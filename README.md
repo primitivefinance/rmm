@@ -1,66 +1,26 @@
-## Foundry
+## rmm specifciation
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+State variables include:
+- reserve x and y
+- liquidity
+- parameters
+- last "interaction" timestamp. interaction could be only swaps, or include more actions.
+- curator
+- weth
 
-Foundry consists of:
+Constructor
+- WETH
+- Deploys ERC-20 token, maybe from proxy?
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+Init
+- Sets the initial parameter state of the pool
+- burns the initial liquidity
+- Does it require tokens to be sent in?
 
-## Documentation
+Adjust
+- Allows arbitrary adjustments, validates against trading function
+- flash swaps to allow optimistic payments
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Helpers:
+- helper functions to handle specific actions
+- helper functions for math
