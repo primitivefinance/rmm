@@ -63,9 +63,6 @@ contract RMM {
 
     /// @dev Applies updates to the trading function and validates the adjustment.
     modifier evolve() {
-        // Applies adjustments to the trading function curve prior to reserve or liquidity changes.
-        lastTimestamp = block.timestamp;
-
         int256 initial = tradingFunction();
         _;
         int256 terminal = tradingFunction();
@@ -161,11 +158,11 @@ contract RMM {
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
         uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
-        uint256 nextReserveY =
-            solveY(reserveX + amountIn - feeAmount, totalLiquidity, tradingFunction(), mean, width, tau_);
-        lastTimestamp = block.timestamp;
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), mean, width, tau());
+            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), mean, width, tau(), tau_);
+        uint256 nextReserveY =
+            solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), mean, width, tau_);
+        lastTimestamp = block.timestamp;
         console2.log("here");
         console2.log("reserveY", reserveY);
         console2.log("nextReserveY", nextReserveY);
@@ -190,8 +187,9 @@ contract RMM {
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
         uint256 nextReserveX = solveX(reserveY + amountIn, totalLiquidity, tradingFunction(), mean, width, tau());
+        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), mean, width, tau());
+            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), mean, width, tau(), tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
@@ -208,8 +206,9 @@ contract RMM {
         lock
         returns (uint256 deltaLiquidity)
     {
+        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), mean, width, tau());
+            solveL(totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), mean, width, tau(), tau_);
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
             revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
@@ -306,7 +305,7 @@ contract RMM {
     }
 
     /// @dev Converts seconds (units of block.timestamp) into years in WAD units.
-    function computeTauWadYears(uint256 tauSeconds) internal pure returns (uint256) {
+    function computeTauWadYears(uint256 tauSeconds) public pure returns (uint256) {
         return tauSeconds.mulDivDown(1e18, 365 days);
     }
 
@@ -338,6 +337,27 @@ contract RMM {
         int256 c = Gaussian.cdf(a + b);
 
         return liquidity * (1 ether - toUint(c)) / 1e18;
+    }
+
+    /// @dev ~L = x / (1 - Φ(Φ⁻¹(y/(LK)) + σ√τ))
+    function computeL(
+        uint256 reserveX_,
+        uint256 liquidity,
+        uint256 mean_,
+        uint256 width_,
+        uint256 prevTau,
+        uint256 newTau
+    ) public pure returns (uint256) {
+        int256 a = Gaussian.ppf(toInt(reserveX_ * 1e18 / liquidity));
+        int256 c = Gaussian.cdf(
+            (
+                (a * toInt(computeWidthSqrtTau(width_, prevTau)) / 1 ether)
+                    + toInt(width_ * width_ * prevTau / (2 ether * 1 ether))
+                    + toInt(width_ * width_ * newTau / (2 ether * 1 ether))
+            ) * 1 ether / toInt(computeWidthSqrtTau(width_, newTau))
+        );
+
+        return reserveX_ * 1 ether / toUint(1 ether - c);
     }
 
     /// @dev x is independent variable, y and L are dependent variables.
@@ -444,14 +464,15 @@ contract RMM {
         int256 invariant,
         uint256 mean_,
         uint256 width_,
-        uint256 tau_
+        uint256 tau_,
+        uint256 prevTau
     ) public pure returns (uint256 liquidity_) {
         // All the arguments that don't change.
         bytes memory args = abi.encode(reserveX_, reserveY_, mean_, width_, tau_, invariant);
 
         // Establish initial bounds
         uint256 upper = initialLiquidity;
-        uint256 lower = initialLiquidity;
+        uint256 lower = computeL(reserveX_, initialLiquidity, mean_, width_, prevTau, tau_);
         int256 result = findL(args, initialLiquidity);
         if (result < 0) {
             while (result < 0) {
@@ -480,7 +501,7 @@ contract RMM {
     }
 }
 
-uint256 constant MAX_ITER = 100;
+uint256 constant MAX_ITER = 256;
 
 /// @dev Thrown when the lower bound is greater than the upper bound.
 error BisectionLib_InvalidBounds(uint256 lower, uint256 upper);
