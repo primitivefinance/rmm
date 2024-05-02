@@ -280,7 +280,7 @@ contract RMM {
     /// * As lim_x->0, price(x) = +infinity for all `τ` > 0 and `σ` > 0.
     /// * As lim_x->1, price(x) = 0 for all `τ` > 0 and `σ` > 0.
     /// * If `τ` or `σ` is zero, price is equal to strike.
-    function computeSpotPrice(uint256 reserveX_, uint256 totalLiquidity_, uint256 mean_, uint256 width_, uint256 tau)
+    function computeSpotPrice(uint256 reserveX_, uint256 totalLiquidity_, uint256 mean_, uint256 width_, uint256 tau_)
         public
         pure
         returns (uint256)
@@ -290,13 +290,17 @@ contract RMM {
         // Φ^-1(1 - x/L)
         int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(totalLiquidity_)));
         // σ√τ
-        int256 b = toInt(computeWidthSqrtTau(width_, tau));
+        int256 b = toInt(computeWidthSqrtTau(width_, tau_));
         // 1/2σ^2τ
-        int256 c = toInt(0.5 ether * width_ * width_ * tau / (1e18 ** 3));
+        int256 c = toInt(0.5 ether * width_ * width_ * tau_ / (1e18 ** 3));
         // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
         int256 exp = (a * b / 1 ether - c).expWad();
         // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
         return mean_.mulWadUp(uint256(exp));
+    }
+
+    function computeLnSDivK(uint256 S, uint256 mean_) public pure returns (int256) {
+      return int256(S.divWadDown(mean_)).lnWad();
     }
 
     /// @dev Computes σ√τ given `width_` σ and `tau` τ.
@@ -344,12 +348,11 @@ contract RMM {
     function computeL(
         uint256 reserveX_,
         uint256 liquidity,
-        uint256 mean_,
         uint256 width_,
         uint256 prevTau,
         uint256 newTau
     ) public pure returns (uint256) {
-        int256 a = Gaussian.ppf(toInt(reserveX_ * 1e18 / liquidity));
+        int256 a = Gaussian.ppf(toInt(reserveX_ * 1 ether / liquidity));
         int256 c = Gaussian.cdf(
             (
                 (a * toInt(computeWidthSqrtTau(width_, prevTau)) / 1 ether)
@@ -359,6 +362,25 @@ contract RMM {
         );
 
         return reserveX_ * 1 ether / toUint(1 ether - c);
+    }
+
+    function computeLGivenX(
+      uint256 reserveX_,
+      uint256 prevL,
+      uint256 mean_,
+      uint256 width_,
+      uint256 prevTau,
+      uint256 newTau
+    ) public pure returns (uint256) {
+
+      int256 lnSDivK = computeLnSDivK(computeSpotPrice(reserveX_, prevL, mean_, width_, newTau), mean_);
+      uint256 sigmaSqrtTau = computeWidthSqrtTau(width_, newTau);
+      uint256 halfSigmaSquaredTau = width_.mulWadDown(width_).mulWadDown(0.5 ether).mulWadDown(newTau);
+      int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) /
+          int256(sigmaSqrtTau);
+      uint256 cdf = uint256(Gaussian.cdf(d1));
+
+      return reserveX_.divWadUp(1 ether - cdf);
     }
 
     /// @dev x is independent variable, y and L are dependent variables.
@@ -440,7 +462,8 @@ contract RMM {
             lower = lower.mulDivDown(1e15 - 1, 1e15);
             //result = findY(args, lower);
         }
-
+        reserveY_ = upper;
+        /*
         // Run bisection using the bounds to find the root of the function `findY`.
         (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, 1, findY);
 
@@ -450,6 +473,7 @@ contract RMM {
         } else {
             reserveY_ = upperInput;
         }
+        */
     }
 
     function solveL(
@@ -466,27 +490,20 @@ contract RMM {
         bytes memory args = abi.encode(reserveX_, reserveY_, mean_, width_, tau_, invariant);
 
         // Establish initial bounds
-        uint256 upper = computeL(reserveX_, initialLiquidity, mean_, width_, prevTau, tau_);
+        uint256 upper = computeL(reserveX_, initialLiquidity, width_, prevTau, tau_);
         uint256 lower = upper;
         int256 result = findL(args, lower);
-        console2.log("initialL", initialLiquidity);
-        console2.log("approximatedL", upper);
-        console2.log("resultL", result);
-        uint256 iters;
         if (result < 0) {
-            lower = lower.mulDivDown(1e9 - 1, 1e9);
+            lower = lower.mulDivDown(1e8 - 1, 1e8);
             uint256 min =
                 reserveX_ > reserveY_.divWadDown(mean_) ? reserveX_ + 1000 : reserveY_.divWadDown(mean_) + 1000;
             lower = lower < reserveX_ ? min : lower;
-            //result = findL(args, lower);
-            iters++;
         } else {
-            upper = upper.mulDivUp(1e9 + 1, 1e9);
-            //result = findL(args, upper);
-            iters++;
+            upper = upper.mulDivUp(1e8 + 1, 1e8);
         }
-        console2.log("iters", iters);
+        liquidity_ = lower;
 
+        /*
         // Run bisection using the bounds to find the root of the function `findL`.
         (uint256 rootInput,, uint256 lowerInput) = bisection(args, lower, upper, 1, 1, findL);
 
@@ -497,6 +514,7 @@ contract RMM {
             liquidity_ = lowerInput;
         }
         console2.log("terminal L", liquidity_);
+        */
     }
 }
 

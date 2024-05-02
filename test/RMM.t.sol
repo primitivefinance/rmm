@@ -252,7 +252,7 @@ contract RMMTest is Test {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 1000; //0.685040862443611931 ether;
         int256 initial = subject().tradingFunction();
-        vm.warp(364 days + 10_000);
+        vm.warp(12 days);
         /*
         uint256 computedL = subject().computeL(
             subject().reserveX(),
