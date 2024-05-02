@@ -247,23 +247,26 @@ contract RMMTest is Test {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 1000; //0.685040862443611931 ether;
         int256 initial = subject().tradingFunction();
-        vm.warp(1 days);
-        vm.store(address(subject()), bytes32(LAST_TIMESTAMP_SLOT), bytes32(uint256(block.timestamp)));
-        console2.log("price", subject().approxSpotPrice());
+        vm.warp(365 days / 2);
         (uint256 amountOut, uint256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
         int256 terminal = subject().tradingFunction();
-        console2.log("price", subject().approxSpotPrice());
         console2.logInt(initial);
         console2.logInt(terminal);
         console2.logUint(amountOut);
         console2.logUint(deltaLiquidity);
-        (amountOut, deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
-        int256 postTerminal = subject().tradingFunction();
-        console2.log("price", subject().approxSpotPrice());
-        console2.logInt(initial);
-        console2.logInt(terminal);
-        console2.logInt(postTerminal);
-        console2.logUint(amountOut);
-        console2.logUint(deltaLiquidity);
+    }
+
+    function test_price_increase_over_time() public basic {
+        uint256 timeDelta = 10 days;
+
+        uint256 initial = subject().approxSpotPrice();
+        vm.warp(timeDelta);
+        vm.store(address(subject()), bytes32(LAST_TIMESTAMP_SLOT), bytes32(uint256(block.timestamp)));
+        uint256 terminal = subject().approxSpotPrice();
+
+        console2.logUint(initial);
+        console2.logUint(terminal);
+
+        assertTrue(terminal > initial, "Price did not increase over time.");
     }
 }
