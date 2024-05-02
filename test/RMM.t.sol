@@ -240,12 +240,12 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction();
         console2.log("loss", uint256(685040862443611928) - uint256(685001492551417433));
         console2.log("loss %", uint256(39369892194495) * 1 ether / uint256(685001492551417433));
-        (uint256 amountOut, uint256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
         int256 terminal = subject().tradingFunction();
         console2.logInt(initial);
         console2.logInt(terminal);
         console2.logUint(amountOut);
-        console2.logUint(deltaLiquidity);
+        console2.logInt(deltaLiquidity);
     }
 
     function test_swap_x_over_time() public basic {
@@ -262,18 +262,18 @@ contract RMMTest is Test {
             subject().computeTauWadYears(subject().maturity() - block.timestamp)
         );
         uint256 expectedL = 2763676832322849396;
-        console2.log("computedL", computedL);
         console2.log("expectedL", expectedL);
+        /* console2.log("computedL", computedL);
         console2.log(
             "diff", computedL > expectedL ? computedL - expectedL : expectedL - computedL, computedL > expectedL
-        );
-        (uint256 amountOut, uint256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
+        ); */
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
         int256 terminal = subject().tradingFunction();
 
         console2.logInt(initial);
         console2.logInt(terminal);
         console2.logUint(amountOut);
-        console2.logUint(deltaLiquidity);
+        console2.logInt(deltaLiquidity);
     }
 
     function test_price_increase_over_time() public basic {

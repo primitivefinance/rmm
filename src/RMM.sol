@@ -154,7 +154,7 @@ contract RMM {
     function swapX(uint256 amountIn, uint256 minAmountOut)
         external
         lock
-        returns (uint256 amountOut, uint256 deltaLiquidity)
+        returns (uint256 amountOut, int256 deltaLiquidity)
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
         uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
@@ -175,15 +175,15 @@ contract RMM {
         console2.log("nextLiquidity", nextLiquidity);
         console2.log("totalLiquidity", totalLiquidity);
 
-        deltaLiquidity = nextLiquidity - totalLiquidity;
+        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
-        _adjust(toInt(amountIn), -toInt(amountOut), toInt(deltaLiquidity));
+        _adjust(toInt(amountIn), -toInt(amountOut), deltaLiquidity);
     }
 
     function swapY(uint256 amountIn, uint256 minAmountOut)
         external
         lock
-        returns (uint256 amountOut, uint256 deltaLiquidity)
+        returns (uint256 amountOut, int256 deltaLiquidity)
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
         uint256 nextReserveX = solveX(reserveY + amountIn, totalLiquidity, tradingFunction(), mean, width, tau());
@@ -196,9 +196,9 @@ contract RMM {
             revert InsufficientOutput(amountIn, minAmountOut, amountOut);
         }
 
-        deltaLiquidity = nextLiquidity - totalLiquidity;
+        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
-        _adjust(-toInt(amountOut), toInt(amountIn), toInt(deltaLiquidity));
+        _adjust(-toInt(amountOut), toInt(amountIn), deltaLiquidity);
     }
 
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut)
@@ -464,8 +464,8 @@ contract RMM {
         int256 invariant,
         uint256 mean_,
         uint256 width_,
-        uint256 tau_,
-        uint256 prevTau
+        uint256 prevTau,
+        uint256 tau_
     ) public pure returns (uint256 liquidity_) {
         // All the arguments that don't change.
         bytes memory args = abi.encode(reserveX_, reserveY_, mean_, width_, tau_, invariant);
@@ -473,7 +473,7 @@ contract RMM {
         // Establish initial bounds
         uint256 upper = initialLiquidity;
         uint256 lower = computeL(reserveX_, initialLiquidity, mean_, width_, prevTau, tau_);
-        int256 result = findL(args, initialLiquidity);
+        int256 result = findL(args, lower);
         if (result < 0) {
             while (result < 0) {
                 lower = lower.mulDivDown(999, 1000);
@@ -501,7 +501,11 @@ contract RMM {
     }
 }
 
-uint256 constant MAX_ITER = 256;
+// 256 iter:  0.732899032202380204
+// 8 iter:    0.732436599229286431
+// 3 iter:    0.705792051020313330
+
+uint256 constant MAX_ITER = 8;
 
 /// @dev Thrown when the lower bound is greater than the upper bound.
 error BisectionLib_InvalidBounds(uint256 lower, uint256 upper);
