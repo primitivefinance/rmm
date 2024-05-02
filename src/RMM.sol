@@ -53,6 +53,7 @@ contract RMM {
     uint256 public lastTimestamp; // slot 10
     address public curator; // slot 11
     uint256 public lock_ = 1; // slot 12
+    // TODO: go back to calling it strike, sigma, tau, mean and width is cringe
 
     modifier lock() {
         require(lock_ == 1, "RMM: reentrancy");
@@ -387,7 +388,7 @@ contract RMM {
     /// todo: figure out what happens when result of trading function is negative or positive.
     function solveX(uint256 reserveY_, uint256 liquidity, int256 invariant, uint256 mean_, uint256 width_, uint256 tau_)
         public
-        pure
+        view 
         returns (uint256 reserveX_)
     {
         // All the arguments that don't change.
@@ -396,19 +397,16 @@ contract RMM {
         // Establish initial bounds
         uint256 upper = computeX(reserveY_, liquidity, mean_, width_, tau_);
         uint256 lower = upper;
-        int256 result = invariant;
+        int256 result = findX(args, upper);
+        console2.log("result X", result);
         if (result < 0) {
-            while (result < 0) {
-                upper = upper.mulDivUp(1001, 1000);
-                upper = upper > liquidity ? liquidity : upper;
-                result = findX(args, upper);
-            }
+              upper = upper.mulDivUp(1001, 1000);
+              upper = upper > liquidity ? liquidity : upper;
+              //result = findX(args, upper);
         } else {
-            while (result > 0) {
-                lower = lower.mulDivDown(999, 1000);
-                lower = lower > liquidity ? liquidity : lower;
-                result = findX(args, lower);
-            }
+              lower = lower.mulDivDown(999, 1000);
+              lower = lower > liquidity ? liquidity : lower;
+              //result = findX(args, lower);
         }
 
         // Run bisection using the bounds to find the root of the function `findX`.
@@ -424,7 +422,7 @@ contract RMM {
 
     function solveY(uint256 reserveX_, uint256 liquidity, int256 invariant, uint256 mean_, uint256 width_, uint256 tau_)
         public
-        pure
+        view 
         returns (uint256 reserveY_)
     {
         // All the arguments that don't change.
@@ -434,20 +432,17 @@ contract RMM {
         uint256 upper = computeY(reserveX_, liquidity, mean_, width_, tau_);
         uint256 lower = upper;
         int256 result = findY(args, upper);
+        console2.log("result Y", result);
         if (result < 0) {
-            while (result < 0) {
-                upper = upper.mulDivUp(1001, 1000);
-                result = findY(args, upper);
-            }
+            upper = upper.mulDivUp(1e15 + 1, 1e15);
+            //result = findY(args, upper);
         } else {
-            while (result > 0) {
-                lower = lower.mulDivDown(999, 1000);
-                result = findY(args, lower);
-            }
+            lower = lower.mulDivDown(1e15 - 1, 1e15);
+            //result = findY(args, lower);
         }
 
         // Run bisection using the bounds to find the root of the function `findY`.
-        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, MAX_ITER, findY);
+        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, 1, findY);
 
         // `upperInput` should be positive, so if root is < 0 return upperInput instead
         if (findY(args, rootInput) == 0) {
@@ -466,38 +461,42 @@ contract RMM {
         uint256 width_,
         uint256 prevTau,
         uint256 tau_
-    ) public pure returns (uint256 liquidity_) {
+    ) public view returns (uint256 liquidity_) {
         // All the arguments that don't change.
         bytes memory args = abi.encode(reserveX_, reserveY_, mean_, width_, tau_, invariant);
 
         // Establish initial bounds
-        uint256 upper = initialLiquidity;
-        uint256 lower = computeL(reserveX_, initialLiquidity, mean_, width_, prevTau, tau_);
+        uint256 upper = computeL(reserveX_, initialLiquidity, mean_, width_, prevTau, tau_);
+        uint256 lower = upper;
         int256 result = findL(args, lower);
+        console2.log("initialL", initialLiquidity);
+        console2.log("approximatedL", upper);
+        console2.log("resultL", result);
+        uint256 iters;
         if (result < 0) {
-            while (result < 0) {
-                lower = lower.mulDivDown(999, 1000);
-                uint256 min =
-                    reserveX_ > reserveY_.divWadDown(mean_) ? reserveX_ + 1000 : reserveY_.divWadDown(mean_) + 1000;
-                lower = lower < reserveX_ ? min : lower;
-                result = findL(args, lower);
-            }
+            lower = lower.mulDivDown(1e9 - 1, 1e9);
+            uint256 min =
+                reserveX_ > reserveY_.divWadDown(mean_) ? reserveX_ + 1000 : reserveY_.divWadDown(mean_) + 1000;
+            lower = lower < reserveX_ ? min : lower;
+            //result = findL(args, lower);
+            iters++;
         } else {
-            while (result > 0) {
-                upper = upper.mulDivUp(1001, 1000);
-                result = findL(args, upper);
-            }
+            upper = upper.mulDivUp(1e9 + 1, 1e9);
+            //result = findL(args, upper);
+            iters++;
         }
+        console2.log("iters", iters);
 
         // Run bisection using the bounds to find the root of the function `findL`.
-        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, MAX_ITER, findL);
+        (uint256 rootInput,, uint256 lowerInput) = bisection(args, lower, upper, 1, 1, findL);
 
         // `upperInput` should be positive, so if root is < 0 return upperInput instead
         if (findL(args, rootInput) == 0) {
             liquidity_ = rootInput;
         } else {
-            liquidity_ = upperInput;
+            liquidity_ = lowerInput;
         }
+        console2.log("terminal L", liquidity_);
     }
 }
 
@@ -505,7 +504,7 @@ contract RMM {
 // 8 iter:    0.732436599229286431
 // 3 iter:    0.705792051020313330
 
-uint256 constant MAX_ITER = 8;
+uint256 constant MAX_ITER = 10;
 
 /// @dev Thrown when the lower bound is greater than the upper bound.
 error BisectionLib_InvalidBounds(uint256 lower, uint256 upper);
@@ -535,7 +534,7 @@ function bisection(
     uint256 epsilon,
     uint256 maxIterations,
     function (bytes memory,uint256) pure returns (int256) fx
-) pure returns (uint256 root, uint256 upperInput, uint256 lowerInput) {
+) view returns (uint256 root, uint256 upperInput, uint256 lowerInput) {
     if (lower > upper) revert BisectionLib_InvalidBounds(lower, upper);
     // Passes the lower and upper bounds to the optimized function.
     // Reverts if the optimized function `fx` returns both negative or both positive values.
@@ -559,6 +558,7 @@ function bisection(
         root = (lowerInput + upperInput) / 2;
 
         int256 output = fx(args, root);
+        console2.log("fx output", output);
 
         // If the product is negative, the root is between the lower and root.
         // If the product is positive, the root is between the root and upper.
@@ -575,6 +575,7 @@ function bisection(
         unchecked {
             iterations++; // Increment the iterator.
         }
+        console2.log("iterations", iterations);
     } while (distance > epsilon && iterations < maxIterations);
 }
 

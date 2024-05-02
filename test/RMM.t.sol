@@ -252,7 +252,8 @@ contract RMMTest is Test {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 1000; //0.685040862443611931 ether;
         int256 initial = subject().tradingFunction();
-        vm.warp(365 days / 2);
+        vm.warp(364 days + 10_000);
+        /*
         uint256 computedL = subject().computeL(
             subject().reserveX(),
             subject().totalLiquidity(),
@@ -263,17 +264,18 @@ contract RMMTest is Test {
         );
         uint256 expectedL = 2763676832322849396;
         console2.log("expectedL", expectedL);
+        */
         /* console2.log("computedL", computedL);
         console2.log(
             "diff", computedL > expectedL ? computedL - expectedL : expectedL - computedL, computedL > expectedL
         ); */
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut);
         int256 terminal = subject().tradingFunction();
 
-        console2.logInt(initial);
-        console2.logInt(terminal);
-        console2.logUint(amountOut);
-        console2.logInt(deltaLiquidity);
+        console2.log("initialInvariant", initial);
+        console2.log("terminalInvariant", terminal);
+        console2.log("amountOut", amountOut);
+        console2.log("deltaLiquidity", deltaLiquidity);
     }
 
     function test_price_increase_over_time() public basic {
