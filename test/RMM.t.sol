@@ -534,6 +534,41 @@ contract RMMTest is Test {
         uint256 newBalance = tokenY.balanceOf(address(this));
         assertEq(balance - newBalance, basicParams.reserveY, "Token Y balance did not decrease by reserve amount.");
     }
+
+    function test_init() public {
+        vm.warp(0);
+
+        deal(address(tokenX), address(this), basicParams.reserveX);
+        deal(address(tokenY), address(this), basicParams.reserveY);
+        tokenX.approve(address(subject()), basicParams.reserveX);
+        tokenY.approve(address(subject()), basicParams.reserveY);
+
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            basicParams.curator
+        );
+
+        assertEq(subject().tokenX(), address(tokenX), "Token X address is not correct.");
+        assertEq(subject().tokenY(), address(tokenY), "Token Y address is not correct.");
+        assertEq(subject().reserveX(), basicParams.reserveX, "Reserve X is not correct.");
+        assertEq(subject().reserveY(), basicParams.reserveY, "Reserve Y is not correct.");
+        assertEq(subject().totalLiquidity(), basicParams.totalLiquidity, "Total liquidity is not correct.");
+        assertEq(subject().strike(), basicParams.strike, "Strike is not correct.");
+        assertEq(subject().sigma(), basicParams.sigma, "Sigma is not correct.");
+        assertEq(subject().fee(), basicParams.fee, "Fee is not correct.");
+        assertEq(subject().maturity(), basicParams.maturity, "Maturity is not correct.");
+        assertEq(subject().initTimestamp(), block.timestamp, "Init timestamp is not correct.");
+        assertEq(subject().lastTimestamp(), block.timestamp, "Last timestamp is not correct.");
+        assertEq(subject().curator(), basicParams.curator, "Curator is not correct.");
+    }
 }
 
 contract CallbackProvider is Test {
