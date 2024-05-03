@@ -11,19 +11,20 @@ import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnT
 import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
 
 // slot numbers. double check these if changes are made.
-uint256 constant TOKEN_X_SLOT = 0;
-uint256 constant TOKEN_Y_SLOT = 1;
-uint256 constant RESERVE_X_SLOT = 2;
-uint256 constant RESERVE_Y_SLOT = 3;
-uint256 constant TOTAL_LIQUIDITY_SLOT = 4;
-uint256 constant strike_SLOT = 5;
-uint256 constant sigma_SLOT = 6;
-uint256 constant FEE_SLOT = 7;
-uint256 constant MATURITY_SLOT = 8;
-uint256 constant INIT_TIMESTAMP_SLOT = 9;
-uint256 constant LAST_TIMESTAMP_SLOT = 10;
-uint256 constant CURATOR_SLOT = 11;
-uint256 constant LOCK_SLOT = 12;
+uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
+uint256 constant TOKEN_X_SLOT = 0 + offset;
+uint256 constant TOKEN_Y_SLOT = 1 + offset;
+uint256 constant RESERVE_X_SLOT = 2 + offset;
+uint256 constant RESERVE_Y_SLOT = 3 + offset;
+uint256 constant TOTAL_LIQUIDITY_SLOT = 4 + offset;
+uint256 constant STRIKE_SLOT = 5 + offset;
+uint256 constant SIGMA_SLOT = 6 + offset;
+uint256 constant FEE_SLOT = 7 + offset;
+uint256 constant MATURITY_SLOT = 8 + offset;
+uint256 constant INIT_TIMESTAMP_SLOT = 9 + offset;
+uint256 constant LAST_TIMESTAMP_SLOT = 10 + offset;
+uint256 constant CURATOR_SLOT = 11 + offset;
+uint256 constant LOCK_SLOT = 12 + offset;
 
 contract RMMTest is Test {
     RMM public __subject__;
@@ -31,7 +32,8 @@ contract RMMTest is Test {
     MockERC20 public tokenY;
 
     function setUp() public tokens {
-        __subject__ = new RMM(address(0));
+        __subject__ = new RMM(address(0), "LPToken", "LPT");
+        vm.label(address(__subject__), "RMM");
         vm.warp(0);
     }
 
@@ -54,8 +56,8 @@ contract RMMTest is Test {
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
         vm.store(address(subject()), bytes32(RESERVE_Y_SLOT), bytes32(uint256(999999999999999997)));
         vm.store(address(subject()), bytes32(TOTAL_LIQUIDITY_SLOT), bytes32(uint256(3241096933647192684)));
-        vm.store(address(subject()), bytes32(strike_SLOT), bytes32(uint256(1 ether)));
-        vm.store(address(subject()), bytes32(sigma_SLOT), bytes32(uint256(1 ether)));
+        vm.store(address(subject()), bytes32(STRIKE_SLOT), bytes32(uint256(1 ether)));
+        vm.store(address(subject()), bytes32(SIGMA_SLOT), bytes32(uint256(1 ether)));
         vm.store(address(subject()), bytes32(MATURITY_SLOT), bytes32(uint256(block.timestamp + 365 days)));
         _;
     }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Gaussian} from "solstat/Gaussian.sol";
 import {console2} from "forge-std/console2.sol";
@@ -16,7 +17,7 @@ interface ICallback {
     function callback(address token, uint256 amountNative, bytes calldata data) external returns (bool);
 }
 
-contract RMM {
+contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
 
@@ -66,25 +67,28 @@ contract RMM {
         int256 deltaLiquidity
     );
     /// @dev Emitted on allocatess.
-    event Allocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
+    event Allocate(address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
     /// @dev Emitted on deallocates.
-    event Deallocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
+    event Deallocate(
+        address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity
+    );
 
     int256 public constant INIT_UPPER_BOUND = 30;
+    uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
-    address public tokenX; // slot 0
-    address public tokenY; // slot 1
-    uint256 public reserveX; // slot 2
-    uint256 public reserveY; // slot 3
-    uint256 public totalLiquidity; // slot 4
-    uint256 public strike; // slot 5
-    uint256 public sigma; // slot 6
-    uint256 public fee; // slot 7
-    uint256 public maturity; // slot 8
-    uint256 public initTimestamp; // slot 9
-    uint256 public lastTimestamp; // slot 10
-    address public curator; // slot 11
-    uint256 public lock_ = 1; // slot 12
+    address public tokenX; // slot 6
+    address public tokenY; // slot 7
+    uint256 public reserveX; // slot 8
+    uint256 public reserveY; // slot 9
+    uint256 public totalLiquidity; // slot 10
+    uint256 public strike; // slot 11
+    uint256 public sigma; // slot 12
+    uint256 public fee; // slot 13
+    uint256 public maturity; // slot 14
+    uint256 public initTimestamp; // slot 15
+    uint256 public lastTimestamp; // slot 16
+    address public curator; // slot 17
+    uint256 public lock_ = 1; // slot 18
     // TODO: go back to calling it strike, sigma, tau, strike and sigma is cringe
 
     modifier lock() {
@@ -96,10 +100,8 @@ contract RMM {
 
     /// @dev Applies updates to the trading function and validates the adjustment.
     modifier evolve() {
-        console2.log("initial");
         int256 initial = tradingFunction();
         _;
-        console2.log("terminal");
         int256 terminal = tradingFunction();
 
         if (terminal < initial) {
@@ -107,7 +109,7 @@ contract RMM {
         }
     }
 
-    constructor(address weth_) {
+    constructor(address weth_, string memory name_, string memory symbol_) ERC20(name_, symbol_, 18) {
         WETH = weth_;
     }
 
@@ -152,6 +154,8 @@ contract RMM {
         decimals = Token(tokenY).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY, decimals);
 
+        _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
+        _mint(address(0), BURNT_LIQUIDITY);
         _debit(tokenX, reserveX, "");
         _debit(tokenY, reserveY, "");
 
@@ -242,7 +246,7 @@ contract RMM {
         emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
     }
 
-    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut)
+    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
         external
         lock
         returns (uint256 deltaLiquidity)
@@ -267,14 +271,16 @@ contract RMM {
             revert InsufficientLiquidityMinted(deltaXWad, deltaYWad, minLiquidityOut, deltaLiquidity);
         }
 
+        _mint(to, deltaLiquidity.mulDivDown(totalSupply, nextLiquidity));
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity));
+
         (uint256 debitNativeX) = _debit(tokenX, deltaXWad, "");
         (uint256 debitNativeY) = _debit(tokenY, deltaYWad, "");
 
-        emit Allocate(msg.sender, debitNativeX, debitNativeY, deltaLiquidity);
+        emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
 
-    function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut)
+    function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut, address to)
         external
         lock
         returns (uint256 deltaX, uint256 deltaY)
@@ -289,11 +295,13 @@ contract RMM {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
         }
 
+        _burn(msg.sender, deltaLiquidity.mulDivUp(totalSupply, totalLiquidity)); // uses state totalLiquidity
         _adjust(-toInt(deltaX), -toInt(deltaY), -toInt(deltaLiquidity));
-        (uint256 creditNativeX) = _credit(tokenX, msg.sender, deltaX);
-        (uint256 creditNativeY) = _credit(tokenY, msg.sender, deltaY);
 
-        emit Deallocate(msg.sender, creditNativeX, creditNativeY, deltaLiquidity);
+        (uint256 creditNativeX) = _credit(tokenX, to, deltaX);
+        (uint256 creditNativeY) = _credit(tokenY, to, deltaY);
+
+        emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }
 
     // payments
