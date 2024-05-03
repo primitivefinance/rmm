@@ -125,7 +125,8 @@ contract RMM {
         uint256 fee_,
         uint256 maturity_,
         address curator_
-    ) external lock evolve {
+    ) external lock {
+        // todo: input validation
         tokenX = tokenX_;
         tokenY = tokenY_;
         reserveX = reserveX_;
@@ -139,10 +140,10 @@ contract RMM {
         lastTimestamp = block.timestamp;
         curator = curator_;
 
-        /* int256 result = tradingFunction();
+        int256 result = tradingFunction();
         if (result > INIT_UPPER_BOUND || result < 0) {
             revert OutOfRange(0, result);
-        } */
+        }
 
         uint256 decimals = Token(tokenX).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX, decimals);

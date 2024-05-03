@@ -333,9 +333,8 @@ contract RMMTest is Test {
         assertTrue(terminal > initial, "Price did not increase over time.");
     }
 
+    // avoids stack too deep in tests.
     struct InitParams {
-        address tokenX;
-        address tokenY;
         uint256 reserveX;
         uint256 reserveY;
         uint256 totalLiquidity;
@@ -346,59 +345,194 @@ contract RMMTest is Test {
         address curator;
     }
 
-    // event testing
+    InitParams basicParams = InitParams({
+        reserveX: 1 ether,
+        reserveY: 1 ether,
+        totalLiquidity: 3241096933647192684,
+        strike: 1 ether,
+        sigma: 1 ether,
+        fee: 0,
+        maturity: 365 days,
+        curator: address(0x55)
+    });
+
+    // init
+
     function test_init_event() public {
         vm.warp(0);
-        address curator = address(0x55);
-        InitParams memory params = InitParams({
-            tokenX: address(tokenX),
-            tokenY: address(tokenY),
-            reserveX: 1 ether,
-            reserveY: 1 ether,
-            totalLiquidity: 1 ether,
-            strike: 1 ether,
-            sigma: 1 ether,
-            fee: 1,
-            maturity: 7 days,
-            curator: curator
-        });
 
-        uint256 tau = subject().computeTauWadYears(params.maturity);
-        uint256 totalLiquidity =
-            subject().solveL(0, params.reserveX, params.reserveY, toInt(0), params.strike, params.sigma, tau, tau);
-
-        deal(address(tokenX), address(this), params.reserveX);
-        deal(address(tokenY), address(this), params.reserveY);
-        tokenX.approve(address(subject()), params.reserveX);
-        tokenY.approve(address(subject()), params.reserveY);
+        deal(address(tokenX), address(this), basicParams.reserveX);
+        deal(address(tokenY), address(this), basicParams.reserveY);
+        tokenX.approve(address(subject()), basicParams.reserveX);
+        tokenY.approve(address(subject()), basicParams.reserveY);
 
         vm.expectEmit();
         emit RMM.Init(
             address(this),
             address(tokenX),
             address(tokenY),
-            params.reserveX,
-            params.reserveY,
-            totalLiquidity,
-            params.strike,
-            params.sigma,
-            params.fee,
-            params.maturity,
-            curator
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            basicParams.curator
         );
 
         subject().init(
             address(tokenX),
             address(tokenY),
-            params.reserveX,
-            params.reserveY,
-            totalLiquidity,
-            params.strike,
-            params.sigma,
-            params.fee,
-            params.maturity,
-            curator
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            basicParams.curator
         );
+    }
+
+    function test_init_reverts_with_OutOfRange() public {
+        vm.warp(0);
+        // Reducing the starting liquidity creates a large buffer result from the trading function.
+        // Pools have to be initialized with a result near 0.
+        int256 result = subject().computeTradingFunction(
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity - 1 ether,
+            basicParams.strike,
+            basicParams.sigma,
+            subject().computeTauWadYears(basicParams.maturity)
+        );
+        vm.expectRevert(abi.encodeWithSelector(RMM.OutOfRange.selector, 0, result));
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity - 1 ether,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            address(0)
+        );
+    }
+
+    function test_init_reverts_with_OutOfRange_negative() public {
+        vm.warp(0);
+        // Reducing the starting liquidity creates a large buffer result from the trading function.
+        // Pools have to be initialized with a result near 0.
+        int256 result = subject().computeTradingFunction(
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity + 1 ether,
+            basicParams.strike,
+            basicParams.sigma,
+            subject().computeTauWadYears(basicParams.maturity)
+        );
+        vm.expectRevert(abi.encodeWithSelector(RMM.OutOfRange.selector, 0, result));
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity + 1 ether,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            address(0)
+        );
+    }
+
+    function test_init_reverts_with_InvalidDecimals_greater() public {
+        vm.warp(0);
+        MockERC20 token = new MockERC20("Token", "T", 20);
+        vm.expectRevert(abi.encodeWithSelector(RMM.InvalidDecimals.selector, address(token), 20));
+        subject().init(
+            address(token),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            address(0)
+        );
+    }
+
+    function test_init_reverts_with_InvalidDecimals_lesser() public {
+        vm.warp(0);
+        MockERC20 token = new MockERC20("Token", "T", 3);
+        vm.expectRevert(abi.encodeWithSelector(RMM.InvalidDecimals.selector, address(token), 3));
+        subject().init(
+            address(token),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            address(0)
+        );
+    }
+
+    function test_init_debits_x() public {
+        vm.warp(0);
+
+        deal(address(tokenX), address(this), basicParams.reserveX);
+        deal(address(tokenY), address(this), basicParams.reserveY);
+        tokenX.approve(address(subject()), basicParams.reserveX);
+        tokenY.approve(address(subject()), basicParams.reserveY);
+
+        uint256 balance = tokenX.balanceOf(address(this));
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            basicParams.curator
+        );
+        uint256 newBalance = tokenX.balanceOf(address(this));
+        assertEq(balance - newBalance, basicParams.reserveX, "Token X balance did not decrease by reserve amount.");
+    }
+
+    function test_init_debits_y() public {
+        vm.warp(0);
+
+        deal(address(tokenX), address(this), basicParams.reserveX);
+        deal(address(tokenY), address(this), basicParams.reserveY);
+        tokenX.approve(address(subject()), basicParams.reserveX);
+        tokenY.approve(address(subject()), basicParams.reserveY);
+
+        uint256 balance = tokenY.balanceOf(address(this));
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            basicParams.curator
+        );
+        uint256 newBalance = tokenY.balanceOf(address(this));
+        assertEq(balance - newBalance, basicParams.reserveY, "Token Y balance did not decrease by reserve amount.");
     }
 }
 
