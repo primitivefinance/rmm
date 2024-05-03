@@ -113,6 +113,7 @@ contract RMM {
 
     receive() external payable {}
 
+    /// todo: need a way to compute initial liquidity based on price user input!
     /// @dev Initializes the pool with an implied price via the desired reserves, liquidity, and parameters.
     function init(
         address tokenX_,

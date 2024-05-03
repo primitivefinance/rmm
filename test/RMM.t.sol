@@ -3,7 +3,12 @@ pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {RMM, toInt, toUint} from "../src/RMM.sol";
+import {FeeOnTransferToken} from "../src/test/FeeOnTransferToken.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
+import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
+import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnToken.sol";
+import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant TOKEN_X_SLOT = 0;
@@ -27,6 +32,7 @@ contract RMMTest is Test {
 
     function setUp() public tokens {
         __subject__ = new RMM(address(0));
+        vm.warp(0);
     }
 
     function subject() public view returns (RMM) {
@@ -43,7 +49,6 @@ contract RMMTest is Test {
 
     /// @dev Uses the "basic" set of parameters produced from DFMM LogNormal solvers.
     modifier basic() {
-        vm.warp(0);
         vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
         vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
@@ -359,8 +364,6 @@ contract RMMTest is Test {
     // init
 
     function test_init_event() public {
-        vm.warp(0);
-
         deal(address(tokenX), address(this), basicParams.reserveX);
         deal(address(tokenY), address(this), basicParams.reserveY);
         tokenX.approve(address(subject()), basicParams.reserveX);
@@ -396,7 +399,6 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_OutOfRange() public {
-        vm.warp(0);
         // Reducing the starting liquidity creates a large buffer result from the trading function.
         // Pools have to be initialized with a result near 0.
         int256 result = subject().computeTradingFunction(
@@ -423,7 +425,6 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_OutOfRange_negative() public {
-        vm.warp(0);
         // Reducing the starting liquidity creates a large buffer result from the trading function.
         // Pools have to be initialized with a result near 0.
         int256 result = subject().computeTradingFunction(
@@ -450,7 +451,6 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_InvalidDecimals_greater() public {
-        vm.warp(0);
         MockERC20 token = new MockERC20("Token", "T", 20);
         vm.expectRevert(abi.encodeWithSelector(RMM.InvalidDecimals.selector, address(token), 20));
         subject().init(
@@ -468,7 +468,6 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_InvalidDecimals_lesser() public {
-        vm.warp(0);
         MockERC20 token = new MockERC20("Token", "T", 3);
         vm.expectRevert(abi.encodeWithSelector(RMM.InvalidDecimals.selector, address(token), 3));
         subject().init(
@@ -486,8 +485,6 @@ contract RMMTest is Test {
     }
 
     function test_init_debits_x() public {
-        vm.warp(0);
-
         deal(address(tokenX), address(this), basicParams.reserveX);
         deal(address(tokenY), address(this), basicParams.reserveY);
         tokenX.approve(address(subject()), basicParams.reserveX);
@@ -511,8 +508,6 @@ contract RMMTest is Test {
     }
 
     function test_init_debits_y() public {
-        vm.warp(0);
-
         deal(address(tokenX), address(this), basicParams.reserveX);
         deal(address(tokenY), address(this), basicParams.reserveY);
         tokenX.approve(address(subject()), basicParams.reserveX);
@@ -536,8 +531,6 @@ contract RMMTest is Test {
     }
 
     function test_init() public {
-        vm.warp(0);
-
         deal(address(tokenX), address(this), basicParams.reserveX);
         deal(address(tokenY), address(this), basicParams.reserveY);
         tokenX.approve(address(subject()), basicParams.reserveX);
@@ -568,6 +561,36 @@ contract RMMTest is Test {
         assertEq(subject().initTimestamp(), block.timestamp, "Init timestamp is not correct.");
         assertEq(subject().lastTimestamp(), block.timestamp, "Last timestamp is not correct.");
         assertEq(subject().curator(), basicParams.curator, "Curator is not correct.");
+    }
+
+    function test_init_reverts_InsufficientPayment_fee_on_transfer_token() public {
+        FeeOnTransferToken token = new FeeOnTransferToken();
+        FeeOnTransferToken token2 = new FeeOnTransferToken();
+        deal(address(token), address(this), 1 ether);
+        deal(address(token2), address(this), 1 ether);
+        token.approve(address(subject()), 1 ether);
+        token2.approve(address(subject()), 1 ether);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RMM.InsufficientPayment.selector,
+                address(token),
+                basicParams.reserveX * (1 ether - token.transferFee()) / 1 ether,
+                1 ether
+            )
+        );
+        subject().init(
+            address(token),
+            address(token2),
+            basicParams.reserveX,
+            basicParams.reserveY,
+            basicParams.totalLiquidity,
+            basicParams.strike,
+            basicParams.sigma,
+            basicParams.fee,
+            basicParams.maturity,
+            address(0)
+        );
     }
 }
 
