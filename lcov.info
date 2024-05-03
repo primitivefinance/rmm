@@ -409,8 +409,8 @@ FNDA:0,RMM.computeLnSDivK
 DA:396,0
 DA:396,0
 DA:396,0
-FN:400,RMM.computeWidthSqrtTau
-FNDA:49,RMM.computeWidthSqrtTau
+FN:400,RMM.computeSigmaSqrtTau
+FNDA:49,RMM.computeSigmaSqrtTau
 DA:401,49
 DA:401,49
 DA:401,49
