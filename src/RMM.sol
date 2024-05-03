@@ -181,6 +181,7 @@ contract RMM {
 
     /// @dev Applies an adjustment to the reserves, liquidity, and last timestamp before validating it with the trading function.
     function _adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) internal evolve {
+        lastTimestamp = block.timestamp;
         reserveX = sum(reserveX, deltaX);
         reserveY = sum(reserveY, deltaY);
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
@@ -198,7 +199,6 @@ contract RMM {
             solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
         uint256 nextReserveY =
             solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
-        lastTimestamp = block.timestamp;
 
         amountOut = reserveY - nextReserveY;
         if (amountOut < minAmountOut) {
@@ -220,10 +220,11 @@ contract RMM {
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
-        uint256 nextReserveX = solveX(reserveY + amountIn, totalLiquidity, tradingFunction(), strike, sigma, lastTau());
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
             solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
+        uint256 nextReserveX =
+            solveX(reserveY + amountIn - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
@@ -248,10 +249,12 @@ contract RMM {
         uint256 nextLiquidity = solveL(
             totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), strike, sigma, lastTau(), tau_
         );
+
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
             revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
         }
+
         _adjust(toInt(deltaX), toInt(deltaY), toInt(deltaLiquidity));
         (uint256 debitNativeX) = _debit(tokenX, deltaX, "");
         (uint256 debitNativeY) = _debit(tokenY, deltaY, "");
@@ -267,11 +270,13 @@ contract RMM {
         uint256 tau_ = currentTau();
         uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
         uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
+
         deltaX = reserveX - nextReserveX;
         deltaY = reserveY - nextReserveY;
         if (deltaX < minDeltaXOut || deltaY < minDeltaYOut) {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
         }
+
         _adjust(-toInt(deltaX), -toInt(deltaY), -toInt(deltaLiquidity));
         (uint256 creditNativeX) = _credit(tokenX, msg.sender, deltaX);
         (uint256 creditNativeY) = _credit(tokenY, msg.sender, deltaY);
