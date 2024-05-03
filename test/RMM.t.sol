@@ -37,7 +37,9 @@ contract RMMTest is Test {
     modifier basic() {
         vm.warp(0);
         tokenX = new MockERC20("Token X", "X", 18);
+        vm.label(address(tokenX), "Token X");
         tokenY = new MockERC20("Token Y", "Y", 18);
+        vm.label(address(tokenY), "Token Y");
         vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
         vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
@@ -72,14 +74,20 @@ contract RMMTest is Test {
         uint256 deltaX = 1 ether;
         uint256 approximatedDeltaY = 0.685040862443611931 ether;
 
-        subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(0));
+        deal(subject().tokenX(), address(this), deltaX);
+        deal(subject().tokenY(), address(this), approximatedDeltaY);
+        tokenX.approve(address(subject()), deltaX);
+        tokenY.approve(address(subject()), approximatedDeltaY);
 
-        int256 result = subject().tradingFunction();
-        console2.logInt(result);
+        vm.expectRevert();
+        subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(1 ether));
     }
 
     function test_basic_adjust_single_allocate_x_increases() public basic {
         uint256 deltaX = 1;
+
+        deal(subject().tokenX(), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
 
         int256 prev = subject().tradingFunction();
         subject().adjust(toInt(deltaX), toInt(0), toInt(0));
@@ -93,6 +101,9 @@ contract RMMTest is Test {
 
     function test_basic_adjust_single_allocate_y_increases() public basic {
         uint256 deltaY = 4;
+
+        deal(subject().tokenY(), address(this), deltaY);
+        tokenY.approve(address(subject()), deltaY);
 
         int256 prev = subject().tradingFunction();
         subject().adjust(toInt(0), toInt(deltaY), toInt(0));
@@ -244,6 +255,10 @@ contract RMMTest is Test {
     function test_swap_x() public basic {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 0.685040862443611931 ether;
+        deal(subject().tokenY(), address(subject()), minAmountOut * 110 / 100);
+        deal(subject().tokenX(), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
+
         int256 initial = subject().tradingFunction();
         console2.log("loss", uint256(685040862443611928) - uint256(685001492551417433));
         console2.log("loss %", uint256(39369892194495) * 1 ether / uint256(685001492551417433));
@@ -269,6 +284,10 @@ contract RMMTest is Test {
     function test_swap_x_over_time() public basic {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 1000; //0.685040862443611931 ether;
+        deal(subject().tokenY(), address(subject()), 1 ether);
+        deal(subject().tokenX(), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
+
         int256 initial = subject().tradingFunction();
         vm.warp(12 days);
         /*
