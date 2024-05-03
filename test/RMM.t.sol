@@ -109,9 +109,9 @@ contract RMMTest is Test {
         uint256 computedYGivenXAdjustment = subject().computeY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         console2.log("computedYGivenXAdjustment", computedYGivenXAdjustment);
 
@@ -119,9 +119,9 @@ contract RMMTest is Test {
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         console2.log("nextReserveY", nextReserveY);
 
@@ -146,9 +146,9 @@ contract RMMTest is Test {
         uint256 computedXGivenYAdjustment = subject().computeX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         console2.log("computedXGivenYAdjustment", computedXGivenYAdjustment);
 
@@ -156,9 +156,9 @@ contract RMMTest is Test {
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         uint256 actualDeltaX = nextReserveX - subject().reserveX();
         console2.log("nextReserveX", nextReserveX);
@@ -169,10 +169,10 @@ contract RMMTest is Test {
             nextReserveX,
             subject().reserveY() + approximatedDeltaY,
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau(),
+            subject().lastTau()
         );
         uint256 deltaLGivenProportionalAllocate = approxLGivenProportionalAllocate - subject().totalLiquidity();
         console2.log("deltaLGivenProportionalAllocate", deltaLGivenProportionalAllocate);
@@ -182,10 +182,10 @@ contract RMMTest is Test {
             subject().reserveX() + deltaX,
             subject().reserveY(),
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau(),
+            subject().lastTau()
         );
         uint256 deltaLGivenSingleAllocate = approxLGivenSingleALlocate - subject().totalLiquidity();
         console2.log("deltaLGivenSingleAllocate", deltaLGivenSingleAllocate);
@@ -200,10 +200,10 @@ contract RMMTest is Test {
             nextReserveX,
             subject().reserveY() - approximatedDeltaY,
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau(),
+            subject().lastTau()
         );
         console2.log("approxLGivenSwap", approxLGivenSwap);
         uint256 deltaLGivenSwap = approxLGivenSwap > subject().totalLiquidity()
@@ -218,9 +218,9 @@ contract RMMTest is Test {
             subject().reserveX() - deltaX,
             subject().reserveY(),
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         uint256 liq = subject().totalLiquidity();
         uint256 deltaLGivenXDecrease =
@@ -233,9 +233,9 @@ contract RMMTest is Test {
             subject().reserveX(),
             subject().reserveY() - approximatedDeltaY,
             subject().tradingFunction(),
-            subject().mean(),
-            subject().width(),
-            subject().tau()
+            subject().strike(),
+            subject().sigma(),
+            subject().lastTau()
         );
         uint256 deltaLGivenYDecrease = approxLGivenYDecrease - subject().totalLiquidity();
         console2.log("deltaLGivenYDecrease", deltaLGivenYDecrease); */
@@ -247,7 +247,7 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction();
         console2.log("loss", uint256(685040862443611928) - uint256(685001492551417433));
         console2.log("loss %", uint256(39369892194495) * 1 ether / uint256(685001492551417433));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
         int256 terminal = subject().tradingFunction();
         console2.logInt(initial);
         console2.logInt(terminal);
@@ -258,11 +258,12 @@ contract RMMTest is Test {
     function test_swap_x_callback() public basic {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 0.685040862443611931 ether;
-        deal(subject().tokenY(), address(subject()), minAmountOut + 10);
+        deal(subject().tokenY(), address(subject()), minAmountOut * 101 / 100);
         CallbackProvider provider = new CallbackProvider();
         vm.prank(address(provider));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, "0x1");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "0x1");
         assertTrue(amountOut > minAmountOut, "Amount out is not greater than min amount out.");
+        assertTrue(tokenY.balanceOf(address(this)) == amountOut, "Token Y balance is not greater than 0.");
     }
 
     function test_swap_x_over_time() public basic {
@@ -274,8 +275,8 @@ contract RMMTest is Test {
         uint256 computedL = subject().computeL(
             subject().reserveX(),
             subject().totalLiquidity(),
-            subject().mean(),
-            subject().width(),
+            subject().strike(),
+            subject().sigma(),
             subject().tau(),
             subject().computeTauWadYears(subject().maturity() - block.timestamp)
         );
@@ -286,7 +287,7 @@ contract RMMTest is Test {
         console2.log(
             "diff", computedL > expectedL ? computedL - expectedL : expectedL - computedL, computedL > expectedL
         ); */
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction();
 
         console2.log("initialInvariant", initial);

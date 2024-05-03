@@ -38,8 +38,8 @@ contract RMM {
     error PaymentFailed(address token, address from, address to, uint256 amount);
     /// @dev Thrown when an external call is made within the same frame as another.
     error Reentrancy();
-
     /// @dev Emitted on pool creation.
+
     event Init(
         address caller,
         address indexed tokenX,
@@ -47,8 +47,8 @@ contract RMM {
         uint256 reserveX,
         uint256 reserveY,
         uint256 totalLiquidity,
-        uint256 mean,
-        uint256 width,
+        uint256 strike,
+        uint256 sigma,
         uint256 fee,
         uint256 maturity,
         address curator
@@ -61,15 +61,15 @@ contract RMM {
     uint256 public reserveX; // slot 2
     uint256 public reserveY; // slot 3
     uint256 public totalLiquidity; // slot 4
-    uint256 public mean; // slot 5
-    uint256 public width; // slot 6
+    uint256 public strike; // slot 5
+    uint256 public sigma; // slot 6
     uint256 public fee; // slot 7
     uint256 public maturity; // slot 8
     uint256 public initTimestamp; // slot 9
     uint256 public lastTimestamp; // slot 10
     address public curator; // slot 11
     uint256 public lock_ = 1; // slot 12
-    // TODO: go back to calling it strike, sigma, tau, mean and width is cringe
+    // TODO: go back to calling it strike, sigma, tau, strike and sigma is cringe
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -113,8 +113,8 @@ contract RMM {
         reserveX = reserveX_;
         reserveY = reserveY_;
         totalLiquidity = totalLiquidity_;
-        mean = mean_;
-        width = width_;
+        strike = mean_;
+        sigma = width_;
         fee = fee_;
         maturity = maturity_;
         initTimestamp = block.timestamp;
@@ -150,6 +150,7 @@ contract RMM {
         );
     }
 
+    /// @dev Allows an arbitrary adjustment to the reserves and liquidity, if it is valid.
     function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) external lock {
         _adjust(deltaX, deltaY, deltaLiquidity);
         if (deltaX < 0) _credit(tokenX, msg.sender, uint256(-deltaX));
@@ -165,17 +166,18 @@ contract RMM {
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
     }
 
-    function swapX(uint256 amountIn, uint256 minAmountOut, bytes calldata data)
+    /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
+    function swapX(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
-        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
+        uint256 tau_ = currentTau();
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), mean, width, tau(), tau_);
+            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
         uint256 nextReserveY =
-            solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), mean, width, tau_);
+            solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
         lastTimestamp = block.timestamp;
 
         amountOut = reserveY - nextReserveY;
@@ -186,20 +188,20 @@ contract RMM {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(toInt(amountIn), -toInt(amountOut), deltaLiquidity);
-        _credit(tokenX, msg.sender, amountIn);
+        _credit(tokenY, to, amountOut);
         _debit(tokenX, amountIn, data);
     }
 
-    function swapY(uint256 amountIn, uint256 minAmountOut, bytes calldata data)
+    function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
         uint256 feeAmount = amountIn.mulWadUp(fee);
-        uint256 nextReserveX = solveX(reserveY + amountIn, totalLiquidity, tradingFunction(), mean, width, tau());
-        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
+        uint256 nextReserveX = solveX(reserveY + amountIn, totalLiquidity, tradingFunction(), strike, sigma, lastTau());
+        uint256 tau_ = currentTau();
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), mean, width, tau(), tau_);
+            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
@@ -209,7 +211,7 @@ contract RMM {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(-toInt(amountOut), toInt(amountIn), deltaLiquidity);
-        _credit(tokenY, msg.sender, amountIn);
+        _credit(tokenX, to, amountOut);
         _debit(tokenY, amountIn, data);
     }
 
@@ -218,9 +220,10 @@ contract RMM {
         lock
         returns (uint256 deltaLiquidity)
     {
-        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), mean, width, tau(), tau_);
+        uint256 tau_ = currentTau();
+        uint256 nextLiquidity = solveL(
+            totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), strike, sigma, lastTau(), tau_
+        );
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
             revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
@@ -235,9 +238,9 @@ contract RMM {
         lock
         returns (uint256 deltaX, uint256 deltaY)
     {
-        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
-        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), mean, width, tau_);
-        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), mean, width, tau_);
+        uint256 tau_ = currentTau();
+        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
         deltaX = reserveX - nextReserveX;
         deltaY = reserveY - nextReserveY;
         if (deltaX < minDeltaXOut || deltaY < minDeltaYOut) {
@@ -253,7 +256,7 @@ contract RMM {
     /// @dev Handles the request of payment for a given token.
     /// @param data Avoid the callback by passing empty data. Trigger the callback and pass the data through otherwise.
     function _debit(address token, uint256 amountWad, bytes memory data) internal {
-        uint256 balanceNative = _getBalance(token);
+        uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, _scalar(token));
 
         if (data.length > 0) {
@@ -266,14 +269,15 @@ contract RMM {
             }
         }
 
-        uint256 paymentNative = _getBalance(token) - balanceNative;
+        uint256 paymentNative = _balanceNative(token) - balanceNative;
         if (paymentNative < amountNative) {
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
     }
 
+    /// @dev Handles sending tokens as payment to the recipient `to`.
     function _credit(address token, address to, uint256 amount) internal {
-        uint256 balanceNative = _getBalance(token);
+        uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, _scalar(token));
 
         // Send the tokens to the recipient.
@@ -281,19 +285,21 @@ contract RMM {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
-        uint256 paymentNative = balanceNative - _getBalance(token);
+        uint256 paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
     }
 
+    /// @dev Computes the scalar to multiply to convert between WAD and native units.
     function _scalar(address token) internal view returns (uint256) {
         uint256 decimals = Token(token).decimals();
         uint256 difference = 18 - decimals;
         return FixedPointMathLib.WAD * 10 ** difference;
     }
 
-    function _getBalance(address token) internal view returns (uint256) {
+    /// @dev Retrieves the balance of a token in this contract, reverting if the call fails or returns unexpected data.
+    function _balanceNative(address token) internal view returns (uint256) {
         (bool success, bytes memory data) =
             token.staticcall(abi.encodeWithSelector(Token.balanceOf.selector, address(this)));
         if (!success || data.length != 32) revert BalanceError();
@@ -302,7 +308,8 @@ contract RMM {
 
     // maths
 
-    function tau() public view returns (uint256) {
+    /// @dev Computes the time to maturity based on the `lastTimestamp` and converts it to units of WAD years.
+    function lastTau() public view returns (uint256) {
         if (maturity < lastTimestamp) {
             return 0;
         }
@@ -310,9 +317,18 @@ contract RMM {
         return computeTauWadYears(maturity - lastTimestamp);
     }
 
+    /// @dev Computes the time to maturity based on the current `block.timestamp` and converts it to units of WAD years.
+    function currentTau() public view returns (uint256) {
+        if (maturity < block.timestamp) {
+            return 0;
+        }
+
+        return computeTauWadYears(maturity - block.timestamp);
+    }
+
     /// @dev Computes the trading function result using the current state.
     function tradingFunction() public view returns (int256) {
-        return computeTradingFunction(reserveX, reserveY, totalLiquidity, mean, width, tau());
+        return computeTradingFunction(reserveX, reserveY, totalLiquidity, strike, sigma, lastTau());
     }
 
     /// @dev k = Φ⁻¹(x/L) + Φ⁻¹(y/μL)  + σ√τ
@@ -349,7 +365,7 @@ contract RMM {
     /// @notice Uses state to approximate the spot price of the X token in terms of the Y token.
     /// @dev Do not rely on this for onchain calculations.
     function approxSpotPrice() public view returns (uint256) {
-        return computeSpotPrice(reserveX, totalLiquidity, mean, width, tau());
+        return computeSpotPrice(reserveX, totalLiquidity, strike, sigma, lastTau());
     }
 
     /// @dev price(x) = μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
