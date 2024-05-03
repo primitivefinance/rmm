@@ -193,23 +193,24 @@ contract RMM {
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
-        uint256 feeAmount = amountIn.mulWadUp(fee);
+        uint256 amountInWad = upscale(amountIn, _scalar(tokenX));
+        uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
             solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
         uint256 nextReserveY =
-            solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+            solveY(reserveX + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
 
         amountOut = reserveY - nextReserveY;
         if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountIn, minAmountOut, amountOut);
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
-        _adjust(toInt(amountIn), -toInt(amountOut), deltaLiquidity);
+        _adjust(toInt(amountInWad), -toInt(amountOut), deltaLiquidity);
         (uint256 creditNative) = _credit(tokenY, to, amountOut);
-        (uint256 debitNative) = _debit(tokenX, amountIn, data);
+        (uint256 debitNative) = _debit(tokenX, amountInWad, data);
 
         emit Swap(msg.sender, to, tokenX, tokenY, debitNative, creditNative, deltaLiquidity);
     }
@@ -219,23 +220,24 @@ contract RMM {
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
-        uint256 feeAmount = amountIn.mulWadUp(fee);
+        uint256 amountInWad = upscale(amountIn, _scalar(tokenY));
+        uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
             solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
         uint256 nextReserveX =
-            solveX(reserveY + amountIn - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+            solveX(reserveY + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountIn, minAmountOut, amountOut);
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
-        _adjust(-toInt(amountOut), toInt(amountIn), deltaLiquidity);
+        _adjust(-toInt(amountOut), toInt(amountInWad), deltaLiquidity);
         (uint256 creditNative) = _credit(tokenX, to, amountOut);
-        (uint256 debitNative) = _debit(tokenY, amountIn, data);
+        (uint256 debitNative) = _debit(tokenY, amountInWad, data);
 
         emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
     }
@@ -245,19 +247,29 @@ contract RMM {
         lock
         returns (uint256 deltaLiquidity)
     {
+        uint256 deltaXWad = upscale(deltaX, _scalar(tokenX));
+        uint256 deltaYWad = upscale(deltaY, _scalar(tokenY));
+
         uint256 tau_ = currentTau();
         uint256 nextLiquidity = solveL(
-            totalLiquidity, reserveX + deltaX, reserveY + deltaY, tradingFunction(), strike, sigma, lastTau(), tau_
+            totalLiquidity,
+            reserveX + deltaXWad,
+            reserveY + deltaYWad,
+            tradingFunction(),
+            strike,
+            sigma,
+            lastTau(),
+            tau_
         );
 
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
-            revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
+            revert InsufficientLiquidityMinted(deltaXWad, deltaYWad, minLiquidityOut, deltaLiquidity);
         }
 
-        _adjust(toInt(deltaX), toInt(deltaY), toInt(deltaLiquidity));
-        (uint256 debitNativeX) = _debit(tokenX, deltaX, "");
-        (uint256 debitNativeY) = _debit(tokenY, deltaY, "");
+        _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity));
+        (uint256 debitNativeX) = _debit(tokenX, deltaXWad, "");
+        (uint256 debitNativeY) = _debit(tokenY, deltaYWad, "");
 
         emit Allocate(msg.sender, debitNativeX, debitNativeY, deltaLiquidity);
     }
@@ -729,6 +741,11 @@ function bisection(
 }
 
 // utils
+
+/// @dev Converts native decimal amount to WAD amount, rounding down.
+function upscale(uint256 amount, uint256 scalingFactor) pure returns (uint256) {
+    return FixedPointMathLib.mulWadDown(amount, scalingFactor);
+}
 
 /// @dev Converts a WAD amount to a native DECIMAL amount, rounding down.
 function downscaleDown(uint256 amount, uint256 scalar) pure returns (uint256) {

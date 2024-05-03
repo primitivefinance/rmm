@@ -592,6 +592,23 @@ contract RMMTest is Test {
             address(0)
         );
     }
+
+    function test_swapX() public basic {
+        uint256 deltaX = 1 ether;
+        uint256 minAmountOut = 0.685040862443611931 ether;
+        deal(address(tokenY), address(subject()), minAmountOut * 110 / 100);
+        deal(address(tokenX), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
+
+        int256 prevResult = subject().tradingFunction();
+        uint256 prevReserveX = subject().reserveX();
+        uint256 prevReserveY = subject().reserveY();
+        uint256 prevTotalLiquidity = subject().totalLiquidity();
+        uint256 prevTau = subject().lastTau();
+        uint256 prevBalanceX = tokenX.balanceOf(address(this));
+        uint256 prevBalanceY = tokenY.balanceOf(address(this));
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+    }
 }
 
 contract CallbackProvider is Test {
