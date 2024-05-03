@@ -30,16 +30,18 @@ contract RMM {
     error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
     /// @dev Thrown on `init` when a token has invalid decimals.
     error InvalidDecimals(address token, uint256 decimals);
-    /// @dev Thrown when an input to the trading function is outside the domain.
-    error OutOfBounds(uint256 value);
+    /// @dev Thrown when an input to the trading function is outside the domain for the X reserve.
+    error OutOfBoundsX(uint256 value);
+    /// @dev Thrown when an input to the trading function is outside the domain for the Y reserve.
+    error OutOfBoundsY(uint256 value);
     /// @dev Thrown when the trading function result is less than the previous invariant.
     error OutOfRange(int256 initial, int256 terminal);
     /// @dev Thrown when a payment to or from the user returns false or no data.
     error PaymentFailed(address token, address from, address to, uint256 amount);
     /// @dev Thrown when an external call is made within the same frame as another.
     error Reentrancy();
-    /// @dev Emitted on pool creation.
 
+    /// @dev Emitted on pool creation.
     event Init(
         address caller,
         address indexed tokenX,
@@ -51,8 +53,22 @@ contract RMM {
         uint256 sigma,
         uint256 fee,
         uint256 maturity,
-        address curator
+        address indexed curator
     );
+    /// @dev Emitted on swaps.
+    event Swap(
+        address caller,
+        address indexed to,
+        address indexed tokenIn,
+        address indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        int256 deltaLiquidity
+    );
+    /// @dev Emitted on allocatess.
+    event Allocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
+    /// @dev Emitted on deallocates.
+    event Deallocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
 
     int256 public constant INIT_UPPER_BOUND = 30;
     address public immutable WETH;
@@ -80,8 +96,10 @@ contract RMM {
 
     /// @dev Applies updates to the trading function and validates the adjustment.
     modifier evolve() {
+        console2.log("initial");
         int256 initial = tradingFunction();
         _;
+        console2.log("terminal");
         int256 terminal = tradingFunction();
 
         if (terminal < initial) {
@@ -188,8 +206,10 @@ contract RMM {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(toInt(amountIn), -toInt(amountOut), deltaLiquidity);
-        _credit(tokenY, to, amountOut);
-        _debit(tokenX, amountIn, data);
+        (uint256 creditNative) = _credit(tokenY, to, amountOut);
+        (uint256 debitNative) = _debit(tokenX, amountIn, data);
+
+        emit Swap(msg.sender, to, tokenX, tokenY, debitNative, creditNative, deltaLiquidity);
     }
 
     function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
@@ -211,8 +231,10 @@ contract RMM {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(-toInt(amountOut), toInt(amountIn), deltaLiquidity);
-        _credit(tokenX, to, amountOut);
-        _debit(tokenY, amountIn, data);
+        (uint256 creditNative) = _credit(tokenX, to, amountOut);
+        (uint256 debitNative) = _debit(tokenY, amountIn, data);
+
+        emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
     }
 
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut)
@@ -229,8 +251,10 @@ contract RMM {
             revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
         }
         _adjust(toInt(deltaX), toInt(deltaY), toInt(deltaLiquidity));
-        _debit(tokenX, deltaX, "");
-        _debit(tokenY, deltaY, "");
+        (uint256 debitNativeX) = _debit(tokenX, deltaX, "");
+        (uint256 debitNativeY) = _debit(tokenY, deltaY, "");
+
+        emit Allocate(msg.sender, debitNativeX, debitNativeY, deltaLiquidity);
     }
 
     function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut)
@@ -247,15 +271,17 @@ contract RMM {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
         }
         _adjust(-toInt(deltaX), -toInt(deltaY), -toInt(deltaLiquidity));
-        _credit(tokenX, msg.sender, deltaX);
-        _credit(tokenY, msg.sender, deltaY);
+        (uint256 creditNativeX) = _credit(tokenX, msg.sender, deltaX);
+        (uint256 creditNativeY) = _credit(tokenY, msg.sender, deltaY);
+
+        emit Deallocate(msg.sender, creditNativeX, creditNativeY, deltaLiquidity);
     }
 
     // payments
 
     /// @dev Handles the request of payment for a given token.
     /// @param data Avoid the callback by passing empty data. Trigger the callback and pass the data through otherwise.
-    function _debit(address token, uint256 amountWad, bytes memory data) internal {
+    function _debit(address token, uint256 amountWad, bytes memory data) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, _scalar(token));
 
@@ -269,14 +295,14 @@ contract RMM {
             }
         }
 
-        uint256 paymentNative = _balanceNative(token) - balanceNative;
+        paymentNative = _balanceNative(token) - balanceNative;
         if (paymentNative < amountNative) {
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
     }
 
     /// @dev Handles sending tokens as payment to the recipient `to`.
-    function _credit(address token, address to, uint256 amount) internal {
+    function _credit(address token, address to, uint256 amount) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, _scalar(token));
 
@@ -285,7 +311,7 @@ contract RMM {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
-        uint256 paymentNative = balanceNative - _balanceNative(token);
+        paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
@@ -328,6 +354,8 @@ contract RMM {
 
     /// @dev Computes the trading function result using the current state.
     function tradingFunction() public view returns (int256) {
+        if (totalLiquidity == 0) return 0; // Not initialized.
+
         return computeTradingFunction(reserveX, reserveY, totalLiquidity, strike, sigma, lastTau());
     }
 
@@ -342,12 +370,12 @@ contract RMM {
     ) public pure returns (int256) {
         uint256 a_i = reserveX_ * 1e18 / liquidity;
         if (a_i >= 1 ether || a_i == 0) {
-            revert OutOfBounds(a_i);
+            revert OutOfBoundsX(a_i);
         }
 
         uint256 b_i = reserveY_ * 1e36 / (mean_ * liquidity);
         if (b_i >= 1 ether || b_i == 0) {
-            revert OutOfBounds(b_i);
+            revert OutOfBoundsY(b_i);
         }
 
         int256 a = Gaussian.ppf(toInt(a_i));
@@ -579,7 +607,8 @@ contract RMM {
         bytes memory args = abi.encode(reserveX_, reserveY_, mean_, width_, tau_, invariant);
 
         // Establish initial bounds
-        uint256 upper = computeL(reserveX_, initialLiquidity, width_, prevTau, tau_);
+        uint256 upper =
+            initialLiquidity == 0 ? reserveX_ + 1 : computeL(reserveX_, initialLiquidity, width_, prevTau, tau_);
         uint256 lower = upper;
         int256 result = findL(args, lower);
         if (result < 0) {

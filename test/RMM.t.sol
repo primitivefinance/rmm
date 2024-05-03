@@ -25,7 +25,7 @@ contract RMMTest is Test {
     MockERC20 public tokenX;
     MockERC20 public tokenY;
 
-    function setUp() public {
+    function setUp() public tokens {
         __subject__ = new RMM(address(0));
     }
 
@@ -33,13 +33,17 @@ contract RMMTest is Test {
         return __subject__;
     }
 
+    modifier tokens() {
+        _;
+        tokenX = new MockERC20("Token X", "X", 18);
+        tokenY = new MockERC20("Token Y", "Y", 18);
+        vm.label(address(tokenX), "Token X");
+        vm.label(address(tokenY), "Token Y");
+    }
+
     /// @dev Uses the "basic" set of parameters produced from DFMM LogNormal solvers.
     modifier basic() {
         vm.warp(0);
-        tokenX = new MockERC20("Token X", "X", 18);
-        vm.label(address(tokenX), "Token X");
-        tokenY = new MockERC20("Token Y", "Y", 18);
-        vm.label(address(tokenY), "Token Y");
         vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
         vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
@@ -327,6 +331,74 @@ contract RMMTest is Test {
         console2.logUint(terminal);
 
         assertTrue(terminal > initial, "Price did not increase over time.");
+    }
+
+    struct InitParams {
+        address tokenX;
+        address tokenY;
+        uint256 reserveX;
+        uint256 reserveY;
+        uint256 totalLiquidity;
+        uint256 strike;
+        uint256 sigma;
+        uint256 fee;
+        uint256 maturity;
+        address curator;
+    }
+
+    // event testing
+    function test_init_event() public {
+        vm.warp(0);
+        address curator = address(0x55);
+        InitParams memory params = InitParams({
+            tokenX: address(tokenX),
+            tokenY: address(tokenY),
+            reserveX: 1 ether,
+            reserveY: 1 ether,
+            totalLiquidity: 1 ether,
+            strike: 1 ether,
+            sigma: 1 ether,
+            fee: 1,
+            maturity: 7 days,
+            curator: curator
+        });
+
+        uint256 tau = subject().computeTauWadYears(params.maturity);
+        uint256 totalLiquidity =
+            subject().solveL(0, params.reserveX, params.reserveY, toInt(0), params.strike, params.sigma, tau, tau);
+
+        deal(address(tokenX), address(this), params.reserveX);
+        deal(address(tokenY), address(this), params.reserveY);
+        tokenX.approve(address(subject()), params.reserveX);
+        tokenY.approve(address(subject()), params.reserveY);
+
+        vm.expectEmit();
+        emit RMM.Init(
+            address(this),
+            address(tokenX),
+            address(tokenY),
+            params.reserveX,
+            params.reserveY,
+            totalLiquidity,
+            params.strike,
+            params.sigma,
+            params.fee,
+            params.maturity,
+            curator
+        );
+
+        subject().init(
+            address(tokenX),
+            address(tokenY),
+            params.reserveX,
+            params.reserveY,
+            totalLiquidity,
+            params.strike,
+            params.sigma,
+            params.fee,
+            params.maturity,
+            curator
+        );
     }
 }
 
