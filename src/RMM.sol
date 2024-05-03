@@ -625,6 +625,7 @@ contract RMM {
         } else {
             upper = upper.mulDivUp(1e8 + 1, 1e8);
         }
+
         liquidity_ = lower;
 
         /*

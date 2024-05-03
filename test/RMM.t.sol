@@ -293,7 +293,7 @@ contract RMMTest is Test {
         tokenX.approve(address(subject()), deltaX);
 
         int256 initial = subject().tradingFunction();
-        vm.warp(12 days);
+        vm.warp(365 days / 2);
         /*
         uint256 computedL = subject().computeL(
             subject().reserveX(),
@@ -303,13 +303,15 @@ contract RMMTest is Test {
             subject().tau(),
             subject().computeTauWadYears(subject().maturity() - block.timestamp)
         );
-        uint256 expectedL = 2763676832322849396;
-        console2.log("expectedL", expectedL);
         */
         /* console2.log("computedL", computedL);
         console2.log(
             "diff", computedL > expectedL ? computedL - expectedL : expectedL - computedL, computedL > expectedL
         ); */
+        uint256 expectedL = 2763676832322849395;
+        uint256 expectedAmountOut = 732899032202380207;
+        console2.log("expectedL", expectedL);
+        console2.log("expectedOut", expectedAmountOut);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction();
 
