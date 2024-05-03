@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {RMM, toInt, toUint} from "../src/RMM.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant TOKEN_X_SLOT = 0;
@@ -21,6 +22,8 @@ uint256 constant LOCK_SLOT = 12;
 
 contract RMMTest is Test {
     RMM public __subject__;
+    MockERC20 public tokenX;
+    MockERC20 public tokenY;
 
     function setUp() public {
         __subject__ = new RMM(address(0));
@@ -33,6 +36,10 @@ contract RMMTest is Test {
     /// @dev Uses the "basic" set of parameters produced from DFMM LogNormal solvers.
     modifier basic() {
         vm.warp(0);
+        tokenX = new MockERC20("Token X", "X", 18);
+        tokenY = new MockERC20("Token Y", "Y", 18);
+        vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
+        vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
         vm.store(address(subject()), bytes32(RESERVE_Y_SLOT), bytes32(uint256(999999999999999997)));
         vm.store(address(subject()), bytes32(TOTAL_LIQUIDITY_SLOT), bytes32(uint256(3241096933647192684)));
@@ -240,12 +247,22 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction();
         console2.log("loss", uint256(685040862443611928) - uint256(685001492551417433));
         console2.log("loss %", uint256(39369892194495) * 1 ether / uint256(685001492551417433));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, "");
         int256 terminal = subject().tradingFunction();
         console2.logInt(initial);
         console2.logInt(terminal);
         console2.logUint(amountOut);
         console2.logInt(deltaLiquidity);
+    }
+
+    function test_swap_x_callback() public basic {
+        uint256 deltaX = 1 ether;
+        uint256 minAmountOut = 0.685040862443611931 ether;
+        deal(subject().tokenY(), address(subject()), minAmountOut + 10);
+        CallbackProvider provider = new CallbackProvider();
+        vm.prank(address(provider));
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, "0x1");
+        assertTrue(amountOut > minAmountOut, "Amount out is not greater than min amount out.");
     }
 
     function test_swap_x_over_time() public basic {
@@ -269,7 +286,7 @@ contract RMMTest is Test {
         console2.log(
             "diff", computedL > expectedL ? computedL - expectedL : expectedL - computedL, computedL > expectedL
         ); */
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, "");
         int256 terminal = subject().tradingFunction();
 
         console2.log("initialInvariant", initial);
@@ -290,5 +307,13 @@ contract RMMTest is Test {
         console2.logUint(terminal);
 
         assertTrue(terminal > initial, "Price did not increase over time.");
+    }
+}
+
+contract CallbackProvider is Test {
+    function callback(address token, uint256 amountNativeToPay, bytes calldata data) public returns (bool) {
+        data;
+        deal(token, msg.sender, amountNativeToPay);
+        return true;
     }
 }

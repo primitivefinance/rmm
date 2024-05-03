@@ -1,27 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import {Gaussian} from "solstat/Gaussian.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Gaussian} from "solstat/Gaussian.sol";
 import {console2} from "forge-std/console2.sol";
 
 interface Token {
     function decimals() external view returns (uint8);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
+interface ICallback {
+    function callback(address token, uint256 amountNative, bytes calldata data) external returns (bool);
 }
 
 contract RMM {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
 
+    /// @dev Thrown when a `balanceOf` call fails or returns unexpected data.
+    error BalanceError();
+    /// @dev Thrown when a payment to this contract is insufficient.
+    error InsufficientPayment(address token, uint256 actual, uint256 expected);
+    /// @dev Thrown when a mint does not output enough liquidity.
+    error InsufficientLiquidityMinted(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
+    /// @dev Thrown when a swap does not output enough tokens.
+    error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
+    /// @dev Thrown on `init` when a token has invalid decimals.
+    error InvalidDecimals(address token, uint256 decimals);
     /// @dev Thrown when an input to the trading function is outside the domain.
     error OutOfBounds(uint256 value);
     /// @dev Thrown when the trading function result is less than the previous invariant.
     error OutOfRange(int256 initial, int256 terminal);
-    /// @dev Thrown on `init` when a token has invalid decimals.
-    error InvalidDecimals(address token, uint256 decimals);
-    /// @dev Thrown when pulling tokens fails.
-    error PayFailed(address token, address from, uint256 amount);
+    /// @dev Thrown when a payment to or from the user returns false or no data.
+    error PaymentFailed(address token, address from, address to, uint256 amount);
+    /// @dev Thrown when an external call is made within the same frame as another.
+    error Reentrancy();
 
     /// @dev Emitted on pool creation.
     event Init(
@@ -56,7 +72,7 @@ contract RMM {
     // TODO: go back to calling it strike, sigma, tau, mean and width is cringe
 
     modifier lock() {
-        require(lock_ == 1, "RMM: reentrancy");
+        if (lock_ != 1) revert Reentrancy();
         lock_ = 0;
         _;
         lock_ = 1;
@@ -91,7 +107,7 @@ contract RMM {
         uint256 fee_,
         uint256 maturity_,
         address curator_
-    ) external lock {
+    ) external lock evolve {
         tokenX = tokenX_;
         tokenY = tokenY_;
         reserveX = reserveX_;
@@ -105,10 +121,10 @@ contract RMM {
         lastTimestamp = block.timestamp;
         curator = curator_;
 
-        int256 result = tradingFunction();
+        /* int256 result = tradingFunction();
         if (result > INIT_UPPER_BOUND || result < 0) {
             revert OutOfRange(0, result);
-        }
+        } */
 
         uint256 decimals = Token(tokenX).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX, decimals);
@@ -116,12 +132,8 @@ contract RMM {
         decimals = Token(tokenY).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY, decimals);
 
-        if (!Token(tokenX).transferFrom(msg.sender, address(this), reserveX)) {
-            revert PayFailed(tokenX, msg.sender, reserveX);
-        }
-        if (!Token(tokenY).transferFrom(msg.sender, address(this), reserveY)) {
-            revert PayFailed(tokenY, msg.sender, reserveY);
-        }
+        _debit(tokenX, reserveX, "");
+        _debit(tokenY, reserveY, "");
 
         emit Init(
             msg.sender,
@@ -140,6 +152,10 @@ contract RMM {
 
     function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) external lock {
         _adjust(deltaX, deltaY, deltaLiquidity);
+        if (deltaX < 0) _credit(tokenX, msg.sender, uint256(-deltaX));
+        if (deltaY < 0) _credit(tokenY, msg.sender, uint256(-deltaY));
+        if (deltaX > 0) _debit(tokenX, uint256(deltaX), "");
+        if (deltaY > 0) _debit(tokenY, uint256(deltaY), "");
     }
 
     /// @dev Applies an adjustment to the reserves, liquidity, and last timestamp before validating it with the trading function.
@@ -149,10 +165,7 @@ contract RMM {
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
     }
 
-    error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
-    error InsufficientLiquidityMinted(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
-
-    function swapX(uint256 amountIn, uint256 minAmountOut)
+    function swapX(uint256 amountIn, uint256 minAmountOut, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
@@ -164,24 +177,20 @@ contract RMM {
         uint256 nextReserveY =
             solveY(reserveX + amountIn - feeAmount, nextLiquidity, tradingFunction(), mean, width, tau_);
         lastTimestamp = block.timestamp;
-        console2.log("here");
-        console2.log("reserveY", reserveY);
-        console2.log("nextReserveY", nextReserveY);
 
         amountOut = reserveY - nextReserveY;
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountIn, minAmountOut, amountOut);
         }
 
-        console2.log("nextLiquidity", nextLiquidity);
-        console2.log("totalLiquidity", totalLiquidity);
-
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(toInt(amountIn), -toInt(amountOut), deltaLiquidity);
+        _credit(tokenX, msg.sender, amountIn);
+        _debit(tokenX, amountIn, data);
     }
 
-    function swapY(uint256 amountIn, uint256 minAmountOut)
+    function swapY(uint256 amountIn, uint256 minAmountOut, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
@@ -200,6 +209,8 @@ contract RMM {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
 
         _adjust(-toInt(amountOut), toInt(amountIn), deltaLiquidity);
+        _credit(tokenY, msg.sender, amountIn);
+        _debit(tokenY, amountIn, data);
     }
 
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut)
@@ -215,13 +226,79 @@ contract RMM {
             revert InsufficientLiquidityMinted(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
         }
         _adjust(toInt(deltaX), toInt(deltaY), toInt(deltaLiquidity));
+        _debit(tokenX, deltaX, "");
+        _debit(tokenY, deltaY, "");
     }
 
     function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut)
         external
         lock
         returns (uint256 deltaX, uint256 deltaY)
-    {}
+    {
+        uint256 tau_ = block.timestamp > maturity ? 0 : computeTauWadYears(maturity - block.timestamp);
+        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), mean, width, tau_);
+        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), mean, width, tau_);
+        deltaX = reserveX - nextReserveX;
+        deltaY = reserveY - nextReserveY;
+        if (deltaX < minDeltaXOut || deltaY < minDeltaYOut) {
+            revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
+        }
+        _adjust(-toInt(deltaX), -toInt(deltaY), -toInt(deltaLiquidity));
+        _credit(tokenX, msg.sender, deltaX);
+        _credit(tokenY, msg.sender, deltaY);
+    }
+
+    // payments
+
+    /// @dev Handles the request of payment for a given token.
+    /// @param data Avoid the callback by passing empty data. Trigger the callback and pass the data through otherwise.
+    function _debit(address token, uint256 amountWad, bytes memory data) internal {
+        uint256 balanceNative = _getBalance(token);
+        uint256 amountNative = downscaleDown(amountWad, _scalar(token));
+
+        if (data.length > 0) {
+            if (!ICallback(msg.sender).callback(token, amountNative, data)) {
+                revert PaymentFailed(token, msg.sender, address(this), amountNative);
+            }
+        } else {
+            if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
+                revert PaymentFailed(token, msg.sender, address(this), amountNative);
+            }
+        }
+
+        uint256 paymentNative = _getBalance(token) - balanceNative;
+        if (paymentNative < amountNative) {
+            revert InsufficientPayment(token, paymentNative, amountNative);
+        }
+    }
+
+    function _credit(address token, address to, uint256 amount) internal {
+        uint256 balanceNative = _getBalance(token);
+        uint256 amountNative = downscaleDown(amount, _scalar(token));
+
+        // Send the tokens to the recipient.
+        if (!Token(token).transfer(to, amountNative)) {
+            revert PaymentFailed(token, address(this), to, amountNative);
+        }
+
+        uint256 paymentNative = balanceNative - _getBalance(token);
+        if (paymentNative < amountNative) {
+            revert InsufficientPayment(token, paymentNative, amountNative);
+        }
+    }
+
+    function _scalar(address token) internal view returns (uint256) {
+        uint256 decimals = Token(token).decimals();
+        uint256 difference = 18 - decimals;
+        return FixedPointMathLib.WAD * 10 ** difference;
+    }
+
+    function _getBalance(address token) internal view returns (uint256) {
+        (bool success, bytes memory data) =
+            token.staticcall(abi.encodeWithSelector(Token.balanceOf.selector, address(this)));
+        if (!success || data.length != 32) revert BalanceError();
+        return abi.decode(data, (uint256));
+    }
 
     // maths
 
@@ -300,12 +377,12 @@ contract RMM {
     }
 
     function computeLnSDivK(uint256 S, uint256 mean_) public pure returns (int256) {
-      return int256(S.divWadDown(mean_)).lnWad();
+        return int256(S.divWadDown(mean_)).lnWad();
     }
 
     /// @dev Computes σ√τ given `width_` σ and `tau` τ.
-    function computeWidthSqrtTau(uint256 width_, uint256 tau) internal pure returns (uint256) {
-        uint256 sqrtTau = FixedPointMathLib.sqrt(tau) * 1e9; // 1e9 is the precision of the square root function
+    function computeWidthSqrtTau(uint256 width_, uint256 tau_) internal pure returns (uint256) {
+        uint256 sqrtTau = FixedPointMathLib.sqrt(tau_) * 1e9; // 1e9 is the precision of the square root function
         return width_.mulWadUp(sqrtTau);
     }
 
@@ -345,13 +422,11 @@ contract RMM {
     }
 
     /// @dev ~L = x / (1 - Φ(Φ⁻¹(y/(LK)) + σ√τ))
-    function computeL(
-        uint256 reserveX_,
-        uint256 liquidity,
-        uint256 width_,
-        uint256 prevTau,
-        uint256 newTau
-    ) public pure returns (uint256) {
+    function computeL(uint256 reserveX_, uint256 liquidity, uint256 width_, uint256 prevTau, uint256 newTau)
+        public
+        pure
+        returns (uint256)
+    {
         int256 a = Gaussian.ppf(toInt(reserveX_ * 1 ether / liquidity));
         int256 c = Gaussian.cdf(
             (
@@ -365,22 +440,20 @@ contract RMM {
     }
 
     function computeLGivenX(
-      uint256 reserveX_,
-      uint256 prevL,
-      uint256 mean_,
-      uint256 width_,
-      uint256 prevTau,
-      uint256 newTau
+        uint256 reserveX_,
+        uint256 prevL,
+        uint256 mean_,
+        uint256 width_,
+        uint256 prevTau,
+        uint256 newTau
     ) public pure returns (uint256) {
+        int256 lnSDivK = computeLnSDivK(computeSpotPrice(reserveX_, prevL, mean_, width_, newTau), mean_);
+        uint256 sigmaSqrtTau = computeWidthSqrtTau(width_, newTau);
+        uint256 halfSigmaSquaredTau = width_.mulWadDown(width_).mulWadDown(0.5 ether).mulWadDown(newTau);
+        int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) / int256(sigmaSqrtTau);
+        uint256 cdf = uint256(Gaussian.cdf(d1));
 
-      int256 lnSDivK = computeLnSDivK(computeSpotPrice(reserveX_, prevL, mean_, width_, newTau), mean_);
-      uint256 sigmaSqrtTau = computeWidthSqrtTau(width_, newTau);
-      uint256 halfSigmaSquaredTau = width_.mulWadDown(width_).mulWadDown(0.5 ether).mulWadDown(newTau);
-      int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) /
-          int256(sigmaSqrtTau);
-      uint256 cdf = uint256(Gaussian.cdf(d1));
-
-      return reserveX_.divWadUp(1 ether - cdf);
+        return reserveX_.divWadUp(1 ether - cdf);
     }
 
     /// @dev x is independent variable, y and L are dependent variables.
@@ -410,7 +483,7 @@ contract RMM {
     /// todo: figure out what happens when result of trading function is negative or positive.
     function solveX(uint256 reserveY_, uint256 liquidity, int256 invariant, uint256 mean_, uint256 width_, uint256 tau_)
         public
-        view 
+        view
         returns (uint256 reserveX_)
     {
         // All the arguments that don't change.
@@ -422,13 +495,13 @@ contract RMM {
         int256 result = findX(args, upper);
         console2.log("result X", result);
         if (result < 0) {
-              upper = upper.mulDivUp(1001, 1000);
-              upper = upper > liquidity ? liquidity : upper;
-              //result = findX(args, upper);
+            upper = upper.mulDivUp(1001, 1000);
+            upper = upper > liquidity ? liquidity : upper;
+            //result = findX(args, upper);
         } else {
-              lower = lower.mulDivDown(999, 1000);
-              lower = lower > liquidity ? liquidity : lower;
-              //result = findX(args, lower);
+            lower = lower.mulDivDown(999, 1000);
+            lower = lower > liquidity ? liquidity : lower;
+            //result = findX(args, lower);
         }
 
         // Run bisection using the bounds to find the root of the function `findX`.
@@ -444,7 +517,7 @@ contract RMM {
 
     function solveY(uint256 reserveX_, uint256 liquidity, int256 invariant, uint256 mean_, uint256 width_, uint256 tau_)
         public
-        view 
+        view
         returns (uint256 reserveY_)
     {
         // All the arguments that don't change.
@@ -595,6 +668,18 @@ function bisection(
         }
         console2.log("iterations", iterations);
     } while (distance > epsilon && iterations < maxIterations);
+}
+
+// utils
+
+/// @dev Converts a WAD amount to a native DECIMAL amount, rounding down.
+function downscaleDown(uint256 amount, uint256 scalar) pure returns (uint256) {
+    return FixedPointMathLib.divWadDown(amount, scalar);
+}
+
+/// @dev Converts a WAD amount to a native DECIMAL amount, rounding up.
+function downscaleUp(uint256 amount, uint256 scalar) pure returns (uint256) {
+    return FixedPointMathLib.divWadUp(amount, scalar);
 }
 
 /// @dev Casts a positived signed integer to an unsigned integer, reverting if `x` is negative.
