@@ -193,7 +193,7 @@ contract RMM {
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
-        uint256 amountInWad = upscale(amountIn, _scalar(tokenX));
+        uint256 amountInWad = upscale(amountIn, scalar(tokenX));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
@@ -220,7 +220,7 @@ contract RMM {
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
-        uint256 amountInWad = upscale(amountIn, _scalar(tokenY));
+        uint256 amountInWad = upscale(amountIn, scalar(tokenY));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
@@ -247,8 +247,8 @@ contract RMM {
         lock
         returns (uint256 deltaLiquidity)
     {
-        uint256 deltaXWad = upscale(deltaX, _scalar(tokenX));
-        uint256 deltaYWad = upscale(deltaY, _scalar(tokenY));
+        uint256 deltaXWad = upscale(deltaX, scalar(tokenX));
+        uint256 deltaYWad = upscale(deltaY, scalar(tokenY));
 
         uint256 tau_ = currentTau();
         uint256 nextLiquidity = solveL(
@@ -302,7 +302,7 @@ contract RMM {
     /// @param data Avoid the callback by passing empty data. Trigger the callback and pass the data through otherwise.
     function _debit(address token, uint256 amountWad, bytes memory data) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
-        uint256 amountNative = downscaleDown(amountWad, _scalar(token));
+        uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
         if (data.length > 0) {
             if (!ICallback(msg.sender).callback(token, amountNative, data)) {
@@ -323,7 +323,7 @@ contract RMM {
     /// @dev Handles sending tokens as payment to the recipient `to`.
     function _credit(address token, address to, uint256 amount) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
-        uint256 amountNative = downscaleDown(amount, _scalar(token));
+        uint256 amountNative = downscaleDown(amount, scalar(token));
 
         // Send the tokens to the recipient.
         if (!Token(token).transfer(to, amountNative)) {
@@ -334,13 +334,6 @@ contract RMM {
         if (paymentNative < amountNative) {
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
-    }
-
-    /// @dev Computes the scalar to multiply to convert between WAD and native units.
-    function _scalar(address token) internal view returns (uint256) {
-        uint256 decimals = Token(token).decimals();
-        uint256 difference = 18 - decimals;
-        return FixedPointMathLib.WAD * 10 ** difference;
     }
 
     /// @dev Retrieves the balance of a token in this contract, reverting if the call fails or returns unexpected data.
@@ -741,6 +734,13 @@ function bisection(
 }
 
 // utils
+
+/// @dev Computes the scalar to multiply to convert between WAD and native units.
+function scalar(address token) view returns (uint256) {
+    uint256 decimals = Token(token).decimals();
+    uint256 difference = 18 - decimals;
+    return FixedPointMathLib.WAD * 10 ** difference;
+}
 
 /// @dev Converts native decimal amount to WAD amount, rounding down.
 function upscale(uint256 amount, uint256 scalingFactor) pure returns (uint256) {

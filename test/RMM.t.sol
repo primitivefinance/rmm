@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint} from "../src/RMM.sol";
+import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum} from "../src/RMM.sol";
 import {FeeOnTransferToken} from "../src/test/FeeOnTransferToken.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
@@ -352,7 +352,7 @@ contract RMMTest is Test {
 
     InitParams basicParams = InitParams({
         reserveX: 1 ether,
-        reserveY: 1 ether,
+        reserveY: 0.999999999999999997 ether,
         totalLiquidity: 3241096933647192684,
         strike: 1 ether,
         sigma: 1 ether,
@@ -601,13 +601,171 @@ contract RMMTest is Test {
         tokenX.approve(address(subject()), deltaX);
 
         int256 prevResult = subject().tradingFunction();
-        uint256 prevReserveX = subject().reserveX();
-        uint256 prevReserveY = subject().reserveY();
-        uint256 prevTotalLiquidity = subject().totalLiquidity();
-        uint256 prevTau = subject().lastTau();
-        uint256 prevBalanceX = tokenX.balanceOf(address(this));
-        uint256 prevBalanceY = tokenY.balanceOf(address(this));
+        uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
+        uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
+        uint256 prevPrice = subject().approxSpotPrice();
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+
+        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        assertTrue(
+            subject().tradingFunction() >= prevResult, "Trading function did not increase or stay equal after swap."
+        );
+        assertEq(subject().reserveX(), basicParams.reserveX + deltaX, "Reserve X did not increase by delta X.");
+        assertEq(subject().reserveY(), basicParams.reserveY - amountOut, "Reserve Y did not decrease by amount out.");
+        assertEq(
+            subject().totalLiquidity(),
+            sum(basicParams.totalLiquidity, deltaLiquidity),
+            "Total liquidity did not increase by delta liquidity."
+        );
+
+        assertEq(
+            balanceWad(address(tokenX), address(this)), prevBalanceX - deltaX, "Balance X did not decrease by delta X."
+        );
+        assertEq(
+            balanceWad(address(tokenY), address(this)),
+            prevBalanceY + amountOut,
+            "Balance Y did not increase by amount out."
+        );
+        assertTrue(subject().approxSpotPrice() < prevPrice, "Price did not decrease after selling X.");
+    }
+
+    function test_swapX_reverts_InsufficientOutput() public basic {
+        uint256 deltaX = 1 ether;
+        uint256 minAmountOut = 0.685040874599501347 ether + 10;
+        deal(address(tokenY), address(subject()), minAmountOut);
+        deal(address(tokenX), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RMM.InsufficientOutput.selector,
+                upscale(deltaX, scalar(address(tokenX))),
+                minAmountOut,
+                minAmountOut - 10
+            )
+        );
+        subject().swapX(deltaX, minAmountOut, address(this), "");
+    }
+
+    function test_swapX_event() public basic {
+        uint256 deltaX = 1 ether;
+        uint256 minAmountOut = 0.685040862443611931 ether;
+        deal(address(tokenY), address(subject()), minAmountOut * 110 / 100);
+        deal(address(tokenX), address(this), deltaX);
+        tokenX.approve(address(subject()), deltaX);
+
+        vm.expectEmit();
+        emit RMM.Swap(
+            address(this),
+            address(this),
+            address(tokenX),
+            address(tokenY),
+            deltaX,
+            0.685040874599501347 ether,
+            -toInt(32410966754)
+        );
+
+        subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+    }
+
+    function test_swapY() public basic {
+        uint256 deltaY = 1 ether;
+        uint256 minAmountOut = 0.685040567022230765 ether;
+        deal(address(tokenX), address(subject()), minAmountOut * 110 / 100);
+        deal(address(tokenY), address(this), deltaY);
+        tokenY.approve(address(subject()), deltaY);
+
+        int256 prevResult = subject().tradingFunction();
+        uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
+        uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
+        uint256 prevPrice = subject().approxSpotPrice();
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "");
+
+        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        assertTrue(
+            subject().tradingFunction() >= prevResult, "Trading function did not increase or stay equal after swap."
+        );
+        assertEq(subject().reserveX(), basicParams.reserveX - amountOut, "Reserve X did not decrease by amount in.");
+        assertEq(subject().reserveY(), basicParams.reserveY + deltaY, "Reserve Y did not increase by delta Y.");
+        assertEq(
+            subject().totalLiquidity(),
+            sum(basicParams.totalLiquidity, deltaLiquidity),
+            "Total liquidity did not increase by delta liquidity."
+        );
+
+        assertEq(
+            balanceWad(address(tokenX), address(this)),
+            prevBalanceX + amountOut,
+            "Balance X did not increase by amount in."
+        );
+        assertEq(
+            balanceWad(address(tokenY), address(this)), prevBalanceY - deltaY, "Balance Y did not decrease by delta Y."
+        );
+        assertTrue(subject().approxSpotPrice() > prevPrice, "Price did not increase after buying Y.");
+    }
+
+    function test_swapY_reverts_InsufficientOutput() public basic {
+        uint256 deltaY = 1 ether;
+        uint256 minAmountOut = 0.685040567022230765 ether + 10;
+        deal(address(tokenX), address(subject()), minAmountOut);
+        deal(address(tokenY), address(this), deltaY);
+        tokenY.approve(address(subject()), deltaY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RMM.InsufficientOutput.selector,
+                upscale(deltaY, scalar(address(tokenY))),
+                minAmountOut,
+                minAmountOut - 10
+            )
+        );
+        subject().swapY(deltaY, minAmountOut, address(this), "");
+    }
+
+    function test_swapY_event() public basic {
+        uint256 deltaY = 1 ether;
+        uint256 minAmountOut = 0.685040567022230765 ether;
+        deal(address(tokenX), address(subject()), minAmountOut);
+        deal(address(tokenY), address(this), deltaY);
+        tokenY.approve(address(subject()), deltaY);
+
+        vm.expectEmit();
+        emit RMM.Swap(
+            address(this),
+            address(this),
+            address(tokenY),
+            address(tokenX),
+            deltaY,
+            0.685040567022230765 ether,
+            -toInt(32410966764)
+        );
+
+        subject().swapY(deltaY, minAmountOut, address(this), "");
+    }
+
+    function test_swapY_callback() public basic {
+        uint256 deltaY = 1 ether;
+        uint256 minAmountOut = 0.685040567022230765 ether;
+        deal(address(tokenX), address(subject()), minAmountOut);
+        deal(address(tokenY), address(this), deltaY);
+        tokenY.approve(address(subject()), deltaY);
+        CallbackProvider provider = new CallbackProvider();
+        vm.prank(address(provider));
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
+        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        assertTrue(tokenX.balanceOf(address(this)) == amountOut, "Token X balance is not greater than 0.");
+    }
+
+    function balanceNative(address token, address account) internal view returns (uint256) {
+        if (token == address(0)) {
+            return address(this).balance;
+        }
+
+        return MockERC20(token).balanceOf(account);
+    }
+
+    function balanceWad(address token, address account) internal view returns (uint256) {
+        return upscale(balanceNative(token, account), scalar(token));
     }
 }
 
