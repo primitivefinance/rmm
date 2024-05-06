@@ -70,18 +70,6 @@ contract RMM {
     /// @dev Emitted on deallocates.
     event Deallocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
 
-    struct Pool {
-        uint128 reserveX;
-        uint128 reserveY;
-        uint128 totalLiquidity;
-        uint128 strike;
-        uint64 sigma;
-        uint32 fee;
-        uint32 maturity;
-        uint32 initTimestamp;
-        uint32 lastTimestamp;
-    }
-
     int256 public constant INIT_UPPER_BOUND = 30;
     address public immutable WETH;
     address public tokenX; // slot 0
@@ -112,7 +100,7 @@ contract RMM {
         _;
         int256 terminal = tradingFunction();
 
-        if (terminal < initial) {
+        if (terminal < 0) {
             revert OutOfRange(initial, terminal);
         }
     }
@@ -206,10 +194,8 @@ contract RMM {
         uint256 amountInWad = upscale(amountIn, scalar(tokenX));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
-        uint256 nextReserveY =
-            solveY(reserveX + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextLiquidity = solveL(totalLiquidity, reserveX + feeAmount, reserveY, strike, sigma, lastTau(), tau_);
+        uint256 nextReserveY = solveY(reserveX + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
 
         amountOut = reserveY - nextReserveY;
         if (amountOut < minAmountOut) {
@@ -233,10 +219,8 @@ contract RMM {
         uint256 amountInWad = upscale(amountIn, scalar(tokenY));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
-        uint256 nextReserveX =
-            solveX(reserveY + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextLiquidity = solveL(totalLiquidity, reserveY + feeAmount, reserveY, strike, sigma, lastTau(), tau_);
+        uint256 nextReserveX = solveX(reserveY + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
@@ -261,16 +245,8 @@ contract RMM {
         uint256 deltaYWad = upscale(deltaY, scalar(tokenY));
 
         uint256 tau_ = currentTau();
-        uint256 nextLiquidity = solveL(
-            totalLiquidity,
-            reserveX + deltaXWad,
-            reserveY + deltaYWad,
-            tradingFunction(),
-            strike,
-            sigma,
-            lastTau(),
-            tau_
-        );
+        uint256 nextLiquidity =
+            solveL(totalLiquidity, reserveX + deltaXWad, reserveY + deltaYWad, strike, sigma, lastTau(), tau_);
 
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
@@ -290,8 +266,8 @@ contract RMM {
         returns (uint256 deltaX, uint256 deltaY)
     {
         uint256 tau_ = currentTau();
-        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
-        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, strike, sigma, tau_);
+        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, strike, sigma, tau_);
 
         deltaX = reserveX - nextReserveX;
         deltaY = reserveY - nextReserveY;
@@ -524,92 +500,61 @@ contract RMM {
 
     /// @dev x is independent variable, y and L are dependent variables.
     function findX(bytes memory data, uint256 x) internal pure returns (int256) {
-        (uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(x, reserveY_, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(x, reserveY_, liquidity, strike_, sigma_, tau_);
     }
 
     /// @dev y is independent variable, x and L are dependent variables.
     function findY(bytes memory data, uint256 y) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(reserveX_, y, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(reserveX_, y, liquidity, strike_, sigma_, tau_);
     }
 
     /// @dev L is independent variable, x and y are dependent variables.
     function findL(bytes memory data, uint256 liquidity) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_);
     }
 
     /// todo: figure out what happens when result of trading function is negative or positive.
-    function solveX(
-        uint256 reserveY_,
-        uint256 liquidity,
-        int256 invariant,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) public view returns (uint256 reserveX_) {
-        // All the arguments that don't change.
-        bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_, invariant);
-
-        // Establish initial bounds
-        uint256 upper = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
-        uint256 lower = upper;
-        int256 result = findX(args, upper);
-        console2.log("result X", result);
-        if (result < 0) {
-            upper = upper.mulDivUp(1001, 1000);
-            upper = upper > liquidity ? liquidity : upper;
-            //result = findX(args, upper);
-        } else {
-            lower = lower.mulDivDown(999, 1000);
-            lower = lower > liquidity ? liquidity : lower;
-            //result = findX(args, lower);
-        }
-
-        // Run bisection using the bounds to find the root of the function `findX`.
-        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, MAX_ITER, true, findX);
-
-        // `upperInput` should be positive, so if root is < 0 return upperInput instead
-        if (findX(args, rootInput) == 0) {
-            reserveX_ = rootInput;
-        } else {
-            reserveX_ = upperInput;
-        }
+    function solveX(uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256 reserveX_)
+    {
+        bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
+        uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
+        reserveX_ = findRootNewX(args, initialGuess, 20, 100);
     }
 
-    function solveY(
-        uint256 reserveX_,
-        uint256 liquidity,
-        int256 invariant,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) public pure returns (uint256 reserveY_) {
-        bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_, invariant);
+    function solveY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256 reserveY_)
+    {
+        bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
-        reserveY_ = findRootNewY(args, initialGuess, 20, 1000);
+        reserveY_ = findRootNewY(args, initialGuess, 20, 100);
     }
 
     function solveL(
         uint256 initialLiquidity,
         uint256 reserveX_,
         uint256 reserveY_,
-        int256 invariant,
         uint256 strike_,
         uint256 sigma_,
         uint256 prevTau,
         uint256 tau_
     ) public pure returns (uint256 liquidity_) {
-        bytes memory args = abi.encode(reserveX_, reserveY_, strike_, sigma_, tau_, invariant);
+        bytes memory args = abi.encode(reserveX_, reserveY_, strike_, sigma_, tau_);
         uint256 initialGuess = computeL(reserveX_, initialLiquidity, sigma_, prevTau, tau_);
-        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 1000);
+        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 100);
     }
 
     function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
@@ -700,7 +645,7 @@ contract RMM {
     }
 
     function computeTfDL(bytes memory args, uint256 L) public pure returns (int256) {
-        (uint256 rX, uint256 rY, uint256 K,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 rX, uint256 rY, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
         int256 x = int256(rX);
         int256 y = int256(rY);
         int256 mu = int256(K);
@@ -722,7 +667,7 @@ contract RMM {
     }
 
     function computeTfDReserveX(bytes memory args, uint256 rX) public pure returns (int256) {
-        (, uint256 L,,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256, int256));
+        (, uint256 L,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
         int256 a = Gaussian.ppf(toInt(rX * 1e18 / L));
         int256 pdf_a = Gaussian.pdf(a);
         int256 result = 1e36 / (int256(L) * pdf_a / 1e18);
@@ -730,7 +675,7 @@ contract RMM {
     }
 
     function computeTfDReserveY(bytes memory args, uint256 rY) public pure returns (int256) {
-        (, uint256 L, uint256 K,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256, int256));
+        (, uint256 L, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
         int256 KL = int256(K * L / 1e18);
         int256 a = Gaussian.ppf(int256(rY) * 1e18 / KL);
         int256 pdf_a = Gaussian.pdf(a);

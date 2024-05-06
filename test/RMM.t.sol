@@ -138,7 +138,6 @@ contract RMMTest is Test {
         uint256 nextReserveY = subject().solveY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
-            subject().tradingFunction(),
             subject().strike(),
             subject().sigma(),
             subject().lastTau()
@@ -175,7 +174,6 @@ contract RMMTest is Test {
         uint256 nextReserveX = subject().solveX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
-            subject().tradingFunction(),
             subject().strike(),
             subject().sigma(),
             subject().lastTau()
@@ -188,7 +186,6 @@ contract RMMTest is Test {
             subject().totalLiquidity(),
             nextReserveX,
             subject().reserveY() + approximatedDeltaY,
-            subject().tradingFunction(),
             subject().strike(),
             subject().sigma(),
             subject().lastTau(),
@@ -201,7 +198,6 @@ contract RMMTest is Test {
             subject().totalLiquidity(),
             subject().reserveX() + deltaX,
             subject().reserveY(),
-            subject().tradingFunction(),
             subject().strike(),
             subject().sigma(),
             subject().lastTau(),
@@ -219,7 +215,6 @@ contract RMMTest is Test {
             subject().totalLiquidity(),
             nextReserveX,
             subject().reserveY() - approximatedDeltaY,
-            subject().tradingFunction(),
             subject().strike(),
             subject().sigma(),
             subject().lastTau(),
