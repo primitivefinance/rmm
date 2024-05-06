@@ -106,7 +106,7 @@ contract RMM is ERC20 {
         _;
         int256 terminal = tradingFunction();
 
-        if (terminal < 0) {
+        if (abs(terminal) > 10) {
             revert OutOfRange(initial, terminal);
         }
     }
