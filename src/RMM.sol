@@ -106,7 +106,7 @@ contract RMM is ERC20 {
         _;
         int256 terminal = tradingFunction();
 
-        if (terminal < initial) {
+        if (terminal < 0) {
             revert OutOfRange(initial, terminal);
         }
     }
@@ -213,10 +213,8 @@ contract RMM is ERC20 {
         uint256 amountInWad = upscale(amountIn, scalar(tokenX));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
-        uint256 nextReserveY =
-            solveY(reserveX + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextLiquidity = solveL(totalLiquidity, reserveX + feeAmount, reserveY, strike, sigma, lastTau(), tau_);
+        uint256 nextReserveY = solveY(reserveX + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
 
         amountOut = reserveY - nextReserveY;
         if (amountOut < minAmountOut) {
@@ -240,10 +238,8 @@ contract RMM is ERC20 {
         uint256 amountInWad = upscale(amountIn, scalar(tokenY));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveY + feeAmount, reserveY, tradingFunction(), strike, sigma, lastTau(), tau_);
-        uint256 nextReserveX =
-            solveX(reserveY + amountInWad - feeAmount, nextLiquidity, tradingFunction(), strike, sigma, tau_);
+        uint256 nextLiquidity = solveL(totalLiquidity, reserveY + feeAmount, reserveY, strike, sigma, lastTau(), tau_);
+        uint256 nextReserveX = solveX(reserveY + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
 
         amountOut = reserveX - nextReserveX;
         if (amountOut < minAmountOut) {
@@ -267,16 +263,10 @@ contract RMM is ERC20 {
     {
         uint256 deltaXWad = upscale(deltaX, scalar(tokenX));
         uint256 deltaYWad = upscale(deltaY, scalar(tokenY));
-        uint256 nextLiquidity = solveL(
-            totalLiquidity,
-            reserveX + deltaXWad,
-            reserveY + deltaYWad,
-            tradingFunction(),
-            strike,
-            sigma,
-            lastTau(),
-            lastTau()
-        );
+
+        uint256 tau_ = currentTau();
+        uint256 nextLiquidity =
+            solveL(totalLiquidity, reserveX + deltaXWad, reserveY + deltaYWad, strike, sigma, lastTau(), lastTau());
 
         if (nextLiquidity < totalLiquidity) {
             revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
@@ -480,7 +470,7 @@ contract RMM is ERC20 {
         pure
         returns (uint256)
     {
-        if (tau_ == 0) liquidity * strike_ * (1 ether - reserveX_ / liquidity) / (1e18 ** 2);
+        if (tau_ == 0) return liquidity * strike_ * (1 ether - reserveX_ / liquidity) / 1e36;
 
         int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWadDown(liquidity)));
         int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
@@ -495,9 +485,9 @@ contract RMM is ERC20 {
         pure
         returns (uint256)
     {
-        if (tau_ == 0) return liquidity * (1 ether - reserveY_ * 1e18 * 1e18 / (liquidity * strike_));
+        if (tau_ == 0) return liquidity * (1 ether - reserveY_ * 1e36 / (liquidity * strike_));
 
-        int256 a = Gaussian.ppf(toInt(reserveY_ * 1e18 * 1e18 / (liquidity * strike_)));
+        int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
         int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
         int256 c = Gaussian.cdf(a + b);
 
@@ -541,235 +531,189 @@ contract RMM is ERC20 {
 
     /// @dev x is independent variable, y and L are dependent variables.
     function findX(bytes memory data, uint256 x) internal pure returns (int256) {
-        (uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(x, reserveY_, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(x, reserveY_, liquidity, strike_, sigma_, tau_);
     }
 
     /// @dev y is independent variable, x and L are dependent variables.
     function findY(bytes memory data, uint256 y) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(reserveX_, y, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(reserveX_, y, liquidity, strike_, sigma_, tau_);
     }
 
     /// @dev L is independent variable, x and y are dependent variables.
     function findL(bytes memory data, uint256 liquidity) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_, int256 invariant) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256, int256));
+        (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_) =
+            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
 
-        return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_) - invariant;
+        return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_);
     }
 
     /// todo: figure out what happens when result of trading function is negative or positive.
-    function solveX(
-        uint256 reserveY_,
-        uint256 liquidity,
-        int256 invariant,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) public view returns (uint256 reserveX_) {
-        // All the arguments that don't change.
-        bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_, invariant);
-
-        // Establish initial bounds
-        uint256 upper = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
-        uint256 lower = upper;
-        int256 result = findX(args, upper);
-        console2.log("result X", result);
-        if (result < 0) {
-            upper = upper.mulDivUp(1001, 1000);
-            upper = upper > liquidity ? liquidity : upper;
-            //result = findX(args, upper);
-        } else {
-            lower = lower.mulDivDown(999, 1000);
-            lower = lower > liquidity ? liquidity : lower;
-            //result = findX(args, lower);
-        }
-
-        // Run bisection using the bounds to find the root of the function `findX`.
-        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, MAX_ITER, findX);
-
-        // `upperInput` should be positive, so if root is < 0 return upperInput instead
-        if (findX(args, rootInput) == 0) {
-            reserveX_ = rootInput;
-        } else {
-            reserveX_ = upperInput;
-        }
+    function solveX(uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256 reserveX_)
+    {
+        bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
+        uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
+        reserveX_ = findRootNewX(args, initialGuess, 20, 100);
     }
 
-    function solveY(
-        uint256 reserveX_,
-        uint256 liquidity,
-        int256 invariant,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) public view returns (uint256 reserveY_) {
-        // All the arguments that don't change.
-        bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_, invariant);
-
-        // Establish initial bounds
-        uint256 upper = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
-        uint256 lower = upper;
-        int256 result = findY(args, upper);
-        console2.log("result Y", result);
-        if (result < 0) {
-            upper = upper.mulDivUp(1e15 + 1, 1e15);
-            //result = findY(args, upper);
-        } else {
-            lower = lower.mulDivDown(1e15 - 1, 1e15);
-            //result = findY(args, lower);
-        }
-        reserveY_ = upper;
-        /*
-        // Run bisection using the bounds to find the root of the function `findY`.
-        (uint256 rootInput, uint256 upperInput,) = bisection(args, lower, upper, 1, 1, findY);
-
-        // `upperInput` should be positive, so if root is < 0 return upperInput instead
-        if (findY(args, rootInput) == 0) {
-            reserveY_ = rootInput;
-        } else {
-            reserveY_ = upperInput;
-        }
-        */
+    function solveY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256 reserveY_)
+    {
+        bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
+        uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
+        reserveY_ = findRootNewY(args, initialGuess, 20, 100);
     }
 
     function solveL(
         uint256 initialLiquidity,
         uint256 reserveX_,
         uint256 reserveY_,
-        int256 invariant,
         uint256 strike_,
         uint256 sigma_,
         uint256 prevTau,
         uint256 tau_
-    ) public view returns (uint256 liquidity_) {
-        // All the arguments that don't change.
-        bytes memory args = abi.encode(reserveX_, reserveY_, strike_, sigma_, tau_, invariant);
-
-        // Establish initial bounds
-        uint256 upper =
-            initialLiquidity == 0 ? reserveX_ + 1 : computeL(reserveX_, initialLiquidity, sigma_, prevTau, tau_);
-        uint256 lower = upper;
-        int256 result = findL(args, lower);
-        if (result < 0) {
-            /* lower = lower.mulDivDown(1e8 - 1, 1e8);
-            uint256 min =
-                reserveX_ > reserveY_.divWadDown(strike_) ? reserveX_ + 1000 : reserveY_.divWadDown(strike_) + 1000;
-            lower = lower < reserveX_ ? min : lower; */
-
-            while (result < 0) {
-                lower = lower.mulDivDown(999, 1000);
-                uint256 min =
-                    reserveX_ > reserveY_.divWadDown(strike_) ? reserveX_ + 1000 : reserveY_.divWadDown(strike_) + 1000;
-                lower = lower < reserveX_ ? min : lower;
-                result = findL(args, lower);
-            }
-        } else {
-            /* upper = upper.mulDivUp(1e8 + 1, 1e8); */
-            while (result > 0) {
-                upper = upper.mulDivUp(1001, 1000);
-                result = findL(args, upper);
-            }
-        }
-        liquidity_ = lower;
-
-        // Run bisection using the bounds to find the root of the function `findL`.
-        (uint256 rootInput,, uint256 lowerInput) = bisection(args, lower, upper, 1, 20, findL);
-
-        // `upperInput` should be positive, so if root is < 0 return upperInput instead
-        if (findL(args, rootInput) == 0) {
-            liquidity_ = rootInput;
-        } else {
-            liquidity_ = lowerInput;
-        }
-        console2.log("terminal L", liquidity_);
-    }
-}
-
-// 256 iter:  0.732899032202380204
-// 8 iter:    0.732436599229286431
-// 3 iter:    0.705792051020313330
-
-uint256 constant MAX_ITER = 10;
-
-/// @dev Thrown when the lower bound is greater than the upper bound.
-error BisectionLib_InvalidBounds(uint256 lower, uint256 upper);
-/// @dev Thrown when the result of the function `fx` for each input, `upper` and `lower`, is the same sign.
-error BisectionLib_RootOutsideBounds(int256 lowerResult, int256 upperResult);
-
-/**
- * @notice
- * The function `fx` must be continuous and monotonic.
- *
- * @dev
- * Bisection is a method of finding the root of a function.
- * The root is the point where the function crosses the x-axis.
- *
- * @param args The arguments to pass to the function `fx`.
- * @param lower The lower bound of the root to find.
- * @param upper The upper bound of the root to find.
- * @param epsilon The maximum distance between the lower and upper results.
- * @param maxIterations The maximum amount of loop iterations to run.
- * @param fx The function to find the root of.
- * @return root The root of the function `fx`.
- */
-function bisection(
-    bytes memory args,
-    uint256 lower,
-    uint256 upper,
-    uint256 epsilon,
-    uint256 maxIterations,
-    function (bytes memory,uint256) pure returns (int256) fx
-) view returns (uint256 root, uint256 upperInput, uint256 lowerInput) {
-    if (lower > upper) revert BisectionLib_InvalidBounds(lower, upper);
-    // Passes the lower and upper bounds to the optimized function.
-    // Reverts if the optimized function `fx` returns both negative or both positive values.
-    // This means that the root is not between the bounds.
-    // The root is between the bounds if the product of the two values is negative.
-    int256 lowerOutput = fx(args, lower);
-    int256 upperOutput = fx(args, upper);
-    if (lowerOutput * upperOutput > 0) {
-        revert BisectionLib_RootOutsideBounds(lowerOutput, upperOutput);
+    ) public pure returns (uint256 liquidity_) {
+        bytes memory args = abi.encode(reserveX_, reserveY_, strike_, sigma_, tau_);
+        uint256 initialGuess = computeL(reserveX_, initialLiquidity, sigma_, prevTau, tau_);
+        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 100);
     }
 
-    // Distance is optimized to equal `epsilon`.
-    uint256 distance = upper - lower;
-    upperInput = upper;
-    lowerInput = lower;
+    function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
+        public
+        pure
+        returns (uint256 L)
+    {
+        L = initialGuess;
+        int256 L_next;
+        for (uint256 i = 0; i < maxIterations; i++) {
+            int256 dfx = computeTfDL(args, L);
+            int256 fx = findL(args, L);
 
-    uint256 iterations; // Bounds the amount of loops to `maxIterations`.
-    do {
-        // Bisection uses the point between the lower and upper bounds.
-        // The `distance` is halved each iteration.
-        root = (lowerInput + upperInput) / 2;
+            if (dfx == 0) {
+                // Handle division by zero
+                break;
+            }
 
-        int256 output = fx(args, root);
-        console2.log("fx output", output);
+            L_next = int256(L) - fx * 1e18 / dfx;
+            console2.log("L", L);
 
-        // If the product is negative, the root is between the lower and root.
-        // If the product is positive, the root is between the root and upper.
-        if (output * lowerOutput <= 0) {
-            upperInput = root; // Set the new upper bound to the root because we know its between the lower and root.
-        } else {
-            lowerInput = root; // Set the new lower bound to the root because we know its between the upper and root.
-            lowerOutput = output; // root function value becomes new lower output value
+            if (abs(int256(L) - L_next) <= int256(tolerance)) {
+                L = uint256(L_next);
+                console2.log("terminal L", L);
+                break;
+            }
+
+            L = uint256(L_next);
         }
+    }
 
-        // Update the distance with the new bounds.
-        distance = upper - lower;
+    function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
+        public
+        pure
+        returns (uint256 reserveX_)
+    {
+        reserveX_ = initialGuess;
+        int256 reserveX_next;
+        for (uint256 i = 0; i < maxIterations; i++) {
+            int256 dfx = computeTfDReserveX(args, reserveX_);
+            int256 fx = findX(args, reserveX_);
 
-        unchecked {
-            iterations++; // Increment the iterator.
+            if (dfx == 0) {
+                // Handle division by zero
+                break;
+            }
+
+            reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
+            console2.log("reserveX_", reserveX_);
+
+            if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance)) {
+                reserveX_ = uint256(reserveX_next);
+                console2.log("terminal reserveX_", reserveX_);
+                break;
+            }
+
+            reserveX_ = uint256(reserveX_next);
         }
-        console2.log("iterations", iterations);
-    } while (distance > epsilon && iterations < maxIterations);
+    }
+
+    function findRootNewY(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
+        public
+        pure
+        returns (uint256 reserveY_)
+    {
+        reserveY_ = initialGuess;
+        int256 reserveY_next;
+        for (uint256 i = 0; i < maxIterations; i++) {
+            int256 dfx = computeTfDReserveY(args, reserveY_);
+            int256 fx = findY(args, reserveY_);
+
+            if (dfx == 0) {
+                // Handle division by zero
+                break;
+            }
+
+            reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
+            console2.log("reserveY_", reserveY_);
+
+            if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance)) {
+                reserveY_ = uint256(reserveY_next);
+                console2.log("terminal reserveY_", reserveY_);
+                break;
+            }
+
+            reserveY_ = uint256(reserveY_next);
+        }
+    }
+
+    function computeTfDL(bytes memory args, uint256 L) public pure returns (int256) {
+        (uint256 rX, uint256 rY, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+        int256 x = int256(rX);
+        int256 y = int256(rY);
+        int256 mu = int256(K);
+        int256 L_squared = int256(L.mulWadDown(L));
+
+        int256 a = Gaussian.ppf(int256(rX.divWadUp(L)));
+        int256 b = Gaussian.ppf(int256(rY.divWadUp(L.mulWadUp(K))));
+
+        int256 pdf_a = Gaussian.pdf(a);
+        int256 pdf_b = Gaussian.pdf(b);
+
+        int256 term1 = x * 1 ether / (int256(L_squared) * (pdf_a) / 1 ether);
+
+        int256 term2a = mu * int256(L_squared) / 1 ether;
+        int256 term2b = term2a * pdf_b / 1 ether;
+        int256 term2 = y * 1 ether / term2b;
+
+        return -term1 - term2;
+    }
+
+    function computeTfDReserveX(bytes memory args, uint256 rX) public pure returns (int256) {
+        (, uint256 L,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+        int256 a = Gaussian.ppf(toInt(rX * 1e18 / L));
+        int256 pdf_a = Gaussian.pdf(a);
+        int256 result = 1e36 / (int256(L) * pdf_a / 1e18);
+        return result;
+    }
+
+    function computeTfDReserveY(bytes memory args, uint256 rY) public pure returns (int256) {
+        (, uint256 L, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+        int256 KL = int256(K * L / 1e18);
+        int256 a = Gaussian.ppf(int256(rY) * 1e18 / KL);
+        int256 pdf_a = Gaussian.pdf(a);
+        int256 result = 1e36 / (KL * pdf_a / 1e18);
+        return result;
+    }
 }
-
 // utils
 
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
@@ -798,6 +742,14 @@ function downscaleUp(uint256 amount, uint256 scalar) pure returns (uint256) {
 function toUint(int256 x) pure returns (uint256) {
     require(x >= 0, "toUint: negative");
     return uint256(x);
+}
+
+function abs(int256 x) pure returns (int256) {
+    if (x < 0) {
+        return -x;
+    } else {
+        return x;
+    }
 }
 
 /// @dev Casts an unsigned integer to a signed integer, reverting if `x` is too large.
