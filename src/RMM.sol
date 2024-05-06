@@ -264,9 +264,15 @@ contract RMM is ERC20 {
         uint256 deltaXWad = upscale(deltaX, scalar(tokenX));
         uint256 deltaYWad = upscale(deltaY, scalar(tokenY));
 
-        uint256 tau_ = currentTau();
-        uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + deltaXWad, reserveY + deltaYWad, strike, sigma, lastTau(), lastTau());
+        uint256 nextLiquidity = solveL(
+            computeLGivenX(reserveX + deltaXWad, approxSpotPrice(), strike, sigma, lastTau()),
+            reserveX + deltaXWad,
+            reserveY + deltaYWad,
+            strike,
+            sigma,
+            lastTau(),
+            lastTau()
+        );
 
         if (nextLiquidity < totalLiquidity) {
             revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
@@ -512,17 +518,14 @@ contract RMM is ERC20 {
         return reserveX_ * 1 ether / toUint(1 ether - c);
     }
 
-    function computeLGivenX(
-        uint256 reserveX_,
-        uint256 prevL,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 prevTau,
-        uint256 newTau
-    ) public pure returns (uint256) {
-        int256 lnSDivK = computeLnSDivK(computeSpotPrice(reserveX_, prevL, strike_, sigma_, newTau), strike_);
-        uint256 sigmaSqrtTau = computeSigmaSqrtTau(sigma_, newTau);
-        uint256 halfSigmaSquaredTau = sigma_.mulWadDown(sigma_).mulWadDown(0.5 ether).mulWadDown(newTau);
+    function computeLGivenX(uint256 reserveX_, uint256 S, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256)
+    {
+        int256 lnSDivK = computeLnSDivK(S, strike_);
+        uint256 sigmaSqrtTau = computeSigmaSqrtTau(sigma_, tau_);
+        uint256 halfSigmaSquaredTau = sigma_.mulWadDown(sigma_).mulWadDown(0.5 ether).mulWadDown(tau_);
         int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) / int256(sigmaSqrtTau);
         uint256 cdf = uint256(Gaussian.cdf(d1));
 
@@ -594,9 +597,13 @@ contract RMM is ERC20 {
         returns (uint256 L)
     {
         L = initialGuess;
+        console2.log("initialGuess", initialGuess);
         int256 L_next;
         for (uint256 i = 0; i < maxIterations; i++) {
+            console2.log("L", L);
+            console2.log("i", i);
             int256 dfx = computeTfDL(args, L);
+            console2.log("dfx", dfx);
             int256 fx = findL(args, L);
 
             if (dfx == 0) {
@@ -605,6 +612,7 @@ contract RMM is ERC20 {
             }
 
             L_next = int256(L) - fx * 1e18 / dfx;
+            console2.log("L_next", L_next);
             console2.log("L", L);
 
             if (abs(int256(L) - L_next) <= int256(tolerance)) {
