@@ -482,12 +482,20 @@ contract RMMTest is Test {
         tokenX.approve(address(subject()), basicParams.reserveX);
         tokenY.approve(address(subject()), basicParams.reserveY);
 
+        uint256 totalLiquidity = subject().prepareInit({
+            priceX: 1 ether,
+            amountX: basicParams.reserveX,
+            strike_: basicParams.strike,
+            sigma_: basicParams.sigma,
+            maturity_: basicParams.maturity
+        });
+
         subject().init(
             address(tokenX),
             address(tokenY),
             basicParams.reserveX,
             basicParams.reserveY,
-            basicParams.totalLiquidity,
+            totalLiquidity,
             basicParams.strike,
             basicParams.sigma,
             basicParams.fee,
@@ -499,7 +507,7 @@ contract RMMTest is Test {
         assertEq(subject().tokenY(), address(tokenY), "Token Y address is not correct.");
         assertEq(subject().reserveX(), basicParams.reserveX, "Reserve X is not correct.");
         assertEq(subject().reserveY(), basicParams.reserveY, "Reserve Y is not correct.");
-        assertEq(subject().totalLiquidity(), basicParams.totalLiquidity, "Total liquidity is not correct.");
+        assertEq(subject().totalLiquidity(), totalLiquidity, "Total liquidity is not correct.");
         assertEq(subject().strike(), basicParams.strike, "Strike is not correct.");
         assertEq(subject().sigma(), basicParams.sigma, "Sigma is not correct.");
         assertEq(subject().fee(), basicParams.fee, "Fee is not correct.");

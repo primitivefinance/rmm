@@ -117,6 +117,21 @@ contract RMM is ERC20 {
 
     receive() external payable {}
 
+    function prepareInit(uint256 priceX, uint256 amountX, uint256 strike_, uint256 sigma_, uint256 maturity_)
+        public
+        view
+        returns (uint256 totalLiquidity_)
+    {
+        uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
+        uint256 initialLiquidity =
+            computeLGivenX({reserveX_: amountX, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
+
+        console2.log("initialLiquidity", initialLiquidity);
+        uint256 amountY =
+            solveY({reserveX_: amountX, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
+        totalLiquidity_ = solveL(initialLiquidity, reserveX, amountY, strike_, sigma_, tau_, tau_);
+    }
+
     /// todo: need a way to compute initial liquidity based on price user input!
     /// @dev Initializes the pool with an implied price via the desired reserves, liquidity, and parameters.
     function init(
@@ -324,7 +339,7 @@ contract RMM is ERC20 {
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned)
     {
-        uint liquidity = totalLiquidity;
+        uint256 liquidity = totalLiquidity;
         deltaXWad = deltaLiquidity.mulDivDown(reserveX, liquidity);
         deltaYWad = deltaLiquidity.mulDivDown(reserveY, liquidity);
         lptBurned = deltaLiquidity.mulDivUp(totalSupply, liquidity);
@@ -338,7 +353,7 @@ contract RMM is ERC20 {
         lock
         returns (uint256 deltaX, uint256 deltaY)
     {
-        (uint256 deltaXWad, uint256 deltaYWad, uint lptBurned) = prepareDeallocate(deltaLiquidity);
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned) = prepareDeallocate(deltaLiquidity);
         (deltaX, deltaY) = (downscaleDown(deltaXWad, scalar(tokenX)), downscaleDown(deltaYWad, scalar(tokenY)));
 
         if (minDeltaXOut > deltaX) {
