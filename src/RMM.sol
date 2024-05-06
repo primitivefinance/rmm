@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Gaussian} from "solstat/Gaussian.sol";
 import {console2} from "forge-std/console2.sol";
@@ -16,7 +17,7 @@ interface ICallback {
     function callback(address token, uint256 amountNative, bytes calldata data) external returns (bool);
 }
 
-contract RMM {
+contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
 
@@ -28,6 +29,8 @@ contract RMM {
     error InsufficientLiquidityMinted(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
     /// @dev Thrown when a swap does not output enough tokens.
     error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
+    /// @dev Thrown when an allocate would reduce the liquidity.
+    error InvalidAllocate(uint256 deltaX, uint256 deltaY, uint256 currLiquidity, uint256 nextLiquidity);
     /// @dev Thrown on `init` when a token has invalid decimals.
     error InvalidDecimals(address token, uint256 decimals);
     /// @dev Thrown when an input to the trading function is outside the domain for the X reserve.
@@ -66,25 +69,28 @@ contract RMM {
         int256 deltaLiquidity
     );
     /// @dev Emitted on allocatess.
-    event Allocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
+    event Allocate(address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
     /// @dev Emitted on deallocates.
-    event Deallocate(address indexed caller, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
+    event Deallocate(
+        address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity
+    );
 
     int256 public constant INIT_UPPER_BOUND = 30;
+    uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
-    address public tokenX; // slot 0
-    address public tokenY; // slot 1
-    uint256 public reserveX; // slot 2
-    uint256 public reserveY; // slot 3
-    uint256 public totalLiquidity; // slot 4
-    uint256 public strike; // slot 5
-    uint256 public sigma; // slot 6
-    uint256 public fee; // slot 7
-    uint256 public maturity; // slot 8
-    uint256 public initTimestamp; // slot 9
-    uint256 public lastTimestamp; // slot 10
-    address public curator; // slot 11
-    uint256 public lock_ = 1; // slot 12
+    address public tokenX; // slot 6
+    address public tokenY; // slot 7
+    uint256 public reserveX; // slot 8
+    uint256 public reserveY; // slot 9
+    uint256 public totalLiquidity; // slot 10
+    uint256 public strike; // slot 11
+    uint256 public sigma; // slot 12
+    uint256 public fee; // slot 13
+    uint256 public maturity; // slot 14
+    uint256 public initTimestamp; // slot 15
+    uint256 public lastTimestamp; // slot 16
+    address public curator; // slot 17
+    uint256 public lock_ = 1; // slot 18
     // TODO: go back to calling it strike, sigma, tau, strike and sigma is cringe
 
     modifier lock() {
@@ -105,7 +111,7 @@ contract RMM {
         }
     }
 
-    constructor(address weth_) {
+    constructor(address weth_, string memory name_, string memory symbol_) ERC20(name_, symbol_, 18) {
         WETH = weth_;
     }
 
@@ -150,6 +156,8 @@ contract RMM {
         decimals = Token(tokenY).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY, decimals);
 
+        _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
+        _mint(address(0), BURNT_LIQUIDITY);
         _debit(tokenX, reserveX, "");
         _debit(tokenY, reserveY, "");
 
@@ -170,6 +178,17 @@ contract RMM {
 
     /// @dev Allows an arbitrary adjustment to the reserves and liquidity, if it is valid.
     function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) external lock {
+        uint256 feeAmount;
+
+        // Deallocating
+        if (deltaLiquidity < 0) {
+            if (deltaY > 0 && deltaX <= 0) {
+                feeAmount = toUint(deltaY).mulWadUp(fee);
+            } else if (deltaX > 0 && deltaY <= 0) {
+                feeAmount = toUint(deltaX).mulWadUp(fee);
+            }
+        }
+
         _adjust(deltaX, deltaY, deltaLiquidity);
         if (deltaX < 0) _credit(tokenX, msg.sender, uint256(-deltaX));
         if (deltaY < 0) _credit(tokenY, msg.sender, uint256(-deltaY));
@@ -236,7 +255,8 @@ contract RMM {
         emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
     }
 
-    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut)
+    /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
+    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
         external
         lock
         returns (uint256 deltaLiquidity)
@@ -246,40 +266,51 @@ contract RMM {
 
         uint256 tau_ = currentTau();
         uint256 nextLiquidity =
-            solveL(totalLiquidity, reserveX + deltaXWad, reserveY + deltaYWad, strike, sigma, lastTau(), tau_);
+            solveL(totalLiquidity, reserveX + deltaXWad, reserveY + deltaYWad, strike, sigma, lastTau(), lastTau());
+
+        if (nextLiquidity < totalLiquidity) {
+            revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
+        }
 
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
             revert InsufficientLiquidityMinted(deltaXWad, deltaYWad, minLiquidityOut, deltaLiquidity);
         }
 
+        _mint(to, deltaLiquidity.mulDivDown(totalSupply, nextLiquidity));
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity));
+
         (uint256 debitNativeX) = _debit(tokenX, deltaXWad, "");
         (uint256 debitNativeY) = _debit(tokenY, deltaYWad, "");
 
-        emit Allocate(msg.sender, debitNativeX, debitNativeY, deltaLiquidity);
+        emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
 
-    function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut)
+    /// @dev Burns `deltaLiquidity` * `totalSupply` / `totalLiquidity` rounded up
+    /// and returns `deltaLiquidity` * `reserveX` / `totalLiquidity`
+    ///           + `deltaLiquidity` * `reserveY` / `totalLiquidity` of ERC-20 tokens.
+    function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut, address to)
         external
         lock
         returns (uint256 deltaX, uint256 deltaY)
     {
-        uint256 tau_ = currentTau();
-        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, strike, sigma, tau_);
-        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, strike, sigma, tau_);
+        deltaX = deltaLiquidity.mulDivDown(reserveX, totalLiquidity);
+        deltaY = deltaLiquidity.mulDivDown(reserveY, totalLiquidity);
 
-        deltaX = reserveX - nextReserveX;
-        deltaY = reserveY - nextReserveY;
-        if (deltaX < minDeltaXOut || deltaY < minDeltaYOut) {
+        if (minDeltaXOut > deltaX) {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
         }
+        if (minDeltaYOut > deltaY) {
+            revert InsufficientOutput(deltaLiquidity, minDeltaYOut, deltaY);
+        }
 
+        _burn(msg.sender, deltaLiquidity.mulDivUp(totalSupply, totalLiquidity)); // uses state totalLiquidity
         _adjust(-toInt(deltaX), -toInt(deltaY), -toInt(deltaLiquidity));
-        (uint256 creditNativeX) = _credit(tokenX, msg.sender, deltaX);
-        (uint256 creditNativeY) = _credit(tokenY, msg.sender, deltaY);
 
-        emit Deallocate(msg.sender, creditNativeX, creditNativeY, deltaLiquidity);
+        (uint256 creditNativeX) = _credit(tokenX, to, deltaX);
+        (uint256 creditNativeY) = _credit(tokenY, to, deltaY);
+
+        emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }
 
     // payments
