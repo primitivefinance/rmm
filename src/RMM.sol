@@ -120,16 +120,15 @@ contract RMM is ERC20 {
     function prepareInit(uint256 priceX, uint256 amountX, uint256 strike_, uint256 sigma_, uint256 maturity_)
         public
         view
-        returns (uint256 totalLiquidity_)
+        returns (uint256 totalLiquidity_, uint256 amountY)
     {
         uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
         uint256 initialLiquidity =
             computeLGivenX({reserveX_: amountX, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
-
         console2.log("initialLiquidity", initialLiquidity);
-        uint256 amountY =
-            solveY({reserveX_: amountX, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
-        totalLiquidity_ = solveL(initialLiquidity, reserveX, amountY, strike_, sigma_, tau_, tau_);
+        amountY =
+            computeY({reserveX_: amountX, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
+        totalLiquidity_ = solveL(initialLiquidity, amountX, amountY, strike_, sigma_, tau_, tau_);
     }
 
     /// todo: need a way to compute initial liquidity based on price user input!

@@ -476,13 +476,13 @@ contract RMMTest is Test {
         assertEq(balance - newBalance, basicParams.reserveY, "Token Y balance did not decrease by reserve amount.");
     }
 
-    function test_init() public {
-        deal(address(tokenX), address(this), basicParams.reserveX);
-        deal(address(tokenY), address(this), basicParams.reserveY);
-        tokenX.approve(address(subject()), basicParams.reserveX);
-        tokenY.approve(address(subject()), basicParams.reserveY);
+    function test_init_pool() public {
+        deal(address(tokenX), address(this), 100e18);
+        deal(address(tokenY), address(this), 100e18);
+        tokenX.approve(address(subject()), 100e18);
+        tokenY.approve(address(subject()), 100e18);
 
-        uint256 totalLiquidity = subject().prepareInit({
+        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
             priceX: 1 ether,
             amountX: basicParams.reserveX,
             strike_: basicParams.strike,
@@ -490,11 +490,13 @@ contract RMMTest is Test {
             maturity_: basicParams.maturity
         });
 
+        console2.log("amountY", amountY);
+
         subject().init(
             address(tokenX),
             address(tokenY),
             basicParams.reserveX,
-            basicParams.reserveY,
+            amountY,
             totalLiquidity,
             basicParams.strike,
             basicParams.sigma,
@@ -506,7 +508,7 @@ contract RMMTest is Test {
         assertEq(subject().tokenX(), address(tokenX), "Token X address is not correct.");
         assertEq(subject().tokenY(), address(tokenY), "Token Y address is not correct.");
         assertEq(subject().reserveX(), basicParams.reserveX, "Reserve X is not correct.");
-        assertEq(subject().reserveY(), basicParams.reserveY, "Reserve Y is not correct.");
+        assertEq(subject().reserveY(), amountY, "Reserve Y is not correct.");
         assertEq(subject().totalLiquidity(), totalLiquidity, "Total liquidity is not correct.");
         assertEq(subject().strike(), basicParams.strike, "Strike is not correct.");
         assertEq(subject().sigma(), basicParams.sigma, "Sigma is not correct.");
