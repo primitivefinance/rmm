@@ -41,6 +41,18 @@ contract RMMTest is Test {
         return __subject__;
     }
 
+    function balanceNative(address token, address account) internal view returns (uint256) {
+        if (token == address(0)) {
+            return address(this).balance;
+        }
+
+        return MockERC20(token).balanceOf(account);
+    }
+
+    function balanceWad(address token, address account) internal view returns (uint256) {
+        return upscale(balanceNative(token, account), scalar(token));
+    }
+
     modifier tokens() {
         _;
         tokenX = new MockERC20("Token X", "X", 18);
@@ -50,7 +62,7 @@ contract RMMTest is Test {
     }
 
     /// @dev Uses the "basic" set of parameters produced from DFMM LogNormal solvers.
-    modifier basic() {
+    modifier basic_override() {
         vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
         vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
         vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
@@ -59,6 +71,27 @@ contract RMMTest is Test {
         vm.store(address(subject()), bytes32(STRIKE_SLOT), bytes32(uint256(1 ether)));
         vm.store(address(subject()), bytes32(SIGMA_SLOT), bytes32(uint256(1 ether)));
         vm.store(address(subject()), bytes32(MATURITY_SLOT), bytes32(uint256(block.timestamp + 365 days)));
+        _;
+    }
+
+    modifier basic() {
+        deal(address(tokenX), address(this), 1 ether);
+        deal(address(tokenY), address(this), 0.999999999999999997 ether);
+        tokenX.approve(address(subject()), 1 ether);
+        tokenY.approve(address(subject()), 0.999999999999999997 ether);
+        subject().init({
+            tokenX_: address(tokenX),
+            tokenY_: address(tokenY),
+            reserveX_: 1 ether,
+            reserveY_: 0.999999999999999997 ether,
+            totalLiquidity_: 3241096933647192684,
+            strike_: 1 ether,
+            sigma_: 1 ether,
+            fee_: 0,
+            maturity_: 365 days,
+            curator_: address(0x55)
+        });
+
         _;
     }
 
@@ -673,6 +706,7 @@ contract RMMTest is Test {
     function test_swapY() public basic {
         uint256 deltaY = 1 ether;
         uint256 minAmountOut = 0.685040567022230765 ether;
+        uint256 minAmountOutWIthError = minAmountOut * 99 / 100;
         deal(address(tokenX), address(subject()), minAmountOut * 110 / 100);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
@@ -681,9 +715,9 @@ contract RMMTest is Test {
         uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
         uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
         uint256 prevPrice = subject().approxSpotPrice();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOutWIthError, address(this), "");
 
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        assertTrue(amountOut >= minAmountOutWIthError, "Amount out is not greater than or equal to min amount out.");
         assertTrue(
             subject().tradingFunction() >= prevResult, "Trading function did not increase or stay equal after swap."
         );
@@ -748,33 +782,44 @@ contract RMMTest is Test {
     function test_swapY_callback() public basic {
         uint256 deltaY = 1 ether;
         uint256 minAmountOut = 0.685040567022230765 ether;
+        uint256 minAmountOutWithError = minAmountOut * 99 / 100;
         deal(address(tokenX), address(subject()), minAmountOut);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
         CallbackProvider provider = new CallbackProvider();
         vm.prank(address(provider));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapY(deltaY, minAmountOutWithError, address(this), "0x1");
+        assertTrue(amountOut >= minAmountOutWithError, "Amount out is not greater than or equal to min amount out.");
         assertTrue(tokenX.balanceOf(address(this)) == amountOut, "Token X balance is not greater than 0.");
     }
 
-    function balanceNative(address token, address account) internal view returns (uint256) {
-        if (token == address(0)) {
-            return address(this).balance;
-        }
+    function test_deallocate() public basic {
+        uint256 amount = 1 ether;
+        deal(address(tokenX), address(this), amount);
+        tokenX.approve(address(subject()), amount);
+        deal(address(tokenY), address(this), amount);
+        tokenY.approve(address(subject()), amount);
 
-        return MockERC20(token).balanceOf(account);
-    }
+        uint256 deltaLiquidity = subject().allocate(amount, amount, 1, address(this));
 
-    function balanceWad(address token, address account) internal view returns (uint256) {
-        return upscale(balanceNative(token, account), scalar(token));
+        uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
+        uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
+        (uint256 deltaX, uint256 deltaY) = subject().deallocate(deltaLiquidity, 1, 1, address(this));
+
+        assertEq(
+            balanceWad(address(tokenX), address(this)), prevBalanceX + deltaX, "Balance X did not increase by delta X."
+        );
+        assertEq(
+            balanceWad(address(tokenY), address(this)), prevBalanceY + deltaY, "Balance Y did not increase by delta Y."
+        );
     }
 }
 
 contract CallbackProvider is Test {
     function callback(address token, uint256 amountNativeToPay, bytes calldata data) public returns (bool) {
         data;
-        deal(token, msg.sender, amountNativeToPay);
+        deal(token, msg.sender, MockERC20(token).balanceOf(msg.sender) + amountNativeToPay);
         return true;
     }
 }

@@ -29,6 +29,8 @@ contract RMM is ERC20 {
     error InsufficientLiquidityMinted(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
     /// @dev Thrown when a swap does not output enough tokens.
     error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
+    /// @dev Thrown when an allocate would reduce the liquidity.
+    error InvalidAllocate(uint256 deltaX, uint256 deltaY, uint256 currLiquidity, uint256 nextLiquidity);
     /// @dev Thrown on `init` when a token has invalid decimals.
     error InvalidDecimals(address token, uint256 decimals);
     /// @dev Thrown when an input to the trading function is outside the domain for the X reserve.
@@ -176,6 +178,17 @@ contract RMM is ERC20 {
 
     /// @dev Allows an arbitrary adjustment to the reserves and liquidity, if it is valid.
     function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) external lock {
+        uint256 feeAmount;
+
+        // Deallocating
+        if (deltaLiquidity < 0) {
+            if (deltaY > 0 && deltaX <= 0) {
+                feeAmount = toUint(deltaY).mulWadUp(fee);
+            } else if (deltaX > 0 && deltaY <= 0) {
+                feeAmount = toUint(deltaX).mulWadUp(fee);
+            }
+        }
+
         _adjust(deltaX, deltaY, deltaLiquidity);
         if (deltaX < 0) _credit(tokenX, msg.sender, uint256(-deltaX));
         if (deltaY < 0) _credit(tokenY, msg.sender, uint256(-deltaY));
@@ -246,6 +259,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
     }
 
+    /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
         external
         lock
@@ -253,8 +267,6 @@ contract RMM is ERC20 {
     {
         uint256 deltaXWad = upscale(deltaX, scalar(tokenX));
         uint256 deltaYWad = upscale(deltaY, scalar(tokenY));
-
-        uint256 tau_ = currentTau();
         uint256 nextLiquidity = solveL(
             totalLiquidity,
             reserveX + deltaXWad,
@@ -263,8 +275,12 @@ contract RMM is ERC20 {
             strike,
             sigma,
             lastTau(),
-            tau_
+            lastTau()
         );
+
+        if (nextLiquidity < totalLiquidity) {
+            revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
+        }
 
         deltaLiquidity = nextLiquidity - totalLiquidity;
         if (deltaLiquidity < minLiquidityOut) {
@@ -280,19 +296,22 @@ contract RMM is ERC20 {
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
 
+    /// @dev Burns `deltaLiquidity` * `totalSupply` / `totalLiquidity` rounded up
+    /// and returns `deltaLiquidity` * `reserveX` / `totalLiquidity`
+    ///           + `deltaLiquidity` * `reserveY` / `totalLiquidity` of ERC-20 tokens.
     function deallocate(uint256 deltaLiquidity, uint256 minDeltaXOut, uint256 minDeltaYOut, address to)
         external
         lock
         returns (uint256 deltaX, uint256 deltaY)
     {
-        uint256 tau_ = currentTau();
-        uint256 nextReserveX = solveX(reserveY, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
-        uint256 nextReserveY = solveY(reserveX, totalLiquidity - deltaLiquidity, tradingFunction(), strike, sigma, tau_);
+        deltaX = deltaLiquidity.mulDivDown(reserveX, totalLiquidity);
+        deltaY = deltaLiquidity.mulDivDown(reserveY, totalLiquidity);
 
-        deltaX = reserveX - nextReserveX;
-        deltaY = reserveY - nextReserveY;
-        if (deltaX < minDeltaXOut || deltaY < minDeltaYOut) {
+        if (minDeltaXOut > deltaX) {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
+        }
+        if (minDeltaYOut > deltaY) {
+            revert InsufficientOutput(deltaLiquidity, minDeltaYOut, deltaY);
         }
 
         _burn(msg.sender, deltaLiquidity.mulDivUp(totalSupply, totalLiquidity)); // uses state totalLiquidity
@@ -638,18 +657,29 @@ contract RMM is ERC20 {
         uint256 lower = upper;
         int256 result = findL(args, lower);
         if (result < 0) {
-            lower = lower.mulDivDown(1e8 - 1, 1e8);
+            /* lower = lower.mulDivDown(1e8 - 1, 1e8);
             uint256 min =
                 reserveX_ > reserveY_.divWadDown(strike_) ? reserveX_ + 1000 : reserveY_.divWadDown(strike_) + 1000;
-            lower = lower < reserveX_ ? min : lower;
+            lower = lower < reserveX_ ? min : lower; */
+
+            while (result < 0) {
+                lower = lower.mulDivDown(999, 1000);
+                uint256 min =
+                    reserveX_ > reserveY_.divWadDown(strike_) ? reserveX_ + 1000 : reserveY_.divWadDown(strike_) + 1000;
+                lower = lower < reserveX_ ? min : lower;
+                result = findL(args, lower);
+            }
         } else {
-            upper = upper.mulDivUp(1e8 + 1, 1e8);
+            /* upper = upper.mulDivUp(1e8 + 1, 1e8); */
+            while (result > 0) {
+                upper = upper.mulDivUp(1001, 1000);
+                result = findL(args, upper);
+            }
         }
         liquidity_ = lower;
 
-        /*
         // Run bisection using the bounds to find the root of the function `findL`.
-        (uint256 rootInput,, uint256 lowerInput) = bisection(args, lower, upper, 1, 1, findL);
+        (uint256 rootInput,, uint256 lowerInput) = bisection(args, lower, upper, 1, 20, findL);
 
         // `upperInput` should be positive, so if root is < 0 return upperInput instead
         if (findL(args, rootInput) == 0) {
@@ -658,7 +688,6 @@ contract RMM is ERC20 {
             liquidity_ = lowerInput;
         }
         console2.log("terminal L", liquidity_);
-        */
     }
 }
 
