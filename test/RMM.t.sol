@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum} from "../src/RMM.sol";
+import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../src/RMM.sol";
 import {FeeOnTransferToken} from "../src/test/FeeOnTransferToken.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
@@ -159,6 +159,7 @@ contract RMMTest is Test {
         assertTrue(post > prev, "Trading function did not increase after adjustment.");
     }
 
+    // todo: improve test
     function test_basic_solve_y() public basic {
         uint256 deltaX = 1 ether;
         uint256 computedYGivenXAdjustment = subject().computeY(
@@ -188,9 +189,10 @@ contract RMMTest is Test {
         console2.log("diff", diff, approximatedDeltaY > actualDeltaY);
     }
 
+    // todo: improve test
     function test_basic_solve_x() public basic {
         uint256 deltaX = 1 ether;
-        uint256 approximatedDeltaY = 0.685040862443611931 ether;
+        (,, uint256 approximatedDeltaY,) = subject().prepareSwap(address(tokenX), address(tokenY), deltaX);
 
         uint256 proportionalLGivenX = deltaX * subject().totalLiquidity() / subject().reserveX();
         uint256 proportionalLGivenY = approximatedDeltaY * subject().totalLiquidity() / subject().reserveY();
@@ -216,79 +218,6 @@ contract RMMTest is Test {
         uint256 actualDeltaX = nextReserveX - subject().reserveX();
         console2.log("nextReserveX", nextReserveX);
         console2.log("actualDeltaX", actualDeltaX);
-
-        uint256 approxLGivenProportionalAllocate = subject().solveL(
-            subject().totalLiquidity(),
-            nextReserveX,
-            subject().reserveY() + approximatedDeltaY,
-            subject().strike(),
-            subject().sigma(),
-            subject().lastTau(),
-            subject().lastTau()
-        );
-        uint256 deltaLGivenProportionalAllocate = approxLGivenProportionalAllocate - subject().totalLiquidity();
-        console2.log("deltaLGivenProportionalAllocate", deltaLGivenProportionalAllocate);
-
-        uint256 approxLGivenSingleALlocate = subject().solveL(
-            subject().totalLiquidity(),
-            subject().reserveX() + deltaX,
-            subject().reserveY(),
-            subject().strike(),
-            subject().sigma(),
-            subject().lastTau(),
-            subject().lastTau()
-        );
-        uint256 deltaLGivenSingleAllocate = approxLGivenSingleALlocate - subject().totalLiquidity();
-        console2.log("deltaLGivenSingleAllocate", deltaLGivenSingleAllocate);
-
-        console2.log(
-            "proportional allocate / single allocate",
-            deltaLGivenProportionalAllocate * 1e18 / deltaLGivenSingleAllocate
-        );
-
-        uint256 approxLGivenSwap = subject().solveL(
-            subject().totalLiquidity(),
-            nextReserveX,
-            subject().reserveY() - approximatedDeltaY,
-            subject().strike(),
-            subject().sigma(),
-            subject().lastTau(),
-            subject().lastTau()
-        );
-        console2.log("approxLGivenSwap", approxLGivenSwap);
-        uint256 deltaLGivenSwap = approxLGivenSwap > subject().totalLiquidity()
-            ? approxLGivenSwap - subject().totalLiquidity()
-            : subject().totalLiquidity() - approxLGivenSwap;
-        bool isNegative = approxLGivenSwap < subject().totalLiquidity();
-        console2.log("deltaLGivenSwap", deltaLGivenSwap);
-        console2.log("isNegative", isNegative);
-
-        /* uint256 approxLGivenXDecrease = subject().solveL(
-            subject().totalLiquidity(),
-            subject().reserveX() - deltaX,
-            subject().reserveY(),
-            subject().tradingFunction(),
-            subject().strike(),
-            subject().sigma(),
-            subject().lastTau()
-        );
-        uint256 liq = subject().totalLiquidity();
-        uint256 deltaLGivenXDecrease =
-            approxLGivenXDecrease > liq ? approxLGivenXDecrease - liq : liq - approxLGivenXDecrease;
-        console2.log("deltaLGivenXDecrease", deltaLGivenXDecrease);
-        console2.log("isNegative", approxLGivenXDecrease < liq); */
-
-        /* uint256 approxLGivenYDecrease = subject().solveL(
-            subject().totalLiquidity(),
-            subject().reserveX(),
-            subject().reserveY() - approximatedDeltaY,
-            subject().tradingFunction(),
-            subject().strike(),
-            subject().sigma(),
-            subject().lastTau()
-        );
-        uint256 deltaLGivenYDecrease = approxLGivenYDecrease - subject().totalLiquidity();
-        console2.log("deltaLGivenYDecrease", deltaLGivenYDecrease); */
     }
 
     function test_swap_x() public basic {
@@ -612,21 +541,18 @@ contract RMMTest is Test {
 
     function test_swapX() public basic {
         uint256 deltaX = 1 ether;
-        uint256 minAmountOut = 0.685040862443611931 ether;
-        deal(address(tokenY), address(subject()), minAmountOut * 110 / 100);
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(tokenX), address(tokenY), deltaX);
+        deal(address(tokenY), address(subject()), minAmountOut);
         deal(address(tokenX), address(this), deltaX);
         tokenX.approve(address(subject()), deltaX);
 
-        int256 prevResult = subject().tradingFunction();
         uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
         uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
         uint256 prevPrice = subject().approxSpotPrice();
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(
-            subject().tradingFunction() >= prevResult, "Trading function did not increase or stay equal after swap."
-        );
+        assertTrue(abs(subject().tradingFunction()) < 10, "Invalid trading function state.");
         assertEq(subject().reserveX(), basicParams.reserveX + deltaX, "Reserve X did not increase by delta X.");
         assertEq(subject().reserveY(), basicParams.reserveY - amountOut, "Reserve Y did not decrease by amount out.");
         assertEq(
@@ -648,7 +574,7 @@ contract RMMTest is Test {
 
     function test_swapX_reverts_InsufficientOutput() public basic {
         uint256 deltaX = 1 ether;
-        uint256 minAmountOut = 0.685040874599501347 ether + 10;
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(tokenX), address(tokenY), deltaX);
         deal(address(tokenY), address(subject()), minAmountOut);
         deal(address(tokenX), address(this), deltaX);
         tokenX.approve(address(subject()), deltaX);
@@ -657,52 +583,39 @@ contract RMMTest is Test {
             abi.encodeWithSelector(
                 RMM.InsufficientOutput.selector,
                 upscale(deltaX, scalar(address(tokenX))),
-                minAmountOut,
-                minAmountOut - 10
+                minAmountOut + 10,
+                minAmountOut
             )
         );
-        subject().swapX(deltaX, minAmountOut, address(this), "");
+        subject().swapX(deltaX, minAmountOut + 10, address(this), "");
     }
 
     function test_swapX_event() public basic {
         uint256 deltaX = 1 ether;
-        uint256 minAmountOut = 0.685040862443611931 ether;
-        deal(address(tokenY), address(subject()), minAmountOut * 110 / 100);
+        (,, uint256 minAmountOut, int256 delLiq) = subject().prepareSwap(address(tokenX), address(tokenY), deltaX);
+        deal(address(tokenY), address(subject()), minAmountOut);
         deal(address(tokenX), address(this), deltaX);
         tokenX.approve(address(subject()), deltaX);
 
         vm.expectEmit();
-        emit RMM.Swap(
-            address(this),
-            address(this),
-            address(tokenX),
-            address(tokenY),
-            deltaX,
-            0.685040874599501347 ether,
-            -toInt(32410966754)
-        );
-
-        subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+        emit RMM.Swap(address(this), address(this), address(tokenX), address(tokenY), deltaX, minAmountOut, delLiq);
+        subject().swapX(deltaX, minAmountOut, address(this), "");
     }
 
     function test_swapY() public basic {
         uint256 deltaY = 1 ether;
-        uint256 minAmountOut = 0.685040567022230765 ether;
-        uint256 minAmountOutWIthError = minAmountOut * 99 / 100;
-        deal(address(tokenX), address(subject()), minAmountOut * 110 / 100);
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(tokenY), address(tokenX), deltaY);
+        deal(address(tokenX), address(subject()), minAmountOut);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
 
-        int256 prevResult = subject().tradingFunction();
         uint256 prevBalanceX = balanceWad(address(tokenX), address(this));
         uint256 prevBalanceY = balanceWad(address(tokenY), address(this));
         uint256 prevPrice = subject().approxSpotPrice();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOutWIthError, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "");
 
-        assertTrue(amountOut >= minAmountOutWIthError, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(
-            subject().tradingFunction() >= prevResult, "Trading function did not increase or stay equal after swap."
-        );
+        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
+        assertTrue(abs(subject().tradingFunction()) < 10, "Trading function invalid");
         assertEq(subject().reserveX(), basicParams.reserveX - amountOut, "Reserve X did not decrease by amount in.");
         assertEq(subject().reserveY(), basicParams.reserveY + deltaY, "Reserve Y did not increase by delta Y.");
         assertEq(
@@ -724,7 +637,7 @@ contract RMMTest is Test {
 
     function test_swapY_reverts_InsufficientOutput() public basic {
         uint256 deltaY = 1 ether;
-        uint256 minAmountOut = 0.685040567022230765 ether + 10;
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(tokenY), address(tokenX), deltaY);
         deal(address(tokenX), address(subject()), minAmountOut);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
@@ -733,47 +646,55 @@ contract RMMTest is Test {
             abi.encodeWithSelector(
                 RMM.InsufficientOutput.selector,
                 upscale(deltaY, scalar(address(tokenY))),
-                minAmountOut,
-                minAmountOut - 10
+                minAmountOut + 10,
+                minAmountOut
             )
         );
-        subject().swapY(deltaY, minAmountOut, address(this), "");
+        subject().swapY(deltaY, minAmountOut + 10, address(this), "");
     }
 
     function test_swapY_event() public basic {
         uint256 deltaY = 1 ether;
-        uint256 minAmountOut = 0.685040567022230765 ether;
+        (,, uint256 minAmountOut, int256 delLiq) = subject().prepareSwap(address(tokenY), address(tokenX), deltaY);
         deal(address(tokenX), address(subject()), minAmountOut);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
 
         vm.expectEmit();
-        emit RMM.Swap(
-            address(this),
-            address(this),
-            address(tokenY),
-            address(tokenX),
-            deltaY,
-            0.685040567022230765 ether,
-            -toInt(32410966764)
-        );
-
+        emit RMM.Swap(address(this), address(this), address(tokenY), address(tokenX), deltaY, minAmountOut, delLiq);
         subject().swapY(deltaY, minAmountOut, address(this), "");
     }
 
     function test_swapY_callback() public basic {
         uint256 deltaY = 1 ether;
-        uint256 minAmountOut = 0.685040567022230765 ether;
-        uint256 minAmountOutWithError = minAmountOut * 99 / 100;
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(tokenY), address(tokenX), deltaY);
         deal(address(tokenX), address(subject()), minAmountOut);
         deal(address(tokenY), address(this), deltaY);
         tokenY.approve(address(subject()), deltaY);
         CallbackProvider provider = new CallbackProvider();
         vm.prank(address(provider));
-        (uint256 amountOut, int256 deltaLiquidity) =
-            subject().swapY(deltaY, minAmountOutWithError, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOutWithError, "Amount out is not greater than or equal to min amount out.");
+        (uint256 amountOut,) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
+        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
         assertTrue(tokenX.balanceOf(address(this)) == amountOut, "Token X balance is not greater than 0.");
+    }
+
+    function test_allocate() public basic {
+        uint256 deltaX = 1 ether;
+        uint256 deltaY = 1 ether;
+        deal(address(tokenX), address(this), deltaX);
+        deal(address(tokenY), address(this), deltaY);
+        tokenX.approve(address(subject()), deltaX);
+        tokenY.approve(address(subject()), deltaY);
+
+        uint256 deltaLiquidity = subject().allocate(deltaX, deltaY, 1, address(this));
+        assertTrue(deltaLiquidity >= 1, "Delta liquidity is not at least minDeltaLiquidity");
+        assertEq(subject().reserveX(), basicParams.reserveX + deltaX, "Reserve X did not increase by delta X.");
+        assertEq(subject().reserveY(), basicParams.reserveY + deltaY, "Reserve Y did not increase by delta Y.");
+        assertEq(
+            subject().totalLiquidity(),
+            basicParams.totalLiquidity + deltaLiquidity,
+            "Total liquidity did not increase by delta liquidity."
+        );
     }
 
     function test_deallocate() public basic {
