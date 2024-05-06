@@ -148,21 +148,12 @@ contract RMM is ERC20 {
         // todo: input validation
         tokenX = tokenX_;
         tokenY = tokenY_;
-        reserveX = reserveX_;
-        reserveY = reserveY_;
-        totalLiquidity = totalLiquidity_;
         strike = strike_;
         sigma = sigma_;
         fee = fee_;
         maturity = maturity_;
         initTimestamp = block.timestamp;
-        lastTimestamp = block.timestamp;
         curator = curator_;
-
-        int256 result = tradingFunction();
-        if (result > INIT_UPPER_BOUND || result < 0) {
-            revert OutOfRange(0, result);
-        }
 
         uint256 decimals = Token(tokenX).decimals();
         if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX, decimals);
@@ -172,6 +163,7 @@ contract RMM is ERC20 {
 
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
+        _adjust(toInt(reserveX_), toInt(reserveY_), toInt(totalLiquidity_));
         _debit(tokenX, reserveX, "");
         _debit(tokenY, reserveY, "");
 

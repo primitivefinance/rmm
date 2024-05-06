@@ -345,12 +345,19 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_OutOfRange() public {
+        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
+            priceX: 1 ether,
+            amountX: basicParams.reserveX,
+            strike_: basicParams.strike,
+            sigma_: basicParams.sigma,
+            maturity_: basicParams.maturity
+        });
         // Reducing the starting liquidity creates a large buffer result from the trading function.
         // Pools have to be initialized with a result near 0.
         int256 result = subject().computeTradingFunction(
             basicParams.reserveX,
-            basicParams.reserveY,
-            basicParams.totalLiquidity - 1 ether,
+            amountY,
+            totalLiquidity - 1 ether,
             basicParams.strike,
             basicParams.sigma,
             subject().computeTauWadYears(basicParams.maturity)
@@ -360,8 +367,8 @@ contract RMMTest is Test {
             address(tokenX),
             address(tokenY),
             basicParams.reserveX,
-            basicParams.reserveY,
-            basicParams.totalLiquidity - 1 ether,
+            amountY,
+            totalLiquidity - 1 ether,
             basicParams.strike,
             basicParams.sigma,
             basicParams.fee,
@@ -371,12 +378,19 @@ contract RMMTest is Test {
     }
 
     function test_init_reverts_with_OutOfRange_negative() public {
+        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
+            priceX: 1 ether,
+            amountX: basicParams.reserveX,
+            strike_: basicParams.strike,
+            sigma_: basicParams.sigma,
+            maturity_: basicParams.maturity
+        });
         // Reducing the starting liquidity creates a large buffer result from the trading function.
         // Pools have to be initialized with a result near 0.
         int256 result = subject().computeTradingFunction(
             basicParams.reserveX,
-            basicParams.reserveY,
-            basicParams.totalLiquidity + 1 ether,
+            amountY,
+            totalLiquidity + 2 ether,
             basicParams.strike,
             basicParams.sigma,
             subject().computeTauWadYears(basicParams.maturity)
@@ -386,8 +400,8 @@ contract RMMTest is Test {
             address(tokenX),
             address(tokenY),
             basicParams.reserveX,
-            basicParams.reserveY,
-            basicParams.totalLiquidity + 1 ether,
+            amountY,
+            totalLiquidity + 2 ether,
             basicParams.strike,
             basicParams.sigma,
             basicParams.fee,
