@@ -131,20 +131,24 @@ contract RMM is ERC20 {
         totalLiquidity_ = solveL(initialLiquidity, amountX, amountY, strike_, sigma_, tau_, tau_);
     }
 
-    /// todo: need a way to compute initial liquidity based on price user input!
-    /// @dev Initializes the pool with an implied price via the desired reserves, liquidity, and parameters.
+    /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
     function init(
         address tokenX_,
         address tokenY_,
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 totalLiquidity_,
+        uint256 priceX,
+        uint256 amountX,
         uint256 strike_,
         uint256 sigma_,
         uint256 fee_,
         uint256 maturity_,
         address curator_
     ) external lock {
+        uint256 decimals = Token(tokenX_).decimals();
+        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX_, decimals);
+
+        decimals = Token(tokenY_).decimals();
+        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY_, decimals);
+
         // todo: input validation
         tokenX = tokenX_;
         tokenY = tokenY_;
@@ -155,30 +159,16 @@ contract RMM is ERC20 {
         initTimestamp = block.timestamp;
         curator = curator_;
 
-        uint256 decimals = Token(tokenX).decimals();
-        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX, decimals);
-
-        decimals = Token(tokenY).decimals();
-        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY, decimals);
+        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, amountX, strike_, sigma_, maturity_);
 
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
-        _adjust(toInt(reserveX_), toInt(reserveY_), toInt(totalLiquidity_));
+        _adjust(toInt(amountX), toInt(amountY), toInt(totalLiquidity_));
         _debit(tokenX, reserveX, "");
         _debit(tokenY, reserveY, "");
 
         emit Init(
-            msg.sender,
-            tokenX_,
-            tokenY_,
-            reserveX_,
-            reserveY_,
-            totalLiquidity_,
-            strike_,
-            sigma_,
-            fee_,
-            maturity_,
-            curator_
+            msg.sender, tokenX_, tokenY_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity_, curator_
         );
     }
 
