@@ -238,6 +238,9 @@ contract RMM is ERC20 {
     {
         uint256 amountInWad;
         uint256 amountOutWad;
+        console2.log("strikePrev", strike);
+        strike = computeKGivenLastPrice(reserveX, totalLiquidity, sigma, currentTau());
+        console2.log("strikeNext", strike);
         (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(tokenX, tokenY, amountIn);
 
         if (amountOut < minAmountOut) {
@@ -504,6 +507,21 @@ contract RMM is ERC20 {
     /// @dev Converts seconds (units of block.timestamp) into years in WAD units.
     function computeTauWadYears(uint256 tauSeconds) public pure returns (uint256) {
         return tauSeconds.mulDivDown(1e18, 365 days);
+    }
+
+    function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 price = computeSpotPrice(reserveX_, liquidity, strike, sigma_, tau_);
+
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+
+        return price.divWadDown(uint256(exp));
     }
 
     /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)

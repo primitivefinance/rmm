@@ -126,7 +126,7 @@ contract RMMTest is Test {
             priceX: price,
             amountX: 10 ether,
             strike_: price,
-            sigma_: 0.01 ether,
+            sigma_: 0.005 ether,
             fee_: 0.0005 ether,
             maturity_: PT.expiry(),
             curator_: address(0x55)
@@ -138,5 +138,24 @@ contract RMMTest is Test {
     function test_basic_trading_function_result_sy() public basic_sy {
         int256 result = subject().tradingFunction();
         assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
+    }
+
+    function test_swapX_over_time_sy() public basic_sy {
+        uint256 initialPrice = subject().approxSpotPrice();
+        console2.log("initialPrice", initialPrice);
+        uint256 deltaX = 1 ether;
+        int256 initial = subject().tradingFunction();
+        vm.warp(block.timestamp + 365 days / 8);
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(PT), address(SY), deltaX);
+        console2.log("current price", subject().approxSpotPrice());
+
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
+        int256 terminal = subject().tradingFunction();
+
+        console2.log("initialInvariant", initial);
+        console2.log("terminalInvariant", terminal);
+        console2.log("amountOut", amountOut);
+        console2.log("deltaLiquidity", deltaLiquidity);
+        assertTrue(abs(terminal) < 10, "Trading function invalid.");
     }
 }
