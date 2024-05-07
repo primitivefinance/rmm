@@ -2,13 +2,13 @@
 pragma solidity ^0.8.13;
 
 import {Script, console2} from "forge-std/Script.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {PendleERC20SY} from "pendle/core/StandardizedYield/implementations/PendleERC20SY.sol";
 import {SYBase} from "pendle/core/StandardizedYield/SYBase.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
-
-address constant WETH_ADDRESS = address(0);
+import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
 
 contract DeployPendleTokens is Script {
     function setUp() public {}
@@ -19,6 +19,9 @@ contract DeployPendleTokens is Script {
         uint256 pk = vm.envUint(ENV_PRIVATE_KEY);
         vm.startBroadcast(pk);
         address sender = vm.addr(pk);
+        uint32 _expiry = 1_717_214_400;
+
+        address wstETH = address(new MockERC20("Wrapped stETH", "wstETH", 18));
 
         // Mint some tokens to the deployer
         MockERC20(wstETH).mint(sender, 1_000_000 ether);
