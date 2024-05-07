@@ -660,6 +660,10 @@ contract RMM is ERC20 {
             int256 dfx = computeTfDL(args, L);
             int256 fx = findL(args, L);
 
+            if (abs(fx) <= int256(tolerance)) {
+                break;
+            }
+
             if (dfx == 0) {
                 // Handle division by zero
                 break;
@@ -687,6 +691,10 @@ contract RMM is ERC20 {
         for (uint256 i = 0; i < maxIterations; i++) {
             int256 dfx = computeTfDReserveX(args, reserveX_);
             int256 fx = findX(args, reserveX_);
+
+            if (abs(fx) <= int256(tolerance)) {
+                break;
+            }
 
             if (dfx == 0) {
                 // Handle division by zero
@@ -716,7 +724,10 @@ contract RMM is ERC20 {
         for (uint256 i = 0; i < maxIterations; i++) {
             int256 dfx = computeTfDReserveY(args, reserveY_);
             int256 fx = findY(args, reserveY_);
-            console2.log("fx y", fx);
+
+            if (abs(fx) <= int256(tolerance)) {
+                break;
+            }
 
             if (dfx == 0) {
                 // Handle division by zero
