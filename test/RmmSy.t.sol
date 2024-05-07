@@ -8,6 +8,13 @@ import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooL
 import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
 import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnToken.sol";
 import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
+import {IPMarket} from "pendle/interfaces/IPMarket.sol";
+import "pendle/core/Market/MarketMathCore.sol";
+import "pendle/interfaces/IPAllActionV3.sol";
+import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
+import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
+import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
@@ -26,20 +33,56 @@ uint256 constant CURATOR_SLOT = 11 + offset;
 uint256 constant LOCK_SLOT = 12 + offset;
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
-//IPMarket public constant market = IPMarket(0xC374f7eC85F8C7DE3207a10bB1978bA104bdA3B2);
-//IPMarket public constant market = IPMarket(0xD0354D4e7bCf345fB117cabe41aCaDb724eccCa2);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
 address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
 
 contract RMMTest is Test {
+    using MarketMathCore for MarketState;
+    using MarketMathCore for int256;
+    using MarketMathCore for uint256;
+    using FixedPointMathLib for uint256;
+
     RMM public __subject__;
     MockERC20 public tokenX;
     MockERC20 public tokenY;
 
-    function setUp() public tokens {
+    IStandardizedYield public SY;
+    IPPrincipalToken public PT;
+    IPYieldToken public YT;
+    MarketState public pendleMarketState;
+    int256 pendleRateAnchor;
+    int256 pendleRateScalar;
+    uint256 timeToExpiry;
+
+    function setUp() public {
+        vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
+
         __subject__ = new RMM(address(0), "LPToken", "LPT");
         vm.label(address(__subject__), "RMM");
-        vm.warp(0);
+        console2.log("got here?");
+        (SY, PT, YT) = IPMarket(market).readTokens();
+        pendleMarketState = market.readState(address(router));
+        timeToExpiry = pendleMarketState.expiry - block.timestamp;
+        pendleRateScalar = pendleMarketState._getRateScalar(timeToExpiry);
+        pendleRateAnchor = pendleMarketState.totalPt._getRateAnchor(
+            pendleMarketState.lastLnImpliedRate, pendleMarketState.totalSy, pendleRateScalar, timeToExpiry
+        );
+
+        deal(wstETH, address(this), 1_000_000e18);
+
+        mintSY(100_000 ether);
+        mintPtYt(50_000 ether);
+
+        IERC20(wstETH).approve(address(subject()), type(uint256).max);
+        IERC20(SY).approve(address(subject()), type(uint256).max);
+        IERC20(PT).approve(address(subject()), type(uint256).max);
+        IERC20(YT).approve(address(subject()), type(uint256).max);
+
+        IERC20(wstETH).approve(address(router), type(uint256).max);
+        IERC20(SY).approve(address(router), type(uint256).max);
+        IERC20(PT).approve(address(router), type(uint256).max);
+        IERC20(YT).approve(address(router), type(uint256).max);
+        IERC20(market).approve(address(router), type(uint256).max);
     }
 
     function subject() public view returns (RMM) {
@@ -54,35 +97,46 @@ contract RMMTest is Test {
         return MockERC20(token).balanceOf(account);
     }
 
+    function getPtExchangeRate() internal view returns (int256) {
+        return
+            pendleMarketState.totalPt._getExchangeRate(pendleMarketState.totalSy, pendleRateScalar, pendleRateAnchor, 0);
+    }
+
     function balanceWad(address token, address account) internal view returns (uint256) {
         return upscale(balanceNative(token, account), scalar(token));
     }
 
-    modifier tokens() {
-        _;
-        tokenX = new MockERC20("Token X", "X", 18);
-        tokenY = new MockERC20("Token Y", "Y", 18);
-        vm.label(address(tokenX), "Token X");
-        vm.label(address(tokenY), "Token Y");
+    function mintSY(uint256 amount) public {
+        IERC20(wstETH).approve(address(SY), type(uint256).max);
+        SY.deposit(address(this), address(wstETH), amount, 1);
     }
 
-    modifier basic() {
-        deal(address(tokenX), address(this), 100 ether);
-        deal(address(tokenY), address(this), 100 ether);
-        tokenX.approve(address(subject()), 100 ether);
-        tokenY.approve(address(subject()), 100 ether);
+    function mintPtYt(uint256 amount) public {
+        SY.transfer(address(YT), amount);
+        YT.mintPY(address(this), address(this));
+    }
+
+    modifier basic_sy() {
+        uint256 price = SY.exchangeRate().mulWadDown(uint256(getPtExchangeRate()));
+        console2.log("initial price", price);
+        console2.log("rate anchor", pendleRateAnchor);
         subject().init({
-            tokenX_: address(tokenX),
-            tokenY_: address(tokenY),
-            priceX: 1 ether,
-            amountX: 1 ether,
-            strike_: 1 ether,
-            sigma_: 1 ether,
-            fee_: 0,
-            maturity_: 365 days,
+            tokenX_: address(SY),
+            tokenY_: address(PT),
+            priceX: price,
+            amountX: 10 ether,
+            strike_: price,
+            sigma_: 0.2 ether,
+            fee_: 0.0005 ether,
+            maturity_: PT.expiry(),
             curator_: address(0x55)
         });
 
         _;
+    }
+
+    function test_basic_trading_function_result_sy() public basic_sy {
+        int256 result = subject().tradingFunction();
+        assertTrue(result >= 0 && result <= 30, "Trading function result is not within init epsilon.");
     }
 }

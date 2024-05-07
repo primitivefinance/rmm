@@ -123,11 +123,13 @@ contract RMM is ERC20 {
         returns (uint256 totalLiquidity_, uint256 amountY)
     {
         uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
+        console2.log("tau", tau_);
         uint256 initialLiquidity =
             computeLGivenX({reserveX_: amountX, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
         console2.log("initialLiquidity", initialLiquidity);
         amountY =
             computeY({reserveX_: amountX, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
+        console2.log("initial computed Y", amountY);
         totalLiquidity_ = solveL(initialLiquidity, amountX, amountY, strike_, sigma_, tau_, tau_);
     }
 
