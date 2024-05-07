@@ -24,12 +24,12 @@ contract DeployPendleTokens is Script {
         address wstETH = address(new MockERC20("Wrapped stETH", "wstETH", 18));
 
         // Mint some tokens to the deployer
-        MockERC20(wstETH).mint(sender, 1_000_000 ether);
+        MockERC20(wstETH).mint(sender, 2_000_000 ether);
 
         // Deploy ERC20 Standard Yield on wstETH
         SYBase SY = new PendleERC20SY("Standard Yield wstETH", "SYwstETH", wstETH);
 
-        // Deposit tokens into SYwstETH
+        // Deposit 50% of tokens into SYwstETH
         MockERC20(wstETH).approve(address(SY), type(uint256).max);
         SY.deposit(sender, wstETH, 1_000_000 ether, 1);
         console2.log("Deposit Confirmed: ", SY.totalSupply());
@@ -57,6 +57,15 @@ contract DeployPendleTokens is Script {
         console2.log("YT Token Deployed at: ", wstETH_YT);
         console2.log("PT Token Deployed at: ", wstETH_PT);
         console2.log("Yield Contract Created with SY: ", address(SY));
+
+        // Mint PT/YT with deposited tokens 
+        SY.transfer(wstETH_YT, 1_000_000 ether);
+        console2.log("YieldToken SY Balance: ", PendleYieldTokenV2(wstETH_YT).balanceOf(address(SY)));
+        uint256 ptOut = PendleYieldTokenV2(wstETH_YT).mintPY(sender, sender); 
+        console2.log("Number of PT + YT Minted: ", ptOut);
+
+        // Deposit the remaing wstETH into SY
+        SY.deposit(sender, wstETH, 1_000_000 ether, 1);
 
         vm.stopBroadcast();
     }

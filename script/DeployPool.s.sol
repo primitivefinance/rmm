@@ -16,9 +16,9 @@ contract DeployPool is Script {
     function setUp() public {}
 
     string public constant ENV_PRIVATE_KEY = "PRIVATE_KEY";
-    address payable public constant RMM_ADDRESS = payable(address(0));
-    address public constant SY_ADDRESS = address(0);
-    address public constant PT_ADDRESS = address(0);
+    address payable public constant RMM_ADDRESS = payable(0xc04E06bDb42ce32C87d28C604C908cAf65A662F2);
+    address public constant SY_ADDRESS = 0x14AeD33295C3ac9D8195295542914b8BB0977814;
+    address public constant PT_ADDRESS = 0xB3aB0e660FcA698606490868fF7D13c7Dfb31694;
     uint256 public constant startPrice = 1 ether;
     uint256 public constant initialDepositX = 1 ether;
     uint256 public constant strike = 1 ether;
@@ -51,7 +51,7 @@ contract DeployPool is Script {
         }
 
         if (ERC20(PT_ADDRESS).allowance(msg.sender, address(this)) < initialDepositY) {
-            ERC20(PT_ADDRESS).approve(RMM_ADDRESS, initialDepositY);
+            ERC20(PT_ADDRESS).approve(RMM_ADDRESS, initialDepositY + 1 ether);
         }
 
         RMM(RMM_ADDRESS).init({
