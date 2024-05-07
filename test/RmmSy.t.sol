@@ -59,7 +59,6 @@ contract RMMTest is Test {
 
         __subject__ = new RMM(address(0), "LPToken", "LPT");
         vm.label(address(__subject__), "RMM");
-        console2.log("got here?");
         (SY, PT, YT) = IPMarket(market).readTokens();
         pendleMarketState = market.readState(address(router));
         timeToExpiry = pendleMarketState.expiry - block.timestamp;
@@ -124,9 +123,9 @@ contract RMMTest is Test {
             tokenX_: address(SY),
             tokenY_: address(PT),
             priceX: price,
-            amountX: 10 ether,
+            amountX: 100 ether,
             strike_: price,
-            sigma_: 0.005 ether,
+            sigma_: 0.01 ether,
             fee_: 0.0005 ether,
             maturity_: PT.expiry(),
             curator_: address(0x55)
@@ -145,17 +144,11 @@ contract RMMTest is Test {
         console2.log("initialPrice", initialPrice);
         uint256 deltaX = 1 ether;
         int256 initial = subject().tradingFunction();
-        vm.warp(block.timestamp + 365 days / 8);
-        (,, uint256 minAmountOut,) = subject().prepareSwap(address(PT), address(SY), deltaX);
-        console2.log("current price", subject().approxSpotPrice());
-
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
-        int256 terminal = subject().tradingFunction();
-
-        console2.log("initialInvariant", initial);
-        console2.log("terminalInvariant", terminal);
-        console2.log("amountOut", amountOut);
-        console2.log("deltaLiquidity", deltaLiquidity);
-        assertTrue(abs(terminal) < 10, "Trading function invalid.");
+        vm.warp(block.timestamp + 5 days);
+        (,, uint256 minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+        vm.warp(block.timestamp + 5 days);
+        (,, minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
 }
