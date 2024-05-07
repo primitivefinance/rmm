@@ -65,9 +65,9 @@ contract RMMTest is Test {
     modifier basic_override() {
         vm.store(address(subject()), bytes32(TOKEN_X_SLOT), bytes32(uint256(uint160(address(tokenX)))));
         vm.store(address(subject()), bytes32(TOKEN_Y_SLOT), bytes32(uint256(uint160(address(tokenY)))));
-        vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1000000000000000000)));
-        vm.store(address(subject()), bytes32(RESERVE_Y_SLOT), bytes32(uint256(999999999999999997)));
-        vm.store(address(subject()), bytes32(TOTAL_LIQUIDITY_SLOT), bytes32(uint256(3241096933647192684)));
+        vm.store(address(subject()), bytes32(RESERVE_X_SLOT), bytes32(uint256(1_000_000_000_000_000_000)));
+        vm.store(address(subject()), bytes32(RESERVE_Y_SLOT), bytes32(uint256(999_999_999_999_999_997)));
+        vm.store(address(subject()), bytes32(TOTAL_LIQUIDITY_SLOT), bytes32(uint256(3_241_096_933_647_192_684)));
         vm.store(address(subject()), bytes32(STRIKE_SLOT), bytes32(uint256(1 ether)));
         vm.store(address(subject()), bytes32(SIGMA_SLOT), bytes32(uint256(1 ether)));
         vm.store(address(subject()), bytes32(MATURITY_SLOT), bytes32(uint256(block.timestamp + 365 days)));
@@ -103,7 +103,7 @@ contract RMMTest is Test {
     function test_basic_price() public basic {
         subject().tradingFunction();
         uint256 price = subject().approxSpotPrice();
-        assertApproxEqAbs(price, 1 ether, 10000, "Price is not approximately 1 ether.");
+        assertApproxEqAbs(price, 1 ether, 10_000, "Price is not approximately 1 ether.");
     }
 
     // todo: whats the error?
@@ -111,7 +111,7 @@ contract RMMTest is Test {
         subject().tradingFunction();
         uint256 value = subject().totalValue();
         console2.logUint(value);
-        assertApproxEqAbs(value, 2 ether, 10000, "Value is not approximately 2 ether.");
+        assertApproxEqAbs(value, 2 ether, 10_000, "Value is not approximately 2 ether.");
     }
 
     // no fee btw
@@ -221,8 +221,8 @@ contract RMMTest is Test {
         tokenX.approve(address(subject()), deltaX);
 
         int256 initial = subject().tradingFunction();
-        console2.log("loss", uint256(685040862443611928) - uint256(685001492551417433));
-        console2.log("loss %", uint256(39369892194495) * 1 ether / uint256(685001492551417433));
+        console2.log("loss", uint256(685_040_862_443_611_928) - uint256(685_001_492_551_417_433));
+        console2.log("loss %", uint256(39_369_892_194_495) * 1 ether / uint256(685_001_492_551_417_433));
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
         int256 terminal = subject().tradingFunction();
         console2.logInt(initial);
@@ -252,7 +252,7 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction();
         vm.warp(365 days / 2);
 
-        uint256 expectedL = 2763676832322849396;
+        uint256 expectedL = 2_763_676_832_322_849_396;
         console2.log("expectedL", expectedL);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction();
