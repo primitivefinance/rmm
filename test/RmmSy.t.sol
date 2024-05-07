@@ -126,7 +126,7 @@ contract RMMTest is Test {
             priceX: price,
             amountX: 10 ether,
             strike_: price,
-            sigma_: 0.2 ether,
+            sigma_: 0.01 ether,
             fee_: 0.0005 ether,
             maturity_: PT.expiry(),
             curator_: address(0x55)
@@ -137,6 +137,6 @@ contract RMMTest is Test {
 
     function test_basic_trading_function_result_sy() public basic_sy {
         int256 result = subject().tradingFunction();
-        assertTrue(result >= 0 && result <= 30, "Trading function result is not within init epsilon.");
+        assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
     }
 }
