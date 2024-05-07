@@ -17,3 +17,6 @@
 [submodule "lib\\solstat"]
 	path = lib\\solstat
 	url = https://github.com/primitivefinance/solstat
+[submodule "lib\\pendle-core-v2-public"]
+	path = lib\\pendle-core-v2-public
+	url = https://github.com/pendle-finance/pendle-core-v2-public
