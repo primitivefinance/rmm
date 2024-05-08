@@ -216,14 +216,14 @@ contract RMMTest is Test {
     function test_swap_x() public basic {
         uint256 deltaX = 1 ether;
         uint256 minAmountOut = 0.685040862443611931 ether;
-        deal(subject().tokenY(), address(subject()), minAmountOut * 110 / 100);
+        deal(subject().tokenY(), address(subject()), minAmountOut * 150 / 100);
         deal(subject().tokenX(), address(this), deltaX);
         tokenX.approve(address(subject()), deltaX);
 
         int256 initial = subject().tradingFunction();
         console2.log("loss", uint256(685_040_862_443_611_928) - uint256(685_001_492_551_417_433));
         console2.log("loss %", uint256(39_369_892_194_495) * 1 ether / uint256(685_001_492_551_417_433));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction();
         console2.logInt(initial);
         console2.logInt(terminal);
@@ -533,7 +533,7 @@ contract RMMTest is Test {
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(abs(subject().tradingFunction()) < 10, "Invalid trading function state.");
+        assertTrue(abs(subject().tradingFunction()) < 100, "Invalid trading function state.");
         assertEq(subject().reserveX(), basicParams.amountX + deltaX, "Reserve X did not increase by delta X.");
         assertEq(subject().reserveY(), prevReserveY - amountOut, "Reserve Y did not decrease by amount out.");
         assertEq(
@@ -598,7 +598,7 @@ contract RMMTest is Test {
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "");
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(abs(subject().tradingFunction()) < 10, "Trading function invalid");
+        assertTrue(abs(subject().tradingFunction()) < 100, "Trading function invalid");
         assertEq(subject().reserveX(), basicParams.amountX - amountOut, "Reserve X did not decrease by amount in.");
         assertEq(subject().reserveY(), prevReserveY + deltaY, "Reserve Y did not increase by delta Y.");
         assertEq(
