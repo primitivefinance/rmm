@@ -8,6 +8,8 @@ contract Factory {
 
     address public immutable WETH;
 
+    address[] public pools;
+
     constructor(address weth_) {
         WETH = weth_;
     }
@@ -15,6 +17,7 @@ contract Factory {
     function createRMM(string memory poolName, string memory poolSymbol) external returns (RMM) {
         RMM rmm = new RMM(WETH, poolName, poolSymbol);
         emit NewPool(msg.sender, address(rmm), poolName, poolSymbol);
+        pools.push(address(rmm));
         return rmm;
     }
 }
