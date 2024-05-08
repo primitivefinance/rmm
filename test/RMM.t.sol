@@ -12,19 +12,20 @@ import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseTok
 
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
-uint256 constant TOKEN_X_SLOT = 0 + offset;
-uint256 constant TOKEN_Y_SLOT = 1 + offset;
-uint256 constant RESERVE_X_SLOT = 2 + offset;
-uint256 constant RESERVE_Y_SLOT = 3 + offset;
-uint256 constant TOTAL_LIQUIDITY_SLOT = 4 + offset;
-uint256 constant STRIKE_SLOT = 5 + offset;
-uint256 constant SIGMA_SLOT = 6 + offset;
-uint256 constant FEE_SLOT = 7 + offset;
-uint256 constant MATURITY_SLOT = 8 + offset;
-uint256 constant INIT_TIMESTAMP_SLOT = 9 + offset;
-uint256 constant LAST_TIMESTAMP_SLOT = 10 + offset;
-uint256 constant CURATOR_SLOT = 11 + offset;
-uint256 constant LOCK_SLOT = 12 + offset;
+uint256 constant PT_SLOT = 0 + offset;
+uint256 constant SY_SLOT = 1 + offset;
+uint256 constant YT_SLOT = 2 + offset;
+uint256 constant RESERVE_X_SLOT = 3 + offset;
+uint256 constant RESERVE_Y_SLOT = 4 + offset;
+uint256 constant TOTAL_LIQUIDITY_SLOT = 5 + offset;
+uint256 constant STRIKE_SLOT = 6 + offset;
+uint256 constant SIGMA_SLOT = 7 + offset;
+uint256 constant FEE_SLOT = 8 + offset;
+uint256 constant MATURITY_SLOT = 9 + offset;
+uint256 constant INIT_TIMESTAMP_SLOT = 10 + offset;
+uint256 constant LAST_TIMESTAMP_SLOT = 11 + offset;
+uint256 constant CURATOR_SLOT = 12 + offset;
+uint256 constant LOCK_SLOT = 13 + offset;
 
 contract RMMTest is Test {
     RMM public __subject__;

@@ -5,6 +5,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Gaussian} from "solstat/Gaussian.sol";
 import {console2} from "forge-std/console2.sol";
+import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
+import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
+import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
+import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 
 interface Token {
     function decimals() external view returns (uint8);
@@ -20,6 +24,7 @@ interface ICallback {
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
+    using PYIndexLib for IPYieldToken;
 
     /// @dev Thrown when a `balanceOf` call fails or returns unexpected data.
     error BalanceError();
@@ -78,21 +83,27 @@ contract RMM is ERC20 {
     int256 public constant INIT_UPPER_BOUND = 30;
     uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
-    address public tokenX; // slot 6
-    address public tokenY; // slot 7
-    uint256 public reserveX; // slot 8
-    uint256 public reserveY; // slot 9
-    uint256 public totalLiquidity; // slot 10
-    uint256 public strike; // slot 11
-    uint256 public sigma; // slot 12
-    uint256 public fee; // slot 13
-    uint256 public maturity; // slot 14
-    uint256 public initTimestamp; // slot 15
-    uint256 public lastTimestamp; // slot 16
-    address public curator; // slot 17
-    uint256 public lock_ = 1; // slot 18
-    uint256 public lastImpliedPrice;
-    // TODO: go back to calling it strike, sigma, tau, strike and sigma is cringe
+
+    IPPrincipalToken public PT; // slot 6
+    IStandardizedYield public SY; // slot 7
+    IPYieldToken public YT; // slot 8
+
+    uint256 public reserveX; // slot 9
+    uint256 public reserveY; // slot 10
+    uint256 public totalLiquidity; // slot 11
+
+    uint256 public strike; // slot 12
+    uint256 public sigma; // slot 13
+    uint256 public fee; // slot 14
+    uint256 public maturity; // slot 15
+
+    uint256 public initTimestamp; // slot 16
+    uint256 public lastTimestamp; // slot 17
+
+    address public curator; // slot 18
+    uint256 public lock_ = 1; // slot 19
+
+    uint256 public lastImpliedPrice; // slot 20
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -138,44 +149,38 @@ contract RMM is ERC20 {
 
     /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
     function init(
-        address tokenX_,
-        address tokenY_,
+        address PT_,
         uint256 priceX,
         uint256 amountX,
         uint256 strike_,
         uint256 sigma_,
         uint256 fee_,
-        uint256 maturity_,
         address curator_
     ) external lock {
-        uint256 decimals = Token(tokenX_).decimals();
-        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenX_, decimals);
-
-        decimals = Token(tokenY_).decimals();
-        if (decimals > 18 || decimals < 6) revert InvalidDecimals(tokenY_, decimals);
+        PT = IPPrincipalToken(PT_);
+        SY = IStandardizedYield(PT.SY());
+        YT = IPYieldToken(PT.YT());
 
         // todo: input validation
-        tokenX = tokenX_;
-        tokenY = tokenY_;
         strike = strike_;
         sigma = sigma_;
         fee = fee_;
-        maturity = maturity_;
+        maturity = PT.expiry();
         initTimestamp = block.timestamp;
         curator = curator_;
 
-        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, amountX, strike_, sigma_, maturity_);
+        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, amountX, strike_, sigma_, maturity);
 
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
         _adjust(toInt(amountX), toInt(amountY), toInt(totalLiquidity_));
-        _debit(tokenX, reserveX, "");
-        _debit(tokenY, reserveY, "");
+        _debit(address(SY), reserveX, "");
+        _debit(address(PT), reserveY, "");
 
         lastImpliedPrice = approxSpotPrice();
 
         emit Init(
-            msg.sender, tokenX_, tokenY_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity_, curator_
+            msg.sender, address(PT_), address(SY), amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity, curator_
         );
     }
 
@@ -193,10 +198,10 @@ contract RMM is ERC20 {
         }
 
         _adjust(deltaX, deltaY, deltaLiquidity);
-        if (deltaX < 0) _credit(tokenX, msg.sender, uint256(-deltaX));
-        if (deltaY < 0) _credit(tokenY, msg.sender, uint256(-deltaY));
-        if (deltaX > 0) _debit(tokenX, uint256(deltaX), "");
-        if (deltaY > 0) _debit(tokenY, uint256(deltaY), "");
+        if (deltaX < 0) _credit(address(SY), msg.sender, uint256(-deltaX));
+        if (deltaY < 0) _credit(address(PT), msg.sender, uint256(-deltaY));
+        if (deltaX > 0) _debit(address(SY), uint256(deltaX), "");
+        if (deltaY > 0) _debit(address(PT), uint256(deltaY), "");
     }
 
     /// @dev Applies an adjustment to the reserves, liquidity, and last timestamp before validating it with the trading function.
@@ -213,11 +218,11 @@ contract RMM is ERC20 {
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity)
     {
-        if (tokenIn != tokenX && tokenIn != tokenY) revert("Invalid tokenIn");
-        if (tokenOut != tokenX && tokenOut != tokenY) revert("Invalid tokenOut");
+        if (tokenIn != address(SY) && tokenIn != address(PT)) revert("Invalid tokenIn");
+        if (tokenOut != address(SY) && tokenOut != address(PT)) revert("Invalid tokenOut");
 
-        bool xIn = tokenIn == tokenX;
-        amountInWad = xIn ? upscale(amountIn, scalar(tokenX)) : upscale(amountIn, scalar(tokenY));
+        bool xIn = tokenIn == address(SY);
+        amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         uint256 tau_ = currentTau();
         uint256 nextLiquidity;
@@ -233,7 +238,7 @@ contract RMM is ERC20 {
         }
 
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
-        amountOut = downscaleDown(amountOutWad, xIn ? scalar(tokenY) : scalar(tokenX));
+        amountOut = downscaleDown(amountOutWad, xIn ? scalar(address(PT)) : scalar(address(SY)));
     }
 
     /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
@@ -247,17 +252,17 @@ contract RMM is ERC20 {
         // console2.log("strikePrev", strike);
         // strike = computeKGivenLastPrice(reserveX, totalLiquidity, sigma, currentTau());
         // console2.log("strikeNext", strike);
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(tokenX, tokenY, amountIn);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(address(SY), address(PT), amountIn);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity);
-        (uint256 creditNative) = _credit(tokenY, to, amountOutWad);
-        (uint256 debitNative) = _debit(tokenX, amountInWad, data);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
+        (uint256 debitNative) = _debit(address(SY), amountInWad, data);
 
-        emit Swap(msg.sender, to, tokenX, tokenY, debitNative, creditNative, deltaLiquidity);
+        emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
     function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
@@ -267,17 +272,17 @@ contract RMM is ERC20 {
     {
         uint256 amountInWad;
         uint256 amountOutWad;
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(tokenY, tokenX, amountIn);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(address(PT), address(SY), amountIn);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity);
-        (uint256 creditNative) = _credit(tokenX, to, amountOutWad);
-        (uint256 debitNative) = _debit(tokenY, amountInWad, data);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
+        (uint256 debitNative) = _debit(address(SY), amountInWad, data);
 
-        emit Swap(msg.sender, to, tokenY, tokenX, debitNative, creditNative, deltaLiquidity);
+        emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY)
@@ -285,8 +290,8 @@ contract RMM is ERC20 {
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)
     {
-        deltaXWad = upscale(deltaX, scalar(tokenX));
-        deltaYWad = upscale(deltaY, scalar(tokenY));
+        deltaXWad = upscale(deltaX, scalar(address(SY)));
+        deltaYWad = upscale(deltaY, scalar(address(PT)));
         uint256 nextLiquidity = solveL(
             computeLGivenX(reserveX + deltaXWad, approxSpotPrice(), strike, sigma, lastTau()),
             reserveX + deltaXWad,
@@ -320,8 +325,8 @@ contract RMM is ERC20 {
         _mint(to, lptMinted);
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity));
 
-        (uint256 debitNativeX) = _debit(tokenX, deltaXWad, "");
-        (uint256 debitNativeY) = _debit(tokenY, deltaYWad, "");
+        (uint256 debitNativeX) = _debit(address(SY), deltaXWad, "");
+        (uint256 debitNativeY) = _debit(address(PT), deltaYWad, "");
 
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
@@ -346,7 +351,7 @@ contract RMM is ERC20 {
         returns (uint256 deltaX, uint256 deltaY)
     {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned) = prepareDeallocate(deltaLiquidity);
-        (deltaX, deltaY) = (downscaleDown(deltaXWad, scalar(tokenX)), downscaleDown(deltaYWad, scalar(tokenY)));
+        (deltaX, deltaY) = (downscaleDown(deltaXWad, scalar(address(SY))), downscaleDown(deltaYWad, scalar(address(PT))));
 
         if (minDeltaXOut > deltaX) {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
@@ -358,8 +363,8 @@ contract RMM is ERC20 {
         _burn(msg.sender, lptBurned); // uses state totalLiquidity
         _adjust(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity));
 
-        (uint256 creditNativeX) = _credit(tokenX, to, deltaXWad);
-        (uint256 creditNativeY) = _credit(tokenY, to, deltaYWad);
+        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad);
+        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
 
         emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }

@@ -18,19 +18,20 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
-uint256 constant TOKEN_X_SLOT = 0 + offset;
-uint256 constant TOKEN_Y_SLOT = 1 + offset;
-uint256 constant RESERVE_X_SLOT = 2 + offset;
-uint256 constant RESERVE_Y_SLOT = 3 + offset;
-uint256 constant TOTAL_LIQUIDITY_SLOT = 4 + offset;
-uint256 constant STRIKE_SLOT = 5 + offset;
-uint256 constant SIGMA_SLOT = 6 + offset;
-uint256 constant FEE_SLOT = 7 + offset;
-uint256 constant MATURITY_SLOT = 8 + offset;
-uint256 constant INIT_TIMESTAMP_SLOT = 9 + offset;
-uint256 constant LAST_TIMESTAMP_SLOT = 10 + offset;
-uint256 constant CURATOR_SLOT = 11 + offset;
-uint256 constant LOCK_SLOT = 12 + offset;
+uint256 constant PT_SLOT = 0 + offset;
+uint256 constant SY_SLOT = 1 + offset;
+uint256 constant YT_SLOT = 2 + offset;
+uint256 constant RESERVE_X_SLOT = 3 + offset;
+uint256 constant RESERVE_Y_SLOT = 4 + offset;
+uint256 constant TOTAL_LIQUIDITY_SLOT = 5 + offset;
+uint256 constant STRIKE_SLOT = 6 + offset;
+uint256 constant SIGMA_SLOT = 7 + offset;
+uint256 constant FEE_SLOT = 8 + offset;
+uint256 constant MATURITY_SLOT = 9 + offset;
+uint256 constant INIT_TIMESTAMP_SLOT = 10 + offset;
+uint256 constant LAST_TIMESTAMP_SLOT = 11 + offset;
+uint256 constant CURATOR_SLOT = 12 + offset;
+uint256 constant LOCK_SLOT = 13 + offset;
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
