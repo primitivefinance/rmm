@@ -1,6 +1,11 @@
-ds-test/=lib/solstat/lib/forge-std/lib/ds-test/src/
+ds-test/=lib/openzeppelin-contracts/lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/
 forge-std/=lib/forge-std/src/
+openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
+openzeppelin-contracts/=lib/openzeppelin-contracts/
+openzeppelin/=lib/openzeppelin-contracts/contracts/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@openzeppelin/contracts-upgradeable=lib/openzeppelin-contracts-upgradeable/contracts
+pendle=lib/pendle-core-v2-public/contracts/
 solmate/=lib/solstat/lib/solmate/src/
 solstat/=lib/solstat/src/
-pendle/=lib/pendle-core-v2-public/contracts/
-
