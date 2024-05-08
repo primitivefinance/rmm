@@ -244,9 +244,9 @@ contract RMM is ERC20 {
     {
         uint256 amountInWad;
         uint256 amountOutWad;
-        console2.log("strikePrev", strike);
-        strike = computeKGivenLastPrice(reserveX, totalLiquidity, sigma, currentTau());
-        console2.log("strikeNext", strike);
+        // console2.log("strikePrev", strike);
+        // strike = computeKGivenLastPrice(reserveX, totalLiquidity, sigma, currentTau());
+        // console2.log("strikeNext", strike);
         (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(tokenX, tokenY, amountIn);
 
         if (amountOut < minAmountOut) {
