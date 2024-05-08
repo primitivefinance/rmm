@@ -2,3 +2,5 @@ ds-test/=lib/solstat/lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
 solmate/=lib/solstat/lib/solmate/src/
 solstat/=lib/solstat/src/
+pendle/=lib/pendle-core-v2-public/contracts/
+

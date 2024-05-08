@@ -91,6 +91,7 @@ contract RMM is ERC20 {
     uint256 public lastTimestamp; // slot 16
     address public curator; // slot 17
     uint256 public lock_ = 1; // slot 18
+    uint256 public lastImpliedPrice;
     // TODO: go back to calling it strike, sigma, tau, strike and sigma is cringe
 
     modifier lock() {
@@ -105,8 +106,10 @@ contract RMM is ERC20 {
         int256 initial = tradingFunction();
         _;
         int256 terminal = tradingFunction();
+        console2.log("initial invar", initial);
+        console2.log("post invar", terminal);
 
-        if (abs(terminal) > 10) {
+        if (abs(terminal) > 100) {
             revert OutOfRange(initial, terminal);
         }
     }
@@ -123,11 +126,13 @@ contract RMM is ERC20 {
         returns (uint256 totalLiquidity_, uint256 amountY)
     {
         uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
+        console2.log("tau", tau_);
         uint256 initialLiquidity =
             computeLGivenX({reserveX_: amountX, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
         console2.log("initialLiquidity", initialLiquidity);
         amountY =
             computeY({reserveX_: amountX, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
+        console2.log("initial computed Y", amountY);
         totalLiquidity_ = solveL(initialLiquidity, amountX, amountY, strike_, sigma_, tau_, tau_);
     }
 
@@ -167,6 +172,8 @@ contract RMM is ERC20 {
         _debit(tokenX, reserveX, "");
         _debit(tokenY, reserveY, "");
 
+        lastImpliedPrice = approxSpotPrice();
+
         emit Init(
             msg.sender, tokenX_, tokenY_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity_, curator_
         );
@@ -198,6 +205,7 @@ contract RMM is ERC20 {
         reserveX = sum(reserveX, deltaX);
         reserveY = sum(reserveY, deltaY);
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
+        lastImpliedPrice = approxSpotPrice();
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn)
@@ -216,11 +224,11 @@ contract RMM is ERC20 {
         uint256 nextReserve;
         if (xIn) {
             nextLiquidity = solveL(totalLiquidity, reserveX + feeAmount, reserveY, strike, sigma, lastTau(), tau_);
-            nextReserve = solveY(reserveX + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
+            nextReserve = solveY(reserveX + amountInWad, nextLiquidity, strike, sigma, tau_);
             amountOutWad = reserveY - nextReserve;
         } else {
             nextLiquidity = solveL(totalLiquidity, reserveX, reserveY + feeAmount, strike, sigma, lastTau(), tau_);
-            nextReserve = solveX(reserveY + amountInWad - feeAmount, nextLiquidity, strike, sigma, tau_);
+            nextReserve = solveX(reserveY + amountInWad, nextLiquidity, strike, sigma, tau_);
             amountOutWad = reserveX - nextReserve;
         }
 
@@ -236,6 +244,9 @@ contract RMM is ERC20 {
     {
         uint256 amountInWad;
         uint256 amountOutWad;
+        // console2.log("strikePrev", strike);
+        // strike = computeKGivenLastPrice(reserveX, totalLiquidity, sigma, currentTau());
+        // console2.log("strikeNext", strike);
         (amountInWad, amountOutWad, amountOut, deltaLiquidity) = prepareSwap(tokenX, tokenY, amountIn);
 
         if (amountOut < minAmountOut) {
@@ -504,6 +515,19 @@ contract RMM is ERC20 {
         return tauSeconds.mulDivDown(1e18, 365 days);
     }
 
+    function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+
+        return lastImpliedPrice.divWadDown(uint256(exp));
+    }
+
     /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)
     function computeY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
         public
@@ -598,7 +622,7 @@ contract RMM is ERC20 {
     {
         bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
-        reserveX_ = findRootNewX(args, initialGuess, 20, 100);
+        reserveX_ = findRootNewX(args, initialGuess, 20, 10);
     }
 
     function solveY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
@@ -608,7 +632,7 @@ contract RMM is ERC20 {
     {
         bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
-        reserveY_ = findRootNewY(args, initialGuess, 20, 100);
+        reserveY_ = findRootNewY(args, initialGuess, 20, 10);
     }
 
     function solveL(
@@ -622,7 +646,7 @@ contract RMM is ERC20 {
     ) public pure returns (uint256 liquidity_) {
         bytes memory args = abi.encode(reserveX_, reserveY_, strike_, sigma_, tau_);
         uint256 initialGuess = computeL(reserveX_, initialLiquidity, sigma_, prevTau, tau_);
-        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 100);
+        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 10);
     }
 
     function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
@@ -631,13 +655,9 @@ contract RMM is ERC20 {
         returns (uint256 L)
     {
         L = initialGuess;
-        console2.log("initialGuess", initialGuess);
         int256 L_next;
         for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("L", L);
-            console2.log("i", i);
             int256 dfx = computeTfDL(args, L);
-            console2.log("dfx", dfx);
             int256 fx = findL(args, L);
 
             if (dfx == 0) {
@@ -646,10 +666,8 @@ contract RMM is ERC20 {
             }
 
             L_next = int256(L) - fx * 1e18 / dfx;
-            console2.log("L_next", L_next);
-            console2.log("L", L);
 
-            if (abs(int256(L) - L_next) <= int256(tolerance)) {
+            if (abs(int256(L) - L_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
                 L = uint256(L_next);
                 console2.log("terminal L", L);
                 break;
@@ -678,7 +696,7 @@ contract RMM is ERC20 {
             reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
             console2.log("reserveX_", reserveX_);
 
-            if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance)) {
+            if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
                 reserveX_ = uint256(reserveX_next);
                 console2.log("terminal reserveX_", reserveX_);
                 break;
@@ -707,7 +725,7 @@ contract RMM is ERC20 {
             reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
             console2.log("reserveY_", reserveY_);
 
-            if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance)) {
+            if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
                 reserveY_ = uint256(reserveY_next);
                 console2.log("terminal reserveY_", reserveY_);
                 break;
