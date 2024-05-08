@@ -38,4 +38,6 @@ jobs:
       - name: Run Forge snapshot
         run: |
           forge snapshot --diff --gas-report
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
         id: snapshot
