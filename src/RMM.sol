@@ -229,7 +229,6 @@ contract RMM is ERC20 {
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
         strike = strike_;
         lastImpliedPrice = approxSpotPrice(index.syToAsset(reserveX));
-        console2.log("lastImpliedPrice", lastImpliedPrice);
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
