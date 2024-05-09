@@ -128,7 +128,7 @@ contract RMMTest is Test {
             amountX: 100 ether,
             strike_: price,
             sigma_: 0.01 ether,
-            fee_: 0,
+            fee_: 0.0005 ether,
             curator_: address(0x55)
         });
 
@@ -144,7 +144,6 @@ contract RMMTest is Test {
     function test_swapX_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        int256 initial = subject().tradingFunction(index);
         vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
@@ -159,5 +158,13 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction(index);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, 0, address(this), "");
+    }
+
+    // todo: whats the error?
+    function test_basic_price() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 totalAsset = index.syToAsset(subject().reserveX());
+        uint256 price = subject().approxSpotPrice(totalAsset);
+        assertApproxEqAbs(price, uint256(getPtExchangeRate()), 10_000, "Price is not approximately 1 ether.");
     }
 }
