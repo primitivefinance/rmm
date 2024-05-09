@@ -654,7 +654,6 @@ contract RMM is ERC20 {
     function findL(bytes memory data, uint256 liquidity) internal pure returns (int256) {
         (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_) =
             abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
-        console2.log("rx in findL", reserveX_);
 
         return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_);
     }

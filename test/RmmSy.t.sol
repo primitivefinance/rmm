@@ -122,13 +122,15 @@ contract RMMTest is Test {
         uint256 price = uint256(getPtExchangeRate());
         console2.log("initial price", price);
         console2.log("rate anchor", pendleRateAnchor);
+        console2.log("totalSY", pendleMarketState.totalSy);
+        console2.log("totalPT", pendleMarketState.totalPt);
         subject().init({
             PT_: address(PT),
             priceX: price,
-            amountX: 100 ether,
-            strike_: price,
-            sigma_: 0.01 ether,
-            fee_: 0.0005 ether,
+            amountX: uint256(pendleMarketState.totalSy),
+            strike_: uint256(pendleRateAnchor),
+            sigma_: 0.015 ether,
+            fee_: 0.00016 ether,
             curator_: address(0x55)
         });
 
@@ -138,6 +140,8 @@ contract RMMTest is Test {
     function test_basic_trading_function_result_sy() public basic_sy {
         PYIndex index = YT.newIndex();
         int256 result = subject().tradingFunction(index);
+        console2.log("rx", subject().reserveX());
+        console2.log("ry", subject().reserveY());
         assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
     }
 
@@ -166,5 +170,17 @@ contract RMMTest is Test {
         uint256 totalAsset = index.syToAsset(subject().reserveX());
         uint256 price = subject().approxSpotPrice(totalAsset);
         assertApproxEqAbs(price, uint256(getPtExchangeRate()), 10_000, "Price is not approximately 1 ether.");
+    }
+
+    function test_price_impact() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 totalAsset = index.syToAsset(subject().reserveX());
+        uint256 price = subject().approxSpotPrice(totalAsset);
+        console2.log("initialPrice", price);
+        uint256 deltaY = 100 ether;
+        (uint256 amountOut,) = subject().swapY(deltaY, 0, address(this), "");
+        console2.log("amountOut", amountOut);
+        uint256 priceAfter = subject().approxSpotPrice(totalAsset);
+        console2.log("priceAfter", priceAfter);
     }
 }
