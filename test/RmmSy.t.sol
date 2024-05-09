@@ -42,6 +42,8 @@ contract RMMTest is Test {
     using MarketMathCore for int256;
     using MarketMathCore for uint256;
     using FixedPointMathLib for uint256;
+    using PYIndexLib for IPYieldToken;
+    using PYIndexLib for PYIndex;
 
     RMM public __subject__;
     MockERC20 public tokenX;
@@ -117,18 +119,16 @@ contract RMMTest is Test {
     }
 
     modifier basic_sy() {
-        uint256 price = SY.exchangeRate().mulWadDown(uint256(getPtExchangeRate()));
+        uint256 price = uint256(getPtExchangeRate());
         console2.log("initial price", price);
         console2.log("rate anchor", pendleRateAnchor);
         subject().init({
-            tokenX_: address(SY),
-            tokenY_: address(PT),
+            PT_: address(PT),
             priceX: price,
             amountX: 100 ether,
             strike_: price,
             sigma_: 0.01 ether,
             fee_: 0.0005 ether,
-            maturity_: PT.expiry(),
             curator_: address(0x55)
         });
 
@@ -136,20 +136,22 @@ contract RMMTest is Test {
     }
 
     function test_basic_trading_function_result_sy() public basic_sy {
-        int256 result = subject().tradingFunction();
+        PYIndex index = YT.newIndex();
+        int256 result = subject().tradingFunction(index);
         assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
     }
 
     function test_swapX_over_time_sy() public basic_sy {
-        uint256 initialPrice = subject().approxSpotPrice();
-        console2.log("initialPrice", initialPrice);
+        PYIndex index = YT.newIndex();
+        // uint256 initialPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX));
+        // console2.log("initialPrice", initialPrice);
         uint256 deltaX = 1 ether;
-        int256 initial = subject().tradingFunction();
+        int256 initial = subject().tradingFunction(index);
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
 }

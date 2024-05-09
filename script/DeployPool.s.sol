@@ -11,14 +11,23 @@ import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
 import {RMM} from "../src/RMM.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import "pendle/core/Market/MarketMathCore.sol";
+import "pendle/interfaces/IPAllActionV3.sol";
+import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
+import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
+import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 
 contract DeployPool is Script {
+    using PYIndexLib for IPYieldToken;
+    using PYIndexLib for PYIndex;
+
     function setUp() public {}
 
     string public constant ENV_PRIVATE_KEY = "PRIVATE_KEY";
     address payable public constant RMM_ADDRESS = payable(address(0));
     address public constant SY_ADDRESS = address(0);
     address public constant PT_ADDRESS = address(0);
+    address public constant YT_ADDRESS = address(0);
     uint256 public constant startPrice = 1 ether;
     uint256 public constant initialDepositX = 1 ether;
     uint256 public constant strike = 1 ether;
@@ -40,7 +49,7 @@ contract DeployPool is Script {
 
         (uint256 initialLiquidity, uint256 initialDepositY) = RMM(RMM_ADDRESS).prepareInit({
             priceX: startPrice,
-            amountX: initialDepositX,
+            totalAsset: initialDepositX,
             strike_: strike,
             sigma_: sigma,
             maturity_: maturity
@@ -55,14 +64,12 @@ contract DeployPool is Script {
         }
 
         RMM(RMM_ADDRESS).init({
-            tokenX_: SY_ADDRESS,
-            tokenY_: PT_ADDRESS,
+            PT_: PT_ADDRESS,
             priceX: startPrice,
             amountX: initialDepositX,
             strike_: strike,
             sigma_: sigma,
             fee_: fee,
-            maturity_: maturity,
             curator_: curator
         });
 
