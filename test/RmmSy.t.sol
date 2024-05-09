@@ -128,7 +128,7 @@ contract RMMTest is Test {
             amountX: 100 ether,
             strike_: price,
             sigma_: 0.01 ether,
-            fee_: 0.0005 ether,
+            fee_: 0,
             curator_: address(0x55)
         });
 
@@ -143,8 +143,6 @@ contract RMMTest is Test {
 
     function test_swapX_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
-        // uint256 initialPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX));
-        // console2.log("initialPrice", initialPrice);
         uint256 deltaX = 1 ether;
         int256 initial = subject().tradingFunction(index);
         vm.warp(block.timestamp + 5 days);
@@ -153,5 +151,17 @@ contract RMMTest is Test {
         vm.warp(block.timestamp + 5 days);
         (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+    }
+
+    function test_swap_y() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaY = 1 ether;
+        int256 initial = subject().tradingFunction(index);
+        vm.warp(block.timestamp + 5 days);
+        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaY, 0, address(this), "");
+        vm.warp(block.timestamp + 5 days);
+        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaY, block.timestamp, index);
+        (amountOut, deltaLiquidity) = subject().swapX(deltaY, 0, address(this), "");
     }
 }

@@ -247,9 +247,7 @@ contract RMM is ERC20 {
         uint256 nextLiquidity;
         uint256 nextReserve;
         if (xIn) {
-            console2.log("initial reserve in asset", comp.reserveInAsset);
             comp.reserveInAsset += index.syToAsset(feeAmount);
-            console2.log("post reserve in asset", comp.reserveInAsset);
             nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma, lastTau());
             comp.reserveInAsset -= index.syToAsset(feeAmount);
             nextReserve = solveY(
@@ -259,7 +257,7 @@ contract RMM is ERC20 {
         } else {
             nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma, lastTau());
             nextReserve = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
-            amountOutWad = reserveX - nextReserve;
+            amountOutWad = reserveX - index.assetToSy(nextReserve);
         }
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
@@ -443,7 +441,8 @@ contract RMM is ERC20 {
     }
 
     function preparePoolPreCompute(PYIndex index, uint256 blockTime) internal view returns (PoolPreCompute memory) {
-        uint256 tau_ = computeTauWadYears(blockTime);
+        uint256 tau_ = computeTauWadYears(maturity - blockTime);
+        // uint256 tau_ = currentTau();
         uint256 totalAsset = index.syToAsset(reserveX);
         // uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
         uint256 strike_ = strike;
@@ -656,6 +655,7 @@ contract RMM is ERC20 {
     function findL(bytes memory data, uint256 liquidity) internal pure returns (int256) {
         (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_) =
             abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
+        console2.log("rx in findL", reserveX_);
 
         return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_);
     }
@@ -668,6 +668,7 @@ contract RMM is ERC20 {
     {
         bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
+        console2.log("initial x guess", initialGuess);
         reserveX_ = findRootNewX(args, initialGuess, 20, 10);
     }
 
@@ -688,9 +689,11 @@ contract RMM is ERC20 {
         uint256 sigma_,
         uint256 prevTau
     ) public pure returns (uint256 liquidity_) {
+        console2.log("prev liquidity", initialLiquidity);
         bytes memory args = abi.encode(comp.reserveInAsset, reserveY_, comp.strike_, sigma_, comp.tau_);
         uint256 initialGuess = computeL(comp.reserveInAsset, initialLiquidity, sigma_, prevTau, comp.tau_);
         liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 10);
+        console2.log("new liquidity", liquidity_);
     }
 
     function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
