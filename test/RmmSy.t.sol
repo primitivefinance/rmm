@@ -157,11 +157,7 @@ contract RMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
         int256 initial = subject().tradingFunction(index);
-        vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaY, 0, address(this), "");
-        vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaY, block.timestamp, index);
-        (amountOut, deltaLiquidity) = subject().swapX(deltaY, 0, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, 0, address(this), "");
     }
 }
