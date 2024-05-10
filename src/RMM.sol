@@ -242,18 +242,18 @@ contract RMM is ERC20 {
         bool xIn = tokenIn == address(SY);
         amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
-        console2.log("initial K", strike);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
-        console2.log("next K", comp.strike_);
         uint256 nextLiquidity;
         uint256 nextReserve;
         if (xIn) {
             comp.reserveInAsset += index.syToAsset(feeAmount);
             nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma, lastTau());
             comp.reserveInAsset -= index.syToAsset(feeAmount);
+            console2.log("next L", nextLiquidity);
             nextReserve = solveY(
                 comp.reserveInAsset + index.syToAsset(amountInWad), nextLiquidity, comp.strike_, sigma, comp.tau_
             );
+            console2.log("next reserve", nextReserve);
             amountOutWad = reserveY - nextReserve;
         } else {
             nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma, lastTau());
@@ -442,10 +442,9 @@ contract RMM is ERC20 {
     }
 
     function preparePoolPreCompute(PYIndex index, uint256 blockTime) internal view returns (PoolPreCompute memory) {
-        uint256 tau_ = computeTauWadYears(maturity - blockTime);
+        uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
         uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
-        // uint256 strike_ = strike;
         return PoolPreCompute(totalAsset, strike_, tau_);
     }
 
@@ -477,6 +476,14 @@ contract RMM is ERC20 {
         return computeTauWadYears(maturity - block.timestamp);
     }
 
+    function futureTau(uint256 timestamp) public view returns (uint256) {
+        if (maturity < timestamp) {
+            return 0;
+        }
+
+        return computeTauWadYears(maturity - timestamp);
+    }
+
     /// @dev Computes the trading function result using the current state.
     function tradingFunction(PYIndex index) public view returns (int256) {
         if (totalLiquidity == 0) return 0; // Not initialized.
@@ -494,14 +501,14 @@ contract RMM is ERC20 {
         uint256 tau_
     ) public pure returns (int256) {
         uint256 a_i = reserveX_ * 1e18 / liquidity;
-        if (a_i >= 1 ether || a_i == 0) {
-            revert OutOfBoundsX(a_i);
-        }
+        // if (a_i >= 1 ether || a_i == 0) {
+        //     revert OutOfBoundsX(a_i);
+        // }
 
         uint256 b_i = reserveY_ * 1e36 / (strike_ * liquidity);
-        if (b_i >= 1 ether || b_i == 0) {
-            revert OutOfBoundsY(b_i);
-        }
+        // if (b_i >= 1 ether || b_i == 0) {
+        //     revert OutOfBoundsY(b_i);
+        // }
 
         int256 a = Gaussian.ppf(toInt(a_i));
         int256 b = Gaussian.ppf(toInt(b_i));
@@ -693,7 +700,7 @@ contract RMM is ERC20 {
     {
         bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
-        reserveY_ = findRootNewY(args, initialGuess, 20, 10);
+        reserveY_ = findRootNewY(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
     }
 
     function solveL(
@@ -705,7 +712,6 @@ contract RMM is ERC20 {
     ) public pure returns (uint256 liquidity_) {
         console2.log("prev liquidity", initialLiquidity);
         bytes memory args = abi.encode(comp.reserveInAsset, reserveY_, comp.strike_, sigma_, comp.tau_);
-        // uint256 initialGuess = computeL(comp.reserveInAsset, initialLiquidity, sigma_, prevTau, comp.tau_);
         uint256 initialGuess =
             computeLGivenYK(comp.reserveInAsset, reserveY_, initialLiquidity, comp.strike_, sigma_, prevTau, comp.tau_);
         console2.log("initial guess", initialGuess);
@@ -781,8 +787,10 @@ contract RMM is ERC20 {
         reserveY_ = initialGuess;
         int256 reserveY_next;
         for (uint256 i = 0; i < maxIterations; i++) {
-            int256 dfx = computeTfDReserveY(args, reserveY_);
             int256 fx = findY(args, reserveY_);
+            int256 dfx = computeTfDReserveY(args, reserveY_);
+            console2.log("y dfx", dfx);
+            console2.log("y fx", fx);
 
             if (dfx == 0) {
                 // Handle division by zero
