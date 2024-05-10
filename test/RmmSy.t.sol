@@ -148,6 +148,7 @@ contract RMMTest is Test {
     function test_swapX_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
+        console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
@@ -159,9 +160,8 @@ contract RMMTest is Test {
     function test_swap_y() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
-        int256 initial = subject().tradingFunction(index);
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, 0, address(this), "");
+        subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        subject().swapY(deltaY, 0, address(this), "");
     }
 
     // todo: whats the error?
@@ -182,5 +182,28 @@ contract RMMTest is Test {
         console2.log("amountOut", amountOut);
         uint256 priceAfter = subject().approxSpotPrice(totalAsset);
         console2.log("priceAfter", priceAfter);
+    }
+
+    function test_strike_converges_to_one_at_maturity() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaX = 1 ether;
+        vm.warp(subject().maturity());
+        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().swapX(deltaX, 0, address(this), "");
+        assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
+    }
+
+    function test_spot_price_at_maturity() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaX = 1 ether;
+        vm.warp(subject().maturity());
+        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().swapX(deltaX, 0, address(this), "");
+        assertApproxEqAbs(
+            subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
+            1 ether,
+            1e18,
+            "Spot price is not approximately 1 ether."
+        );
     }
 }
