@@ -45,10 +45,6 @@ contract RMM is ERC20 {
     error InvalidAllocate(uint256 deltaX, uint256 deltaY, uint256 currLiquidity, uint256 nextLiquidity);
     /// @dev Thrown on `init` when a token has invalid decimals.
     error InvalidDecimals(address token, uint256 decimals);
-    /// @dev Thrown when an input to the trading function is outside the domain for the X reserve.
-    error OutOfBoundsX(uint256 value);
-    /// @dev Thrown when an input to the trading function is outside the domain for the Y reserve.
-    error OutOfBoundsY(uint256 value);
     /// @dev Thrown when the trading function result is less than the previous invariant.
     error OutOfRange(int256 initial, int256 terminal);
     /// @dev Thrown when a payment to or from the user returns false or no data.
@@ -125,7 +121,7 @@ contract RMM is ERC20 {
         _;
         int256 terminal = tradingFunction(index);
 
-        if (abs(terminal) > 100) {
+        if (abs(terminal) > 10) {
             revert OutOfRange(initial, terminal);
         }
     }
@@ -847,13 +843,13 @@ function upscale(uint256 amount, uint256 scalingFactor) pure returns (uint256) {
 }
 
 /// @dev Converts a WAD amount to a native DECIMAL amount, rounding down.
-function downscaleDown(uint256 amount, uint256 scalar) pure returns (uint256) {
-    return FixedPointMathLib.divWadDown(amount, scalar);
+function downscaleDown(uint256 amount, uint256 scalar_) pure returns (uint256) {
+    return FixedPointMathLib.divWadDown(amount, scalar_);
 }
 
 /// @dev Converts a WAD amount to a native DECIMAL amount, rounding up.
-function downscaleUp(uint256 amount, uint256 scalar) pure returns (uint256) {
-    return FixedPointMathLib.divWadUp(amount, scalar);
+function downscaleUp(uint256 amount, uint256 scalar_) pure returns (uint256) {
+    return FixedPointMathLib.divWadUp(amount, scalar_);
 }
 
 /// @dev Casts a positived signed integer to an unsigned integer, reverting if `x` is negative.
