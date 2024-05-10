@@ -33,6 +33,8 @@ contract RMM is ERC20 {
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
 
+    /// @dev Thrown if trying to initialize an already initialized pool.
+    error AlreadyInitialized();
     /// @dev Thrown when a `balanceOf` call fails or returns unexpected data.
     error BalanceError();
     /// @dev Thrown when a payment to this contract is insufficient.
@@ -156,6 +158,7 @@ contract RMM is ERC20 {
         uint256 fee_,
         address curator_
     ) external lock {
+        if (strike != 0) revert AlreadyInitialized();
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
