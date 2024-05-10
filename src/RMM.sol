@@ -147,7 +147,7 @@ contract RMM is ERC20 {
             computeLGivenX({reserveX_: totalAsset, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
         amountY =
             computeY({reserveX_: totalAsset, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
-        totalLiquidity_ = solveL(comp, initialLiquidity, amountY, sigma_, tau_);
+        totalLiquidity_ = solveL(comp, initialLiquidity, amountY, sigma_);
     }
 
     /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
@@ -247,7 +247,7 @@ contract RMM is ERC20 {
         uint256 nextReserve;
         if (xIn) {
             comp.reserveInAsset += index.syToAsset(feeAmount);
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma, lastTau());
+            nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma);
             comp.reserveInAsset -= index.syToAsset(feeAmount);
             console2.log("next L", nextLiquidity);
             nextReserve = solveY(
@@ -256,7 +256,7 @@ contract RMM is ERC20 {
             console2.log("next reserve", nextReserve);
             amountOutWad = reserveY - nextReserve;
         } else {
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma, lastTau());
+            nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma);
             nextReserve = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
             amountOutWad = reserveX - index.assetToSy(nextReserve);
         }
@@ -328,8 +328,7 @@ contract RMM is ERC20 {
                 comp.reserveInAsset + deltaXWad, approxSpotPrice(comp.reserveInAsset), strike, sigma, lastTau()
             ),
             reserveY + deltaYWad,
-            sigma,
-            lastTau()
+            sigma
         );
         if (nextLiquidity < totalLiquidity) {
             revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
@@ -624,7 +623,6 @@ contract RMM is ERC20 {
         uint256 liquidity,
         uint256 strike_,
         uint256 sigma_,
-        uint256 prevTau,
         uint256 newTau
     ) public pure returns (uint256) {
         int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
@@ -697,17 +695,15 @@ contract RMM is ERC20 {
         reserveY_ = findRootNewY(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
     }
 
-    function solveL(
-        PoolPreCompute memory comp,
-        uint256 initialLiquidity,
-        uint256 reserveY_,
-        uint256 sigma_,
-        uint256 prevTau
-    ) public pure returns (uint256 liquidity_) {
+    function solveL(PoolPreCompute memory comp, uint256 initialLiquidity, uint256 reserveY_, uint256 sigma_)
+        public
+        pure
+        returns (uint256 liquidity_)
+    {
         console2.log("prev liquidity", initialLiquidity);
         bytes memory args = abi.encode(comp.reserveInAsset, reserveY_, comp.strike_, sigma_, comp.tau_);
         uint256 initialGuess =
-            computeLGivenYK(comp.reserveInAsset, reserveY_, initialLiquidity, comp.strike_, sigma_, prevTau, comp.tau_);
+            computeLGivenYK(comp.reserveInAsset, reserveY_, initialLiquidity, comp.strike_, sigma_, comp.tau_);
         console2.log("initial guess", initialGuess);
         liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 10);
         console2.log("new liquidity", liquidity_);
