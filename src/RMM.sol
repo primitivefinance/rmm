@@ -753,7 +753,6 @@ contract RMM is ERC20 {
             }
 
             reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
-            console2.log("reserveX_", reserveX_);
 
             if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
                 reserveX_ = uint256(reserveX_next);
@@ -776,8 +775,6 @@ contract RMM is ERC20 {
             console2.log("iters y", i);
             int256 fx = findY(args, reserveY_);
             int256 dfx = computeTfDReserveY(args, reserveY_);
-            console2.log("y dfx", dfx);
-            console2.log("y fx", fx);
 
             if (dfx == 0) {
                 // Handle division by zero
@@ -785,7 +782,6 @@ contract RMM is ERC20 {
             }
 
             reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
-            console2.log("reserveY_", reserveY_);
 
             if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
                 reserveY_ = uint256(reserveY_next);
