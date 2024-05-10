@@ -531,15 +531,16 @@ contract RMM is ERC20 {
         pure
         returns (uint256)
     {
-        uint256 oneMinusXOverL = 1 ether - reserveX_.divWadDown(totalLiquidity_); // 1 - x/L
-        int256 a = Gaussian.ppf(int256(oneMinusXOverL)); // Φ^-1(1 - x/L)
-        uint256 sigmaSqrtTau = computeSigmaSqrtTau(sigma_, tau_); // σ√τ
-        int256 b = toInt(sigmaSqrtTau);
-        uint256 halfSigmaSquaredTau = (sigma_ * sigma_ * tau_) / (2 * 1e18 ** 3); // 1/2σ^2τ
-        int256 c = toInt(halfSigmaSquaredTau);
-        int256 exponent = (a * b / 1 ether - c); // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
-        int256 expResult = exponent.expWad(); // e^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
-        return strike_.mulWadUp(uint256(expResult)); // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
+        // Φ^-1(1 - x/L)
+        int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(totalLiquidity_)));
+        // σ√τ
+        int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
+        // 1/2σ^2τ
+        int256 c = toInt(0.5 ether * sigma_ * sigma_ * tau_ / (1e18 ** 3));
+        // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
+        int256 exp = (a * b / 1 ether - c).expWad();
+        // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
+        return strike_.mulWadUp(uint256(exp));
     }
 
     function computeLnSDivK(uint256 S, uint256 strike_) public pure returns (int256) {

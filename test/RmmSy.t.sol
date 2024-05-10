@@ -160,9 +160,8 @@ contract RMMTest is Test {
     function test_swap_y() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
-        int256 initial = subject().tradingFunction(index);
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, 0, address(this), "");
+        subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        subject().swapY(deltaY, 0, address(this), "");
     }
 
     // todo: whats the error?
