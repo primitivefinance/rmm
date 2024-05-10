@@ -185,11 +185,26 @@ contract RMMTest is Test {
         console2.log("priceAfter", priceAfter);
     }
 
-    function test_strike_converges_to_one() public basic_sy {
+    function test_strike_converges_to_one_at_maturity() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().swapX(deltaX, 0, address(this), "");
+        assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
+    }
+
+    function test_spot_price_at_maturity() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaX = 1 ether;
+        vm.warp(subject().maturity());
+        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().swapX(deltaX, 0, address(this), "");
+        assertApproxEqAbs(
+            subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
+            1 ether,
+            1e18,
+            "Spot price is not approximately 1 ether."
+        );
     }
 }
