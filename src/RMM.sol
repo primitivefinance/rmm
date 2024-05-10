@@ -690,7 +690,8 @@ contract RMM is ERC20 {
         bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
         console2.log("initial x guess", initialGuess);
-        reserveX_ = findRootNewX(args, initialGuess, 20, 10);
+        // at maturity the `initialGuess` will == L therefore we must reduce it by 1 wei
+        reserveX_ = findRootNewX(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
     }
 
     function solveY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
@@ -700,6 +701,7 @@ contract RMM is ERC20 {
     {
         bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
+        // at maturity the `initialGuess` will == LK (K == WAD, K*L == L) therefore we must reduce it by 1 wei
         reserveY_ = findRootNewY(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
     }
 
