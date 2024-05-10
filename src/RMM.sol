@@ -501,18 +501,12 @@ contract RMM is ERC20 {
         uint256 tau_
     ) public pure returns (int256) {
         uint256 a_i = reserveX_ * 1e18 / liquidity;
-        // if (a_i >= 1 ether || a_i == 0) {
-        //     revert OutOfBoundsX(a_i);
-        // }
 
         uint256 b_i = reserveY_ * 1e36 / (strike_ * liquidity);
-        // if (b_i >= 1 ether || b_i == 0) {
-        //     revert OutOfBoundsY(b_i);
-        // }
 
         int256 a = Gaussian.ppf(toInt(a_i));
         int256 b = Gaussian.ppf(toInt(b_i));
-        int256 c = toInt(computeSigmaSqrtTau(sigma_, tau_));
+        int256 c = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
         return a + b + c;
     }
 
@@ -587,8 +581,7 @@ contract RMM is ERC20 {
         returns (uint256)
     {
         int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWadDown(liquidity)));
-        int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
-        console2.log("b", b);
+        int256 b = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
         int256 c = Gaussian.cdf(a - b);
 
         return liquidity * strike_ * toUint(c) / (1e18 ** 2);
@@ -601,7 +594,7 @@ contract RMM is ERC20 {
         returns (uint256)
     {
         int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
-        int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
+        int256 b = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
         int256 c = Gaussian.cdf(a + b);
 
         return liquidity * (1 ether - toUint(c)) / 1e18;
@@ -635,7 +628,8 @@ contract RMM is ERC20 {
         uint256 newTau
     ) public pure returns (uint256) {
         int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
-        int256 c = Gaussian.cdf(a + int256(computeSigmaSqrtTau(sigma_, newTau)));
+        int256 b = newTau != 0 ? toInt(computeSigmaSqrtTau(sigma_, newTau)) : int256(0);
+        int256 c = Gaussian.cdf(a + b);
 
         return reserveX_ * 1 ether / toUint(1 ether - c);
     }
