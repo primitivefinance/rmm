@@ -148,6 +148,7 @@ contract RMMTest is Test {
     function test_swapX_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
+        console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
@@ -182,5 +183,13 @@ contract RMMTest is Test {
         console2.log("amountOut", amountOut);
         uint256 priceAfter = subject().approxSpotPrice(totalAsset);
         console2.log("priceAfter", priceAfter);
+    }
+
+    function test_strike_converges_to_one() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaX = 1 ether;
+        vm.warp(subject().maturity() - 5 days);
+        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
 }
