@@ -188,7 +188,7 @@ contract RMMTest is Test {
     function test_strike_converges_to_one() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        vm.warp(subject().maturity() - 5 days);
+        vm.warp(subject().maturity() - 1);
         (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
