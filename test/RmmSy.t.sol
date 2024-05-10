@@ -18,19 +18,20 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
-uint256 constant TOKEN_X_SLOT = 0 + offset;
-uint256 constant TOKEN_Y_SLOT = 1 + offset;
-uint256 constant RESERVE_X_SLOT = 2 + offset;
-uint256 constant RESERVE_Y_SLOT = 3 + offset;
-uint256 constant TOTAL_LIQUIDITY_SLOT = 4 + offset;
-uint256 constant STRIKE_SLOT = 5 + offset;
-uint256 constant SIGMA_SLOT = 6 + offset;
-uint256 constant FEE_SLOT = 7 + offset;
-uint256 constant MATURITY_SLOT = 8 + offset;
-uint256 constant INIT_TIMESTAMP_SLOT = 9 + offset;
-uint256 constant LAST_TIMESTAMP_SLOT = 10 + offset;
-uint256 constant CURATOR_SLOT = 11 + offset;
-uint256 constant LOCK_SLOT = 12 + offset;
+uint256 constant PT_SLOT = 0 + offset;
+uint256 constant SY_SLOT = 1 + offset;
+uint256 constant YT_SLOT = 2 + offset;
+uint256 constant RESERVE_X_SLOT = 3 + offset;
+uint256 constant RESERVE_Y_SLOT = 4 + offset;
+uint256 constant TOTAL_LIQUIDITY_SLOT = 5 + offset;
+uint256 constant STRIKE_SLOT = 6 + offset;
+uint256 constant SIGMA_SLOT = 7 + offset;
+uint256 constant FEE_SLOT = 8 + offset;
+uint256 constant MATURITY_SLOT = 9 + offset;
+uint256 constant INIT_TIMESTAMP_SLOT = 10 + offset;
+uint256 constant LAST_TIMESTAMP_SLOT = 11 + offset;
+uint256 constant CURATOR_SLOT = 12 + offset;
+uint256 constant LOCK_SLOT = 13 + offset;
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
@@ -41,6 +42,8 @@ contract RMMTest is Test {
     using MarketMathCore for int256;
     using MarketMathCore for uint256;
     using FixedPointMathLib for uint256;
+    using PYIndexLib for IPYieldToken;
+    using PYIndexLib for PYIndex;
 
     RMM public __subject__;
     MockERC20 public tokenX;
@@ -116,18 +119,18 @@ contract RMMTest is Test {
     }
 
     modifier basic_sy() {
-        uint256 price = SY.exchangeRate().mulWadDown(uint256(getPtExchangeRate()));
+        uint256 price = uint256(getPtExchangeRate());
         console2.log("initial price", price);
         console2.log("rate anchor", pendleRateAnchor);
+        console2.log("totalSY", pendleMarketState.totalSy);
+        console2.log("totalPT", pendleMarketState.totalPt);
         subject().init({
-            tokenX_: address(SY),
-            tokenY_: address(PT),
+            PT_: address(PT),
             priceX: price,
-            amountX: 100 ether,
-            strike_: price,
-            sigma_: 0.01 ether,
-            fee_: 0.0005 ether,
-            maturity_: PT.expiry(),
+            amountX: uint256(pendleMarketState.totalSy),
+            strike_: uint256(pendleRateAnchor),
+            sigma_: 0.015 ether,
+            fee_: 0.00016 ether,
             curator_: address(0x55)
         });
 
@@ -135,20 +138,49 @@ contract RMMTest is Test {
     }
 
     function test_basic_trading_function_result_sy() public basic_sy {
-        int256 result = subject().tradingFunction();
+        PYIndex index = YT.newIndex();
+        int256 result = subject().tradingFunction(index);
+        console2.log("rx", subject().reserveX());
+        console2.log("ry", subject().reserveY());
         assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
     }
 
     function test_swapX_over_time_sy() public basic_sy {
-        uint256 initialPrice = subject().approxSpotPrice();
-        console2.log("initialPrice", initialPrice);
+        PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        int256 initial = subject().tradingFunction();
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,) = subject().prepareSwap(address(SY), address(PT), deltaX);
+        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+    }
+
+    function test_swap_y() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 deltaY = 1 ether;
+        int256 initial = subject().tradingFunction(index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, 0, address(this), "");
+    }
+
+    // todo: whats the error?
+    function test_basic_price() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 totalAsset = index.syToAsset(subject().reserveX());
+        uint256 price = subject().approxSpotPrice(totalAsset);
+        assertApproxEqAbs(price, uint256(getPtExchangeRate()), 10_000, "Price is not approximately 1 ether.");
+    }
+
+    function test_price_impact() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 totalAsset = index.syToAsset(subject().reserveX());
+        uint256 price = subject().approxSpotPrice(totalAsset);
+        console2.log("initialPrice", price);
+        uint256 deltaY = 100 ether;
+        (uint256 amountOut,) = subject().swapY(deltaY, 0, address(this), "");
+        console2.log("amountOut", amountOut);
+        uint256 priceAfter = subject().approxSpotPrice(totalAsset);
+        console2.log("priceAfter", priceAfter);
     }
 }
