@@ -586,10 +586,9 @@ contract RMM is ERC20 {
         pure
         returns (uint256)
     {
-        if (tau_ == 0) return liquidity * strike_ * (1 ether - reserveX_ / liquidity) / 1e36;
-
         int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWadDown(liquidity)));
         int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
+        console2.log("b", b);
         int256 c = Gaussian.cdf(a - b);
 
         return liquidity * strike_ * toUint(c) / (1e18 ** 2);
@@ -601,8 +600,6 @@ contract RMM is ERC20 {
         pure
         returns (uint256)
     {
-        if (tau_ == 0) return liquidity * (1 ether - reserveY_ * 1e36 / (liquidity * strike_));
-
         int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
         int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
         int256 c = Gaussian.cdf(a + b);
@@ -702,6 +699,7 @@ contract RMM is ERC20 {
         bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
         uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
         // at maturity the `initialGuess` will == LK (K == WAD, K*L == L) therefore we must reduce it by 1 wei
+        console2.log("initialGuess y", initialGuess);
         reserveY_ = findRootNewY(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
     }
 
@@ -729,12 +727,9 @@ contract RMM is ERC20 {
         L = initialGuess;
         int256 L_next;
         for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("i", i);
+            console2.log("iters L", i);
             int256 dfx = computeTfDL(args, L);
             int256 fx = findL(args, L);
-            console2.log("L fx", fx);
-            console2.log("L dfx", dfx);
-            console2.log("L", L);
 
             if (dfx == 0) {
                 // Handle division by zero
@@ -760,6 +755,7 @@ contract RMM is ERC20 {
         reserveX_ = initialGuess;
         int256 reserveX_next;
         for (uint256 i = 0; i < maxIterations; i++) {
+            console2.log("iters x", i);
             int256 dfx = computeTfDReserveX(args, reserveX_);
             int256 fx = findX(args, reserveX_);
 
@@ -789,6 +785,7 @@ contract RMM is ERC20 {
         reserveY_ = initialGuess;
         int256 reserveY_next;
         for (uint256 i = 0; i < maxIterations; i++) {
+            console2.log("iters y", i);
             int256 fx = findY(args, reserveY_);
             int256 dfx = computeTfDReserveY(args, reserveY_);
             console2.log("y dfx", dfx);
