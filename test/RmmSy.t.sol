@@ -37,7 +37,7 @@ IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
 address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
 
-contract RMMTest is Test {
+contract ForkRMMTest is Test {
     using MarketMathCore for MarketState;
     using MarketMathCore for int256;
     using MarketMathCore for uint256;

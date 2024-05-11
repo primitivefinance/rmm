@@ -5,6 +5,19 @@ import "forge-std/Test.sol";
 import "../src/RMM.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
+import {IPMarket} from "pendle/interfaces/IPMarket.sol";
+import "pendle/core/Market/MarketMathCore.sol";
+import "pendle/interfaces/IPAllActionV3.sol";
+import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
+import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
+import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+
+import {PendleERC20SY} from "pendle/core/StandardizedYield/implementations/PendleERC20SY.sol";
+import {SYBase} from "pendle/core/StandardizedYield/SYBase.sol";
+import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
+import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
+import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
+
 struct Calls {
     uint256 success;
     uint256 reverts;
@@ -12,9 +25,18 @@ struct Calls {
 }
 
 contract InvariantHandler {
+    using MarketMathCore for MarketState;
+    using MarketMathCore for int256;
+    using MarketMathCore for uint256;
+    using FixedPointMathLib for uint256;
+    using PYIndexLib for IPYieldToken;
+    using PYIndexLib for PYIndex;
+
     RMM public rmm;
-    MockERC20 public tokenX;
-    MockERC20 public tokenY;
+    address public wstETH;
+    IStandardizedYield public SY;
+    IPPrincipalToken public PT;
+    IPYieldToken public YT;
 
     Calls public initCalls;
 
@@ -31,9 +53,6 @@ contract InvariantHandler {
     Scenario ghostScenario;
 
     constructor() {
-        /* rmm = new RMM(address(0), "RMM", "RMM");
-        tokenX = new MockERC20("Token X", "X", 18);
-        tokenY = new MockERC20("Token Y", "Y", 18); */
         scenarios[0] = Scenario({price: 1 ether, strike: 1 ether, sigma: 1 ether, fee: 0, maturity: 365 days});
         scenarios[1] = Scenario({price: 1 ether, strike: 1 ether, sigma: 1 ether, fee: 0, maturity: 1 days});
         scenarios[2] = Scenario({price: 1 ether, strike: 1 ether, sigma: 1, fee: 0, maturity: 365 days});
@@ -61,8 +80,34 @@ contract InvariantHandler {
 
     function reset() public {
         rmm = new RMM(address(0), "RMM", "RMM");
-        tokenX = new MockERC20("Token X", "X", 18);
-        tokenY = new MockERC20("Token Y", "Y", 18);
+        uint32 _expiry = 1_717_214_400;
+
+        address wstETH = address(new MockERC20("Wrapped stETH", "wstETH", 18));
+        SYBase SY_ = new PendleERC20SY("Standard Yield wstETH", "SYwstETH", wstETH);
+        SY = IStandardizedYield(SY_);
+        (address ytCodeContractA, uint256 ytCodeSizeA, address ytCodeContractB, uint256 ytCodeSizeB) =
+            BaseSplitCodeFactory.setCreationCode(type(PendleYieldTokenV2).creationCode);
+        PendleYieldContractFactoryV2 YCF = new PendleYieldContractFactoryV2({
+            _ytCreationCodeContractA: ytCodeContractA,
+            _ytCreationCodeSizeA: ytCodeSizeA,
+            _ytCreationCodeContractB: ytCodeContractB,
+            _ytCreationCodeSizeB: ytCodeSizeB
+        });
+
+        YCF.initialize(1, 2e17, 0, address(this));
+        YCF.createYieldContract(address(SY), _expiry, true);
+        YT = IPYieldToken(YCF.getYT(address(SY), _expiry));
+        PT = IPPrincipalToken(YCF.getPT(address(SY), _expiry));
+    }
+
+    function mintSY(uint256 amount) public {
+        IERC20(wstETH).approve(address(SY), type(uint256).max);
+        SY.deposit(address(this), address(wstETH), amount, 1);
+    }
+
+    function mintPtYt(uint256 amount) public {
+        SY.transfer(address(YT), amount);
+        YT.mintPY(address(this), address(this));
     }
 
     function handle_init(uint256 rand) public {
@@ -73,26 +118,25 @@ contract InvariantHandler {
         ghostScenario = scenarios[index];
         (uint256 liquidity, uint256 amountY) = rmm.prepareInit({
             priceX: ghostScenario.price,
-            amountX: ghostScenario.price,
+            totalAsset: ghostScenario.price,
             strike_: ghostScenario.strike,
             sigma_: ghostScenario.sigma,
             maturity_: ghostScenario.maturity
         });
 
-        tokenX.mint(address(this), ghostScenario.price);
-        tokenY.mint(address(this), amountY);
-        tokenX.approve(address(rmm), ghostScenario.price);
-        tokenY.approve(address(rmm), amountY);
+        mintSY(ghostScenario.price);
+        mintPtYt(amountY);
+
+        SY.approve(address(rmm), ghostScenario.price);
+        PT.approve(address(rmm), amountY);
 
         try rmm.init({
-            tokenX_: address(tokenX),
-            tokenY_: address(tokenY),
+            PT_: address(PT),
             priceX: ghostScenario.price,
             amountX: ghostScenario.price,
             strike_: ghostScenario.strike,
             sigma_: ghostScenario.sigma,
             fee_: ghostScenario.fee,
-            maturity_: ghostScenario.maturity,
             curator_: address(0)
         }) {
             initCalls.success++;
@@ -121,12 +165,14 @@ contract InvariantHandler {
     Calls public allocateCalls;
 
     function handle_allocate(uint256 deltaX, uint256 deltaY) public {
-        tokenX.mint(address(this), deltaX);
-        tokenY.mint(address(this), deltaY);
-        tokenX.approve(address(rmm), deltaX);
-        tokenY.approve(address(rmm), deltaY);
+        mintSY(deltaX);
+        mintPtYt(deltaY);
+        SY.approve(address(rmm), deltaX);
+        PT.approve(address(rmm), deltaY);
 
-        (,, uint256 deltaLiquidity,) = rmm.prepareAllocate(deltaX, deltaY);
+        PYIndex index = YT.newIndex();
+
+        (,, uint256 deltaLiquidity,) = rmm.prepareAllocate(deltaX, deltaY, index);
 
         allocateCalls.total++;
         try rmm.allocate(deltaX, deltaY, deltaLiquidity, address(this)) {
@@ -139,6 +185,8 @@ contract InvariantHandler {
 }
 
 contract InvariantTest is Test {
+    using PYIndexLib for IPYieldToken;
+
     InvariantHandler handler;
     RMM rmm;
 
@@ -156,12 +204,13 @@ contract InvariantTest is Test {
     }
 
     function invariant_tradingFunction() public {
+        PYIndex index = handler.YT().newIndex();
         rmm = handler.rmm();
         if (address(rmm) == address(0)) {
             return;
         }
 
-        assertTrue(abs(handler.rmm().tradingFunction()) <= 100, "Invariant out of valid range");
+        assertTrue(abs(handler.rmm().tradingFunction(index)) <= 100, "Invariant out of valid range");
     }
 
     /// Invariant tests can "pass" even though all the calls revert, so we track the amount fo times
