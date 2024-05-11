@@ -219,7 +219,8 @@ contract RMMTest is Test {
 
     function test_log_pendle_state() public basic_sy {
         uint256 price = uint256(getPtExchangeRate());
-        console2.log("initial price", price);
+        console2.log("pendle price (asset in principal!)", price);
+        console2.log("pendle price (in SY, not asset in principal!)", price * SY.exchangeRate() / 1e18);
         console2.log("rate anchor", pendleRateAnchor);
         console2.log("rate scalar", pendleRateScalar);
         console2.log("totalSY", pendleMarketState.totalSy);
