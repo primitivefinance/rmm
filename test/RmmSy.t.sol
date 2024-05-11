@@ -124,6 +124,16 @@ contract RMMTest is Test {
         console2.log("rate anchor", pendleRateAnchor);
         console2.log("totalSY", pendleMarketState.totalSy);
         console2.log("totalPT", pendleMarketState.totalPt);
+        console2.log("state.totalPt", pendleMarketState.totalPt);
+        console2.log("state.totalSy", pendleMarketState.totalSy);
+        console2.log("state.totalLp", pendleMarketState.totalLp);
+        console2.log("state.treasury", pendleMarketState.treasury);
+        console2.log("state.scalarRoot", pendleMarketState.scalarRoot);
+        console2.log("state.expiry", pendleMarketState.expiry);
+        console2.log("state.lnFeeRateRoot", pendleMarketState.lnFeeRateRoot);
+        console2.log("state.reserveFeePercent", pendleMarketState.reserveFeePercent);
+        console2.log("state.lastLnImpliedRate", pendleMarketState.lastLnImpliedRate);
+
         subject().init({
             PT_: address(PT),
             priceX: price,
@@ -205,5 +215,24 @@ contract RMMTest is Test {
             1e18,
             "Spot price is not approximately 1 ether."
         );
+    }
+
+    function log_pendle_state() public basic_sy {
+        uint256 price = uint256(getPtExchangeRate());
+        console2.log("initial price", price);
+        console2.log("rate anchor", pendleRateAnchor);
+        console2.log("rate scalar", pendleRateScalar);
+        console2.log("totalSY", pendleMarketState.totalSy);
+        console2.log("totalPT", pendleMarketState.totalPt);
+        console2.log("state.totalPt", pendleMarketState.totalPt);
+        console2.log("state.totalSy", pendleMarketState.totalSy);
+        console2.log("state.totalLp", pendleMarketState.totalLp);
+        console2.log("state.treasury", pendleMarketState.treasury);
+        console2.log("state.scalarRoot", pendleMarketState.scalarRoot);
+        console2.log("state.expiry", pendleMarketState.expiry);
+        console2.log("state.lnFeeRateRoot", pendleMarketState.lnFeeRateRoot);
+        console2.log("state.reserveFeePercent", pendleMarketState.reserveFeePercent);
+        console2.log("state.lastLnImpliedRate", pendleMarketState.lastLnImpliedRate);
+
     }
 }
