@@ -217,7 +217,7 @@ contract RMMTest is Test {
         );
     }
 
-    function log_pendle_state() public basic_sy {
+    function test_log_pendle_state() public basic_sy {
         uint256 price = uint256(getPtExchangeRate());
         console2.log("initial price", price);
         console2.log("rate anchor", pendleRateAnchor);
