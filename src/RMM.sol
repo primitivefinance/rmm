@@ -837,6 +837,28 @@ contract RMM is ERC20 {
         int256 result = 1e36 / (KL * pdf_a / 1e18);
         return result;
     }
+
+    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime) internal view returns (uint256 netYTOut) {
+        uint256 min = index.syToAsset(exactSYIn);
+        uint256 max = index.syToAsset(exactSYIn * 100 ether / 1 ether);
+
+
+        for (uint256 iter = 0; iter < 256; ++iter) {
+            uint256 guess = (min + max) / 2;
+            (,, uint256 amountOut,,) =
+                prepareSwap(address(PT), address(SY), guess, blockTime, index);
+            uint256 netSyToTokenize = index.assetToSyUp(guess);
+
+            uint256 netSyToPull = netSyToTokenize - amountOut;
+
+
+        }
+
+        
+
+
+
+    }
 }
 
 
