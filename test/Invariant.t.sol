@@ -24,7 +24,7 @@ struct Calls {
     uint256 total;
 }
 
-contract InvariantHandler {
+contract InvariantHandler is Test {
     using MarketMathCore for MarketState;
     using MarketMathCore for int256;
     using MarketMathCore for uint256;
@@ -201,12 +201,22 @@ contract InvariantTest is Test {
         selectors[3] = handler.handle_allocate.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         rmm = handler.rmm();
+        handler.reset(); // Sets a pool up.
+        console2.log("Setup complete. Handler: %", address(handler));
     }
 
     function invariant_tradingFunction() public {
-        PYIndex index = handler.YT().newIndex();
+        IPYieldToken YT = handler.YT();
+        PYIndex index = YT.newIndex();
         rmm = handler.rmm();
+
+        // Checks if RMM was deployed.
         if (address(rmm) == address(0)) {
+            return;
+        }
+
+        // Checks if a pool was created.
+        if (rmm.totalSupply() == 0) {
             return;
         }
 
