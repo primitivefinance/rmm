@@ -314,10 +314,10 @@ contract RMM is ERC20 {
 
     function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut) external payable returns (uint256 amountOut) {
         if (tokenIn == address(0)) {
-            // Handle native ETH
             amountOut = SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
         } else {
             ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
             amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
         }    
     }
@@ -724,8 +724,8 @@ contract RMM is ERC20 {
     {
         L = initialGuess;
         int256 L_next;
+        int256 toleranceInt = int256(tolerance);
         for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("iters L", i);
             int256 dfx = computeTfDL(args, L);
             int256 fx = findL(args, L);
 
@@ -733,18 +733,17 @@ contract RMM is ERC20 {
                 // Handle division by zero
                 break;
             }
-            L_next = int256(L) - fx * 1e18 / dfx;
+            L_next = int256(L) - (fx * 1e18) / dfx;
 
-            if (abs(int256(L) - L_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+            int256 diff = int256(L) - L_next;
+            if (diff <= toleranceInt && diff >= -toleranceInt || fx <= toleranceInt && fx >= -toleranceInt) {
                 L = uint256(L_next);
-                console2.log("terminal L", L);
                 break;
             }
 
             L = uint256(L_next);
         }
     }
-
     function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
         public
         pure
