@@ -180,8 +180,8 @@ contract RMM is ERC20 {
 
         emit Init(
             msg.sender,
-            address(PT_),
             address(SY),
+            address(PT),
             amountX,
             amountY,
             totalLiquidity_,
