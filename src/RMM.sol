@@ -110,6 +110,7 @@ contract RMM is ERC20 {
 
     uint256 public lastImpliedPrice; // slot 20
 
+
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
         lock_ = 0;
@@ -309,6 +310,16 @@ contract RMM is ERC20 {
         (uint256 debitNative) = _debit(address(PT), amountInWad, data);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
+    }
+
+    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut) external payable returns (uint256 amountOut) {
+        if (tokenIn == address(0)) {
+            // Handle native ETH
+            amountOut = SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
+        } else {
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
+        }    
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
@@ -831,6 +842,8 @@ contract RMM is ERC20 {
         return result;
     }
 }
+
+
 // utils
 
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
