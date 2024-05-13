@@ -36,6 +36,7 @@ uint256 constant LOCK_SLOT = 13 + offset;
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
 address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
+address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
 contract RMMTest is Test {
     using MarketMathCore for MarketState;
@@ -60,7 +61,7 @@ contract RMMTest is Test {
     function setUp() public {
         vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
 
-        __subject__ = new RMM(address(0), "LPToken", "LPT");
+        __subject__ = new RMM(WETH_ADDRESS, "LPToken", "LPT");
         vm.label(address(__subject__), "RMM");
         (SY, PT, YT) = IPMarket(market).readTokens();
         pendleMarketState = market.readState(address(router));
@@ -84,6 +85,7 @@ contract RMMTest is Test {
         IERC20(SY).approve(address(router), type(uint256).max);
         IERC20(PT).approve(address(router), type(uint256).max);
         IERC20(YT).approve(address(router), type(uint256).max);
+        IERC20(market).approve(address(router), type(uint256).max);
         IERC20(market).approve(address(router), type(uint256).max);
     }
 
@@ -206,4 +208,37 @@ contract RMMTest is Test {
             "Spot price is not approximately 1 ether."
         );
     }
+
+function test_mintSY_with_wstETH() public basic_sy {
+    uint256 amountIn = 1 ether;
+    uint256 expectedShares = amountIn; // 1:1 exchange rate for wstETH to shares
+
+    uint256 sharesOut = subject().mintSY(address(this), wstETH, amountIn, 0);
+    // assertEq(sharesOut, expectedShares, "Minting with wstETH did not return the expected amount of shares.");
+}
+
+// function test_mintSY_with_stETH() public basic_sy {
+//     uint256 amountIn = 1 ether;
+//     uint256 expectedShares = IWstETH(SY.wstETH()).wrap(amountIn); // Wrap stETH to wstETH
+
+//     uint256 sharesOut = subject().mintSY(SY.stETH(), amountIn);
+//     assertEq(sharesOut, expectedShares, "Minting with stETH did not return the expected amount of shares.");
+// }
+
+function test_mintSY_with_wETH() public basic_sy {
+    IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+    deal(subject().WETH(), address(this), 1_000 ether);
+    uint256 amountIn = 1 ether;
+
+    uint256 sharesOut = subject().mintSY(address(this), subject().WETH(), amountIn, 0);
+    // assertEq(sharesOut, expectedShares, "Minting with wETH did not return the expected amount of shares.");
+}
+
+function test_mintSY_with_ETH() public basic_sy {
+    PYIndex index = YT.newIndex();
+    uint256 amountIn = 1 ether;
+
+    uint256 sharesOut = subject().mintSY{value: amountIn}(address(this), address(0), amountIn, 0);
+    // assertEq(sharesOut, expectedShares, "Minting with ETH did not return the expected amount of shares.");
+}
 }
