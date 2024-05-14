@@ -9,5 +9,7 @@ contract SetUp is Test {
 
     address public wstETH;
 
-    function setUp() public {}
+    function setUp() public {
+        rmm = new RMM(address(0), "Test", "TST");
+    }
 }
