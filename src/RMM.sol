@@ -9,6 +9,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import {bisection} from "./lib/BisectionLib.sol";
 
 interface Token {
     function decimals() external view returns (uint8);
@@ -107,7 +108,6 @@ contract RMM is ERC20 {
     uint256 public lock_ = 1; // slot 19
 
     uint256 public lastImpliedPrice; // slot 20
-
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -309,14 +309,19 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
 
-    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut) external payable returns (uint256 amountOut) {
+    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
+        external
+        payable
+        returns (uint256 amountOut)
+    {
         if (tokenIn == address(0)) {
-            amountOut = SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
+            amountOut =
+                SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
         } else {
             ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
             ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
             amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
-        }    
+        }
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
@@ -741,6 +746,7 @@ contract RMM is ERC20 {
             L = uint256(L_next);
         }
     }
+
     function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
         public
         pure
@@ -838,29 +844,36 @@ contract RMM is ERC20 {
         return result;
     }
 
-    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime) internal view returns (uint256 netYTOut) {
-        uint256 min = index.syToAsset(exactSYIn);
-        uint256 max = index.syToAsset(exactSYIn * 100 ether / 1 ether);
-
-
-        for (uint256 iter = 0; iter < 256; ++iter) {
+    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 min = exactSYIn;
+        uint256 max = initialGuess;
+        for (uint256 iter = 0; iter < 100; ++iter) {
+            console2.log("iter", iter);
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) =
-                prepareSwap(address(PT), address(SY), guess, blockTime, index);
-            uint256 netSyToTokenize = index.assetToSyUp(guess);
+            (,, uint256 amountOut,,) = prepareSwap(address(PT), address(SY), guess, blockTime, index);
+            uint256 netSyToPt = index.assetToSyUp(guess);
 
-            uint256 netSyToPull = netSyToTokenize - amountOut;
-
-
+            uint256 netSyToPull = netSyToPt - amountOut;
+            console2.log("netSyToPull", netSyToPull);
+            if (netSyToPull <= exactSYIn) {
+                if (isASmallerApproxB(netSyToPull, exactSYIn, 10_000)) {
+                    return guess;
+                }
+                min = guess;
+            } else {
+                max = guess - 1;
+            }
         }
+    }
 
-        
-
-
-
+    function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
+        return a <= b && a >= b.mulWadDown(1e18 - eps);
     }
 }
-
 
 // utils
 

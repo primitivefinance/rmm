@@ -209,36 +209,42 @@ contract RMMTest is Test {
         );
     }
 
-function test_mintSY_with_wstETH() public basic_sy {
-    uint256 amountIn = 1 ether;
-    uint256 expectedShares = amountIn; // 1:1 exchange rate for wstETH to shares
+    function test_mintSY_with_wstETH() public basic_sy {
+        uint256 amountIn = 1 ether;
+        uint256 expectedShares = amountIn; // 1:1 exchange rate for wstETH to shares
 
-    uint256 sharesOut = subject().mintSY(address(this), wstETH, amountIn, 0);
-    // assertEq(sharesOut, expectedShares, "Minting with wstETH did not return the expected amount of shares.");
-}
+        uint256 sharesOut = subject().mintSY(address(this), wstETH, amountIn, 0);
+        // assertEq(sharesOut, expectedShares, "Minting with wstETH did not return the expected amount of shares.");
+    }
 
-// function test_mintSY_with_stETH() public basic_sy {
-//     uint256 amountIn = 1 ether;
-//     uint256 expectedShares = IWstETH(SY.wstETH()).wrap(amountIn); // Wrap stETH to wstETH
+    // function test_mintSY_with_stETH() public basic_sy {
+    //     uint256 amountIn = 1 ether;
+    //     uint256 expectedShares = IWstETH(SY.wstETH()).wrap(amountIn); // Wrap stETH to wstETH
 
-//     uint256 sharesOut = subject().mintSY(SY.stETH(), amountIn);
-//     assertEq(sharesOut, expectedShares, "Minting with stETH did not return the expected amount of shares.");
-// }
+    //     uint256 sharesOut = subject().mintSY(SY.stETH(), amountIn);
+    //     assertEq(sharesOut, expectedShares, "Minting with stETH did not return the expected amount of shares.");
+    // }
 
-function test_mintSY_with_wETH() public basic_sy {
-    IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
-    deal(subject().WETH(), address(this), 1_000 ether);
-    uint256 amountIn = 1 ether;
+    function test_mintSY_with_wETH() public basic_sy {
+        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+        deal(subject().WETH(), address(this), 1_000 ether);
+        uint256 amountIn = 1 ether;
 
-    uint256 sharesOut = subject().mintSY(address(this), subject().WETH(), amountIn, 0);
-    // assertEq(sharesOut, expectedShares, "Minting with wETH did not return the expected amount of shares.");
-}
+        uint256 sharesOut = subject().mintSY(address(this), subject().WETH(), amountIn, 0);
+        // assertEq(sharesOut, expectedShares, "Minting with wETH did not return the expected amount of shares.");
+    }
 
-function test_mintSY_with_ETH() public basic_sy {
-    PYIndex index = YT.newIndex();
-    uint256 amountIn = 1 ether;
+    function test_mintSY_with_ETH() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 amountIn = 1 ether;
 
-    uint256 sharesOut = subject().mintSY{value: amountIn}(address(this), address(0), amountIn, 0);
-    // assertEq(sharesOut, expectedShares, "Minting with ETH did not return the expected amount of shares.");
-}
+        uint256 sharesOut = subject().mintSY{value: amountIn}(address(this), address(0), amountIn, 0);
+        // assertEq(sharesOut, expectedShares, "Minting with ETH did not return the expected amount of shares.");
+    }
+
+    function test_pt_flash_swap_math() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 syToPull = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        console2.log("syToPull", syToPull);
+    }
 }
