@@ -250,7 +250,7 @@ contract RMMTest is Test {
         // assertEq(sharesOut, expectedShares, "Minting with ETH did not return the expected amount of shares.");
     }
 
-    function test_pt_flash_swap_math() public basic_sy {
+    function test_pt_flash_swap_calculation() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
@@ -260,29 +260,31 @@ contract RMMTest is Test {
         console2.log("rSY", rSY);
     }
 
-    function test_leverage_loop() public basic_sy {
-        //reset balances
+    function test_pt_flash_swap_changes_balances() public basic_sy {
         SY.transfer(address(0x55), SY.balanceOf(address(this)));
         PT.transfer(address(0x55), PT.balanceOf(address(this)));
         YT.transfer(address(0x55), YT.balanceOf(address(this)));
-
         mintSY(1 ether);
-        uint256 amountIn = mintPtYt(1 ether);
-        console2.log("amountIn", amountIn);
-        console2.log("balance pt", PT.balanceOf(address(this)));
-        console2.log("balancSY", SY.balanceOf(address(this)));
-        uint256 netSy = 0;
-        (uint256 amountOut,) = subject().swapY(1 ether, 0, address(this), "");
-        netSy += amountOut;
-        console2.log("first amt out", amountOut);
-        while (amountOut > 0.1 ether) {
-            console2.log("amountOut", amountOut);
-            amountIn = mintPtYt(amountOut);
-            (amountOut,) = subject().swapY(amountIn, 0, address(this), "");
-            netSy += amountOut;
-            console2.log("netSy", netSy);
-        }
-        console2.log("netSy", netSy);
+        PYIndex index = YT.newIndex();
+        uint256 rPT = subject().reserveX();
+        uint256 rSY = subject().reserveY();
+        // console2.log("SY balance before", SY.balanceOf(address(this)));
+        // uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        // console2.log("ytOut", ytOut);
+        console2.log("rPT", rPT);
+        console2.log("rSY", rSY);
+        // (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
+        // console2.log("amtOut", amtOut);
+        // console2.log("SY balance after", SY.balanceOf(address(this)));
+        // console2.log("YT balance after", YT.balanceOf(address(this)));
+    }
+
+    function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
+        console2.log("SYBalance after", SY.balanceOf(address(this)));
+        uint256 amountPY = mintPtYt(SY.balanceOf(address(this)));
+        console2.log("amountPY", amountPY);
+        PT.transfer(msg.sender, amountPY);
+        return true;
     }
 
     function test_approx_sy_pendle() public basic_sy {
