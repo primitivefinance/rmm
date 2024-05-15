@@ -89,6 +89,44 @@ contract InitTest is SetUp {
         assertEq(rmm.balanceOf(address(0)), rmm.BURNT_LIQUIDITY());
     }
 
+    function test_init_TransfersTokens() public {
+        InitParams memory initParams = InitParams({
+            priceX: 1 ether,
+            totalAsset: 1 ether,
+            strike: 1 ether,
+            sigma: 0.015 ether,
+            maturity: PT.expiry(),
+            PT: address(PT),
+            amountX: 1 ether,
+            fee: 0.00016 ether,
+            curator: address(0x55)
+        });
+
+        (, uint256 amountY) = rmm.prepareInit(
+            initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
+        );
+
+        uint256 thisPreBalanceSY = SY.balanceOf(address(this));
+        uint256 thisPreBalancePT = PT.balanceOf(address(this));
+        uint256 rmmPreBalanceSY = SY.balanceOf(address(rmm));
+        uint256 rmmPreBalancePT = PT.balanceOf(address(rmm));
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+
+        assertEq(SY.balanceOf(address(this)), thisPreBalanceSY - initParams.amountX);
+        assertEq(PT.balanceOf(address(this)), thisPreBalancePT - amountY);
+        assertEq(SY.balanceOf(address(rmm)), rmmPreBalanceSY + initParams.amountX);
+        assertEq(PT.balanceOf(address(rmm)), rmmPreBalancePT + amountY);
+    }
+
     function test_init_EmitsInitEvent() public {
         InitParams memory initParams = InitParams({
             priceX: 1 ether,
