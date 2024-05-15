@@ -16,6 +16,11 @@ contract InitTest is SetUp {
         address curator;
     }
 
+    modifier initDefaultPool() {
+        rmm.init(address(PT), 1 ether, 1 ether, 1 ether, 0.015 ether, 0.00016 ether, address(0x55));
+        _;
+    }
+
     function test_init_works() public {
         InitParams memory initParams = InitParams({
             priceX: 1 ether,
@@ -44,7 +49,11 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_StoresTokens() public {}
+    function test_init_StoresTokens() public initDefaultPool {
+        assertEq(address(rmm.PT()), address(PT));
+        assertEq(address(rmm.YT()), address(YT));
+        assertEq(address(rmm.SY()), address(SY));
+    }
 
     function test_init_EmitsInitEvent() public {}
 
