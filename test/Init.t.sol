@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp} from "./SetUp.sol";
+import {SetUp, RMM} from "./SetUp.sol";
 
 contract InitTest is SetUp {
     struct InitParams {
@@ -57,7 +57,49 @@ contract InitTest is SetUp {
         assertEq(address(rmm.SY()), address(SY));
     }
 
-    function test_init_EmitsInitEvent() public {}
+    function test_init_EmitsInitEvent() public {
+        InitParams memory initParams = InitParams({
+            priceX: 1 ether,
+            totalAsset: 1 ether,
+            strike: 1 ether,
+            sigma: 0.015 ether,
+            maturity: PT.expiry(),
+            PT: address(PT),
+            amountX: 1 ether,
+            fee: 0.00016 ether,
+            curator: address(0x55)
+        });
+
+        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(
+            initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
+        );
+
+        vm.expectEmit(true, true, true, true);
+
+        emit RMM.Init(
+            address(this),
+            address(SY),
+            address(PT),
+            initParams.amountX,
+            amountY,
+            totalLiquidity,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.maturity,
+            initParams.curator
+        );
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+    }
 
     function test_init_RevertsIfAlreadyInitialized() public {}
 
