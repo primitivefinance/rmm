@@ -243,6 +243,7 @@ contract RMM is ERC20 {
         amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+        console2.log("comp strike", comp.strike_);
         uint256 nextLiquidity;
         uint256 nextReserve;
         if (xIn) {

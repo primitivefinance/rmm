@@ -45,6 +45,7 @@ contract ForkRMMTest is Test {
     using FixedPointMathLib for uint256;
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
+    using MarketApproxPtInLib for MarketState;
 
     RMM public __subject__;
     MockERC20 public tokenX;
@@ -115,9 +116,9 @@ contract ForkRMMTest is Test {
         SY.deposit(address(this), address(wstETH), amount, 1);
     }
 
-    function mintPtYt(uint256 amount) public {
+    function mintPtYt(uint256 amount) public returns (uint256 amountPY) {
         SY.transfer(address(YT), amount);
-        YT.mintPY(address(this), address(this));
+        amountPY = YT.mintPY(address(this), address(this));
     }
 
     modifier basic_sy() {
@@ -126,15 +127,17 @@ contract ForkRMMTest is Test {
         console2.log("rate anchor", pendleRateAnchor);
         console2.log("totalSY", pendleMarketState.totalSy);
         console2.log("totalPT", pendleMarketState.totalPt);
+        console2.log("scalar", pendleRateScalar);
         subject().init({
             PT_: address(PT),
             priceX: price,
-            amountX: uint256(pendleMarketState.totalSy),
+            amountX: uint256(pendleMarketState.totalSy - 100 ether),
             strike_: uint256(pendleRateAnchor),
-            sigma_: 0.015 ether,
-            fee_: 0.00016 ether,
+            sigma_: 0.03 ether,
+            fee_: 0.0002 ether,
             curator_: address(0x55)
         });
+        console2.log("tau", subject().futureTau(block.timestamp));
 
         _;
     }
@@ -162,8 +165,13 @@ contract ForkRMMTest is Test {
     function test_swap_y() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
+        uint256 balanceSyBefore = SY.balanceOf(address(this));
         subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        subject().swapY(deltaY, 0, address(this), "");
+        (uint256 amtOut,) = subject().swapY(deltaY, 0, address(this), "");
+        console2.log("amtOut", amtOut);
+
+        uint256 balanceSyAfter = SY.balanceOf(address(this));
+        assertEq(balanceSyAfter - balanceSyBefore, amtOut, "SwapY did not return the expected amount of SY.");
     }
 
     // todo: whats the error?
@@ -244,7 +252,46 @@ contract ForkRMMTest is Test {
 
     function test_pt_flash_swap_math() public basic_sy {
         PYIndex index = YT.newIndex();
-        uint256 syToPull = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        console2.log("syToPull", syToPull);
+        uint256 rPT = subject().reserveX();
+        uint256 rSY = subject().reserveY();
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        console2.log("ytOut", ytOut);
+        console2.log("rPT", rPT);
+        console2.log("rSY", rSY);
+    }
+
+    function test_leverage_loop() public basic_sy {
+        //reset balances
+        SY.transfer(address(0x55), SY.balanceOf(address(this)));
+        PT.transfer(address(0x55), PT.balanceOf(address(this)));
+        YT.transfer(address(0x55), YT.balanceOf(address(this)));
+
+        mintSY(1 ether);
+        uint256 amountIn = mintPtYt(1 ether);
+        console2.log("amountIn", amountIn);
+        console2.log("balance pt", PT.balanceOf(address(this)));
+        console2.log("balancSY", SY.balanceOf(address(this)));
+        uint256 netSy = 0;
+        (uint256 amountOut,) = subject().swapY(1 ether, 0, address(this), "");
+        netSy += amountOut;
+        console2.log("first amt out", amountOut);
+        while (amountOut > 0.1 ether) {
+            console2.log("amountOut", amountOut);
+            amountIn = mintPtYt(amountOut);
+            (amountOut,) = subject().swapY(amountIn, 0, address(this), "");
+            netSy += amountOut;
+            console2.log("netSy", netSy);
+        }
+        console2.log("netSy", netSy);
+    }
+
+    function test_approx_sy_pendle() public basic_sy {
+        console2.log("market sy", pendleMarketState.totalSy);
+        console2.log("market pt", pendleMarketState.totalPt);
+        ApproxParams memory approx =
+            ApproxParams({guessMin: 1 ether, guessMax: 500 ether, guessOffchain: 0, maxIteration: 256, eps: 10_000});
+        (uint256 netYtOutMarket,) =
+            pendleMarketState.approxSwapExactSyForYt(YT.newIndex(), 1 ether, block.timestamp, approx);
+        console2.log("netYtOutMarket", netYtOutMarket);
     }
 }
