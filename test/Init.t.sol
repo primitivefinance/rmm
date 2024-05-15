@@ -101,7 +101,31 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_RevertsIfAlreadyInitialized() public {}
+    function test_init_RevertsIfAlreadyInitialized() public initDefaultPool {
+        InitParams memory initParams = InitParams({
+            priceX: 1 ether,
+            totalAsset: 1 ether,
+            strike: 1 ether,
+            sigma: 0.015 ether,
+            maturity: PT.expiry(),
+            PT: address(PT),
+            amountX: 1 ether,
+            fee: 0.00016 ether,
+            curator: address(0x55)
+        });
+
+        vm.expectRevert(RMM.AlreadyInitialized.selector);
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+    }
 
     function test_init_RevertsWhenLocked() public {}
 }
