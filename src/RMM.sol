@@ -856,13 +856,11 @@ contract RMM is ERC20 {
         uint256 min = exactSYIn;
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
-            console2.log("iter", iter);
             uint256 guess = (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwap(address(PT), address(SY), guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
-            console2.log("netSyToPull", netSyToPull);
             if (netSyToPull <= exactSYIn) {
                 if (isASmallerApproxB(netSyToPull, exactSYIn, 10_000)) {
                     return guess;
