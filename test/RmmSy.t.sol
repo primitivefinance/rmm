@@ -268,15 +268,15 @@ contract RMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
-        // console2.log("SY balance before", SY.balanceOf(address(this)));
-        // uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        // console2.log("ytOut", ytOut);
+        console2.log("SY balance before", SY.balanceOf(address(this)));
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        console2.log("ytOut", ytOut);
         console2.log("rPT", rPT);
         console2.log("rSY", rSY);
-        // (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
-        // console2.log("amtOut", amtOut);
-        // console2.log("SY balance after", SY.balanceOf(address(this)));
-        // console2.log("YT balance after", YT.balanceOf(address(this)));
+        (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
+        console2.log("amtOut", amtOut);
+        console2.log("SY balance after", SY.balanceOf(address(this)));
+        console2.log("YT balance after", YT.balanceOf(address(this)));
     }
 
     function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
