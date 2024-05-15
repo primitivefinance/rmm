@@ -89,6 +89,38 @@ contract InitTest is SetUp {
         assertEq(rmm.balanceOf(address(0)), rmm.BURNT_LIQUIDITY());
     }
 
+    function test_init_AdjustsPool() public {
+        InitParams memory initParams = InitParams({
+            priceX: 1 ether,
+            totalAsset: 1 ether,
+            strike: 1 ether,
+            sigma: 0.015 ether,
+            maturity: PT.expiry(),
+            PT: address(PT),
+            amountX: 1 ether,
+            fee: 0.00016 ether,
+            curator: address(0x55)
+        });
+
+        (, uint256 amountY) = rmm.prepareInit(
+            initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
+        );
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+
+        assertEq(rmm.lastTimestamp(), block.timestamp);
+        assertEq(rmm.reserveX(), initParams.amountX);
+        assertEq(rmm.reserveY(), amountY);
+    }
+
     function test_init_TransfersTokens() public {
         InitParams memory initParams = InitParams({
             priceX: 1 ether,
