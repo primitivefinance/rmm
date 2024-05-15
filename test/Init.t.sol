@@ -127,5 +127,7 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_RevertsWhenLocked() public {}
+    function test_init_RevertsWhenLocked() public {
+        vm.skip(true);
+    }
 }
