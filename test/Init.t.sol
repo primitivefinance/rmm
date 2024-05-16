@@ -1,38 +1,11 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp, RMM} from "./SetUp.sol";
+import {SetUp, RMM, InitParams} from "./SetUp.sol";
 
 contract InitTest is SetUp {
-    struct InitParams {
-        uint256 priceX;
-        uint256 totalAsset;
-        uint256 strike;
-        uint256 sigma;
-        uint256 maturity;
-        address PT;
-        uint256 amountX;
-        uint256 fee;
-        address curator;
-    }
-
-    modifier initDefaultPool() {
-        rmm.init(address(PT), 1 ether, 1 ether, 1 ether, 0.015 ether, 0.00016 ether, address(0x55));
-        _;
-    }
-
     function test_init_StoresInitParams() public {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         rmm.init(
             initParams.PT,
@@ -51,24 +24,26 @@ contract InitTest is SetUp {
         assertEq(rmm.curator(), initParams.curator);
     }
 
-    function test_init_StoresTokens() public initDefaultPool {
+    function test_init_StoresTokens() public {
+        InitParams memory initParams = getDefaultParams();
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+
         assertEq(address(rmm.PT()), address(PT));
         assertEq(address(rmm.YT()), address(YT));
         assertEq(address(rmm.SY()), address(SY));
     }
 
     function test_init_MintsLiquidity() public {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         (uint256 totalLiquidity,) = rmm.prepareInit(
             initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
@@ -90,17 +65,7 @@ contract InitTest is SetUp {
     }
 
     function test_init_AdjustsPool() public {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         (, uint256 amountY) = rmm.prepareInit(
             initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
@@ -122,17 +87,7 @@ contract InitTest is SetUp {
     }
 
     function test_init_TransfersTokens() public {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         (, uint256 amountY) = rmm.prepareInit(
             initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
@@ -160,17 +115,7 @@ contract InitTest is SetUp {
     }
 
     function test_init_EmitsInitEvent() public {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(
             initParams.priceX, initParams.totalAsset, initParams.strike, initParams.sigma, initParams.maturity
@@ -204,17 +149,7 @@ contract InitTest is SetUp {
     }
 
     function test_init_RevertsIfAlreadyInitialized() public initDefaultPool {
-        InitParams memory initParams = InitParams({
-            priceX: 1 ether,
-            totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
-            maturity: PT.expiry(),
-            PT: address(PT),
-            amountX: 1 ether,
-            fee: 0.00016 ether,
-            curator: address(0x55)
-        });
+        InitParams memory initParams = getDefaultParams();
 
         vm.expectRevert(RMM.AlreadyInitialized.selector);
 
