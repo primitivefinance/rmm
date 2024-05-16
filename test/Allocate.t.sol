@@ -5,18 +5,6 @@ import {PYIndex} from "./../src/RMM.sol";
 import {SetUp} from "./SetUp.sol";
 
 contract AllocateTest is SetUp {
-    struct InitParams {
-        uint256 priceX;
-        uint256 totalAsset;
-        uint256 strike;
-        uint256 sigma;
-        uint256 maturity;
-        address PT;
-        uint256 amountX;
-        uint256 fee;
-        address curator;
-    }
-
     function test_allocate_MintsLiquidity() public initDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
