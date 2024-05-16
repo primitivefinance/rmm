@@ -13,6 +13,18 @@ import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleY
 
 import {RMM} from "./../src/RMM.sol";
 
+struct InitParams {
+    uint256 priceX;
+    uint256 totalAsset;
+    uint256 strike;
+    uint256 sigma;
+    uint256 maturity;
+    address PT;
+    uint256 amountX;
+    uint256 fee;
+    address curator;
+}
+
 contract SetUp is Test {
     RMM public rmm;
     WETH public weth;
@@ -23,6 +35,26 @@ contract SetUp is Test {
 
     uint32 public DEFAULT_EXPIRY = 1_717_214_400;
     uint256 public DEFAULT_AMOUNT = 1_000 ether;
+
+    function getDefaultParams() internal view returns (InitParams memory) {
+        return InitParams({
+            priceX: 1 ether,
+            totalAsset: 1 ether,
+            strike: 1 ether,
+            sigma: 0.015 ether,
+            maturity: PT.expiry(),
+            PT: address(PT),
+            amountX: 1 ether,
+            fee: 0.00016 ether,
+            curator: address(0x55)
+        });
+    }
+
+    modifier initDefaultPool() {
+        InitParams memory params = getDefaultParams();
+        rmm.init(params.PT, params.priceX, params.amountX, params.strike, params.sigma, params.fee, params.curator);
+        _;
+    }
 
     function setUp() public {
         weth = new WETH();
