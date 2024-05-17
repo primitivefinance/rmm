@@ -92,6 +92,15 @@ contract DeallocateTest is SetUp {
         initDefaultPool
         dealSY(address(this), 1_000 ether)
     {
-        vm.skip(true);
+        (uint256 deltaXWad, uint256 deltaYWad,,) =
+            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        (uint256 deltaLiquidity) = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        uint256 lptBurned;
+
+        (deltaXWad, deltaYWad, lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
+        vm.expectRevert(
+            abi.encodeWithSelector(RMM.InsufficientOutput.selector, deltaLiquidity / 2, deltaYWad + 1, deltaYWad)
+        );
+        rmm.deallocate(deltaLiquidity / 2, 0, deltaYWad + 1, address(this));
     }
 }
