@@ -56,6 +56,11 @@ contract SetUp is Test {
         _;
     }
 
+    modifier dealSY(address to, uint256 amount) {
+        deal(address(SY), to, amount);
+        _;
+    }
+
     function setUp() public {
         weth = new WETH();
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");

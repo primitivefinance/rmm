@@ -5,9 +5,7 @@ import {PYIndex} from "./../src/RMM.sol";
 import {SetUp, RMM} from "./SetUp.sol";
 
 contract AllocateTest is SetUp {
-    function test_allocate_MintsLiquidity() public initDefaultPool {
-        deal(address(SY), address(this), 1_000 ether);
-
+    function test_allocate_MintsLiquidity() public initDefaultPool dealSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
 
