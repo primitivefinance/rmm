@@ -16,6 +16,18 @@ contract AllocateTest is SetUp {
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + deltaLiquidity);
     }
 
+    function test_allocate_MintsLP() public initDefaultPool {
+        deal(address(SY), address(this), 1_000 ether);
+
+        uint256 preBalance = rmm.balanceOf(address(this));
+        uint256 preTotalSupply = rmm.totalSupply();
+        (uint256 deltaXWad, uint256 deltaYWad,, uint256 lpMinted) =
+            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        assertEq(rmm.balanceOf(address(this)), preBalance + lpMinted);
+        assertEq(rmm.totalSupply(), preTotalSupply + lpMinted);
+    }
+
     function test_allocate_AdjustsPool() public initDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
