@@ -286,6 +286,30 @@ contract ForkRMMTest is Test {
         console2.log("stk after", subject().strike());
     }
 
+    function test_pt_flash_swap_adjusts_balances_correctly() public basic_sy {
+        PYIndex index = YT.newIndex();
+
+        SY.transfer(address(0x55), SY.balanceOf(address(this)));
+        PT.transfer(address(0x55), PT.balanceOf(address(this)));
+        YT.transfer(address(0x55), YT.balanceOf(address(this)));
+
+        // assert balance of address(this) is 0 for SY, PT, and YT
+        assertEq(SY.balanceOf(address(this)), 0, "SY balance of address(this) is not 0.");
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
+        assertEq(YT.balanceOf(address(this)), 0, "YT balance of address(this) is not 0.");
+
+        // mint 1 SY for the flash swap
+        mintSY(1 ether);
+
+
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
+
+        // assert balance of address(this) is 0 for SY, PT, and YT
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
+        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance of address(this) is not 0.");
+    }
+
     function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
         console2.log("SYBalance after", SY.balanceOf(address(this)));
         uint256 amountPY = mintPtYt(SY.balanceOf(address(this)));
