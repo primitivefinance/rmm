@@ -230,7 +230,8 @@ contract RMM is ERC20 {
         reserveY = sum(reserveY, deltaY);
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
         strike = strike_;
-        lastImpliedPrice = approxSpotPrice(index.syToAsset(reserveX));
+        uint256 timeToExpiry = maturity - block.timestamp;
+        lastImpliedPrice = uint256(int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(impliedRateTime) / int256(timeToExpiry));
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
@@ -582,8 +583,7 @@ contract RMM is ERC20 {
         returns (uint256)
     {
         int256 timeToExpiry = int256(maturity - block.timestamp);
-        int256 lnLastImplied = int256(lastImpliedPrice).lnWad() * int256(impliedRateTime) / timeToExpiry;
-        int256 rt = lnLastImplied * timeToExpiry / int256(impliedRateTime);
+        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(impliedRateTime);
         int256 rate = rt.expWad();
         return uint256(rate);
         // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);

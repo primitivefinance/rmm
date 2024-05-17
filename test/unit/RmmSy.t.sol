@@ -272,6 +272,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
+        vm.warp(block.timestamp + 10 days);
         console2.log("SY balance before", SY.balanceOf(address(this)));
         uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
         console2.log("ytOut", ytOut);
@@ -305,14 +306,14 @@ contract ForkRMMTest is Test {
 
     function test_pendle_exchangeRate_over_time() public basic_sy {
         int256 rate1 = getExchangeRateFromImplied();
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(block.timestamp + 10 days);
         int256 rate2 = getExchangeRateFromImplied();
         console2.log("rate1 - rate2", rate1 - rate2);
     }
 
     function test_rmm_k_over_time() public basic_sy {
         uint256 k1 = getKFromImplied();
-        vm.warp(block.timestamp + 30 days);
+        vm.warp(block.timestamp + 10 days);
         uint256 k2 = getKFromImplied();
         console2.log("k1", k1);
         console2.log("k2", k2);
