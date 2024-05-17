@@ -311,7 +311,7 @@ contract RMM is ERC20 {
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(PT), amountInWad, data);
+        (uint256 debitNative) = _debit(address(PT), amountInWad, "0x1");
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
@@ -428,9 +428,11 @@ contract RMM is ERC20 {
         uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
         if (data.length > 0) {
-            if (!ICallback(msg.sender).callback(token, amountNative, data)) {
-                revert PaymentFailed(token, msg.sender, address(this), amountNative);
-            }
+            // if (!ICallback(msg.sender).callback(token, amountNative, data)) {
+            //     revert PaymentFailed(token, msg.sender, address(this), amountNative);
+            // }
+            uint256 amountPY = mintPtYt(amountNative);
+            YT.transfer(msg.sender, amountPY);
         } else {
             if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
                 revert PaymentFailed(token, msg.sender, address(this), amountNative);
@@ -883,6 +885,12 @@ contract RMM is ERC20 {
     function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
         return a <= b && a >= b.mulWadDown(1e18 - eps);
     }
+
+    function mintPtYt(uint256 amount) internal returns (uint256 amountPY) {
+        SY.transfer(address(YT), amount);
+        amountPY = YT.mintPY(address(this), address(this));
+    }
+
 }
 
 // utils

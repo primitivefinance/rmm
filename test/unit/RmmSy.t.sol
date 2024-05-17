@@ -313,7 +313,7 @@ contract ForkRMMTest is Test {
 
     function test_rmm_k_over_time() public basic_sy {
         uint256 k1 = getKFromImplied();
-        vm.warp(block.timestamp + 10 days);
+        vm.warp(block.timestamp + 50 days);
         uint256 k2 = getKFromImplied();
         console2.log("k1", k1);
         console2.log("k2", k2);
