@@ -31,8 +31,22 @@ contract AllocateTest is SetUp {
         assertEq(rmm.lastTimestamp(), block.timestamp);
     }
 
-    function test_allocate_TransfersTokens() public {
-        vm.skip(true);
+    function test_allocate_TransfersTokens() public initDefaultPool {
+        deal(address(SY), address(this), 1_000 ether);
+
+        uint256 thisPreBalanceSY = SY.balanceOf(address(this));
+        uint256 thisPreBalancePT = PT.balanceOf(address(this));
+        uint256 rmmPreBalanceSY = SY.balanceOf(address(rmm));
+        uint256 rmmPreBalancePT = PT.balanceOf(address(rmm));
+
+        (uint256 deltaXWad, uint256 deltaYWad,,) =
+            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+
+        assertEq(SY.balanceOf(address(this)), thisPreBalanceSY - deltaXWad);
+        assertEq(PT.balanceOf(address(this)), thisPreBalancePT - deltaYWad);
+        assertEq(SY.balanceOf(address(rmm)), rmmPreBalanceSY + deltaXWad);
+        assertEq(PT.balanceOf(address(rmm)), rmmPreBalancePT + deltaYWad);
     }
 
     function test_allocate_EmitsAllocate() public {
