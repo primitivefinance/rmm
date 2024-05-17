@@ -22,6 +22,8 @@ contract InitTest is SetUp {
         assertEq(rmm.fee(), initParams.fee);
         assertEq(rmm.maturity(), initParams.maturity);
         assertEq(rmm.curator(), initParams.curator);
+        assertEq(rmm.lastTimestamp(), block.timestamp);
+        assertEq(rmm.initTimestamp(), block.timestamp);
     }
 
     function test_init_StoresTokens() public {
