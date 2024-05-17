@@ -61,7 +61,17 @@ contract AllocateTest is SetUp {
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
     }
 
-    function test_allocate_RevertsIfInsufficientLiquidityOut() public {
-        vm.skip(true);
+    function test_allocate_RevertsIfInsufficientLiquidityOut() public initDefaultPool {
+        deal(address(SY), address(this), 1_000 ether);
+
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RMM.InsufficientLiquidityOut.selector, deltaXWad, deltaYWad, deltaLiquidity + 1, deltaLiquidity
+            )
+        );
+        rmm.allocate(deltaXWad, deltaYWad, deltaLiquidity + 1, address(this));
     }
 }
