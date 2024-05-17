@@ -28,6 +28,8 @@ struct PoolPreCompute {
     uint256 tau_;
 }
 
+uint256 constant impliedRateTime = 365 * 86400;
+
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
@@ -456,7 +458,7 @@ contract RMM is ERC20 {
         }
     }
 
-    function preparePoolPreCompute(PYIndex index, uint256 blockTime) internal view returns (PoolPreCompute memory) {
+    function preparePoolPreCompute(PYIndex index, uint256 blockTime) public view returns (PoolPreCompute memory) {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
         uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
@@ -579,12 +581,18 @@ contract RMM is ERC20 {
         view
         returns (uint256)
     {
-        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
-        // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
-        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        int256 timeToExpiry = int256(maturity - block.timestamp);
+        int256 lnLastImplied = int256(lastImpliedPrice).lnWad() * int256(impliedRateTime) / timeToExpiry;
+        int256 rt = lnLastImplied * timeToExpiry / int256(impliedRateTime);
+        int256 rate = rt.expWad();
+        return uint256(rate);
+        // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // // // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        // int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        // return uint256(rate).divWadDown(uint256(exp));
 
-        return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
+        // return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
     }
 
     /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)

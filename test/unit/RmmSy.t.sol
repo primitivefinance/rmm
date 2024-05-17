@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../../src/RMM.sol";
+import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
 import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
@@ -33,6 +33,8 @@ uint256 constant LAST_TIMESTAMP_SLOT = 11 + offset;
 uint256 constant CURATOR_SLOT = 12 + offset;
 uint256 constant LOCK_SLOT = 13 + offset;
 
+uint256 constant impliedRateTime = 365 * 86400;
+
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
 address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
@@ -43,6 +45,7 @@ contract ForkRMMTest is Test {
     using MarketMathCore for int256;
     using MarketMathCore for uint256;
     using FixedPointMathLib for uint256;
+    using FixedPointMathLib for int256;
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
     using MarketApproxPtInLib for MarketState;
@@ -265,6 +268,7 @@ contract ForkRMMTest is Test {
         PT.transfer(address(0x55), PT.balanceOf(address(this)));
         YT.transfer(address(0x55), YT.balanceOf(address(this)));
         mintSY(1 ether);
+        uint256 stkBefore = subject().strike();
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
@@ -277,6 +281,8 @@ contract ForkRMMTest is Test {
         console2.log("amtOut", amtOut);
         console2.log("SY balance after", SY.balanceOf(address(this)));
         console2.log("YT balance after", YT.balanceOf(address(this)));
+        console2.log("stk before", stkBefore);
+        console2.log("stk after", subject().strike());
     }
 
     function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
@@ -295,5 +301,43 @@ contract ForkRMMTest is Test {
         (uint256 netYtOutMarket,) =
             pendleMarketState.approxSwapExactSyForYt(YT.newIndex(), 1 ether, block.timestamp, approx);
         console2.log("netYtOutMarket", netYtOutMarket);
+    }
+
+    function test_pendle_exchangeRate_over_time() public basic_sy {
+        int256 rate1 = getExchangeRateFromImplied();
+        vm.warp(block.timestamp + 1 days);
+        int256 rate2 = getExchangeRateFromImplied();
+        console2.log("rate1 - rate2", rate1 - rate2);
+    }
+
+    function test_rmm_k_over_time() public basic_sy {
+        uint256 k1 = getKFromImplied();
+        vm.warp(block.timestamp + 30 days);
+        uint256 k2 = getKFromImplied();
+        console2.log("k1", k1);
+        console2.log("k2", k2);
+        console2.log("k1 - k2", k1 - k2);
+    }
+
+    function getExchangeRateFromImplied() public returns (int256 rate) {
+        MarketState memory mkt = market.readState(address(router));
+        console2.log("time to expiry", mkt.expiry - block.timestamp);
+        uint256 rt = (mkt.lastLnImpliedRate * (mkt.expiry - block.timestamp)) / impliedRateTime;
+        console2.log("lnImpliedRate", mkt.lastLnImpliedRate);
+        console2.log("rt", rt);
+
+        rate = int256(rt).expWad();
+        console2.log("exchangeRate", rate);
+    }
+
+    function getKFromImplied() public returns (uint256 k) {
+        PYIndex index = YT.newIndex();
+        PoolPreCompute memory comp = subject().preparePoolPreCompute(index, block.timestamp);
+        console2.log("k", comp.strike_);
+        k = comp.strike_;
+    }
+
+    function computeRateAnchor() public returns (uint256 rateAnchor) {
+
     }
 }
