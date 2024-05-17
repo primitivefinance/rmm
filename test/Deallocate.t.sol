@@ -13,7 +13,10 @@ contract DeallocateTest is SetUp {
 
         uint256 lptBurned;
         (deltaXWad, deltaYWad, lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
+
+        uint256 preTotalLiquidity = rmm.totalLiquidity();
         rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
+        assertEq(rmm.totalLiquidity(), preTotalLiquidity - deltaLiquidity / 2);
     }
 
     function test_deallocate_AdjustsPool() public {
