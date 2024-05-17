@@ -272,7 +272,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
-        vm.warp(block.timestamp + 10 days);
+        // vm.warp(block.timestamp + 10 days);
         console2.log("SY balance before", SY.balanceOf(address(this)));
         uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
         console2.log("ytOut", ytOut);
