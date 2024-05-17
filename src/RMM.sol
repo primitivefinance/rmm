@@ -311,7 +311,7 @@ contract RMM is ERC20 {
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(PT), amountInWad, "0x1");
+        (uint256 debitNative) = _debit(address(PT), amountInWad, data);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
