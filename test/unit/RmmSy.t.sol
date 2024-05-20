@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../src/RMM.sol";
+import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../../src/RMM.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
 import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
@@ -37,7 +37,7 @@ IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
 address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
 
-contract RMMTest is Test {
+contract ForkRMMTest is Test {
     using MarketMathCore for MarketState;
     using MarketMathCore for int256;
     using MarketMathCore for uint256;

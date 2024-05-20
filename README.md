@@ -20,7 +20,7 @@ forge test -vvv
 ## Coverage
 
 ```
-forge coverage --lcov
+forge coverage --report lcov
 cmd + shift + p -> Coverage Gutters: Display Coverage
 ```
 
