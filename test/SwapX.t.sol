@@ -60,5 +60,17 @@ contract SwapXTest is SetUp {
         rmm.swapX(amountIn, minAmountOut, address(this), "");
     }
 
-    function test_swapX_RevertsWhenInsufficientOutput() public {}
+    function test_swapX_RevertsWhenInsufficientOutput() public {
+        (uint256 deltaXWad, uint256 deltaYWad,,) =
+            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+
+        PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
+        uint256 amountIn = 1 ether;
+        (,, uint256 minAmountOut,,) = rmm.prepareSwap(address(SY), address(PT), amountIn, block.timestamp, index);
+        vm.expectRevert(
+            abi.encodeWithSelector(RMM.InsufficientOutput.selector, amountIn, minAmountOut + 1, minAmountOut)
+        );
+        rmm.swapX(amountIn, minAmountOut + 1, address(this), "");
+    }
 }
