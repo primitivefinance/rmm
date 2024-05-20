@@ -60,7 +60,7 @@ contract SwapXTest is SetUp {
         rmm.swapX(amountIn, minAmountOut, address(this), "");
     }
 
-    function test_swapX_RevertsWhenInsufficientOutput() public {
+    function test_swapX_RevertsWhenInsufficientOutput() public initDefaultPool dealSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
