@@ -8,11 +8,14 @@ contract MockRMM is RMM {
         WETH = weth_;
     }
 
-    function debit(address token, uint256 amountWad, bytes memory data) internal returns (uint256 paymentNative) {
-        return _debit(token, amountWad, data);
+    function debit(address token, uint256 amountWad) internal returns (uint256 paymentNative) {
+        return _debit(token, amountWad);
     }
 
-    function credit(address token, address to, uint256 amount) internal returns (uint256 paymentNative) {
-        return _credit(token, to, amount);
+    function credit(address token, address to, uint256 amount, uint256 delta, bytes memory data)
+        internal
+        returns (uint256 paymentNative)
+    {
+        return _credit(token, to, amount, delta, data);
     }
 }
