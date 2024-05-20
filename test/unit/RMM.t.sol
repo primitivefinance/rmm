@@ -1,20 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../src/RMM.sol";
+import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs} from "../../src/RMM.sol";
 
 import {Test, console2} from "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {FeeOnTransferToken} from "../src/test/FeeOnTransferToken.sol";
-import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
-import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
-import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnToken.sol";
-import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
 
-import {IPMarket} from "pendle/interfaces/IPMarket.sol";
 import "pendle/core/Market/MarketMathCore.sol";
-import "pendle/interfaces/IPAllActionV3.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
@@ -349,138 +342,6 @@ contract RMMTest is Test {
 
     // init
 
-    function test_init_event() public {
-        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
-            priceX: basicParams.priceX,
-            totalAsset: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            maturity_: basicParams.maturity
-        });
-        deal(address(SY), address(this), basicParams.amountX);
-        deal(address(PT), address(this), amountY);
-        SY.approve(address(subject()), basicParams.amountX);
-        PT.approve(address(subject()), amountY);
-
-        vm.expectEmit();
-        emit RMM.Init(
-            address(this),
-            address(SY),
-            address(PT),
-            basicParams.amountX,
-            amountY,
-            totalLiquidity,
-            basicParams.strike,
-            basicParams.sigma,
-            basicParams.fee,
-            basicParams.maturity,
-            basicParams.curator
-        );
-
-        subject().init({
-            PT_: address(PT),
-            priceX: basicParams.priceX,
-            amountX: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            fee_: basicParams.fee,
-            curator_: basicParams.curator
-        });
-    }
-
-    function test_init_debits_x() public {
-        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
-            priceX: 1 ether,
-            totalAsset: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            maturity_: basicParams.maturity
-        });
-        deal(address(SY), address(this), basicParams.amountX);
-        deal(address(PT), address(this), amountY);
-        SY.approve(address(subject()), basicParams.amountX);
-        PT.approve(address(subject()), amountY);
-
-        uint256 balance = SY.balanceOf(address(this));
-        subject().init({
-            PT_: address(PT),
-            priceX: basicParams.priceX,
-            amountX: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            fee_: basicParams.fee,
-            curator_: basicParams.curator
-        });
-        uint256 newBalance = SY.balanceOf(address(this));
-        assertEq(balance - newBalance, basicParams.amountX, "Token X balance did not decrease by reserve amount.");
-    }
-
-    function test_init_debits_y() public {
-        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
-            priceX: 1 ether,
-            totalAsset: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            maturity_: basicParams.maturity
-        });
-        console2.log("amountY", amountY);
-        mintSY(basicParams.amountX);
-        mintPtYt(amountY);
-
-        uint256 balance = PT.balanceOf(address(this));
-        subject().init({
-            PT_: address(PT),
-            priceX: basicParams.priceX,
-            amountX: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            fee_: basicParams.fee,
-            curator_: basicParams.curator
-        });
-        uint256 newBalance = PT.balanceOf(address(this));
-        assertEq(balance - newBalance, amountY, "Token Y balance did not decrease by reserve amount.");
-    }
-
-    function test_init_pool() public {
-        deal(address(SY), address(this), 100e18);
-        deal(address(PT), address(this), 100e18);
-        SY.approve(address(subject()), 100e18);
-        PT.approve(address(subject()), 100e18);
-
-        (uint256 totalLiquidity, uint256 amountY) = subject().prepareInit({
-            priceX: 1 ether,
-            totalAsset: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            maturity_: basicParams.maturity
-        });
-
-        console2.log("amountY", amountY);
-
-        subject().init({
-            PT_: address(PT),
-            priceX: basicParams.priceX,
-            amountX: basicParams.amountX,
-            strike_: basicParams.strike,
-            sigma_: basicParams.sigma,
-            fee_: basicParams.fee,
-            curator_: basicParams.curator
-        });
-
-        assertEq(address(subject().SY()), address(SY), "Token X address is not correct.");
-        assertEq(address(subject().PT()), address(PT), "Token Y address is not correct.");
-        assertEq(subject().reserveX(), basicParams.amountX, "Reserve X is not correct.");
-        assertEq(subject().reserveY(), amountY, "Reserve Y is not correct.");
-        assertEq(subject().totalLiquidity(), totalLiquidity, "Total liquidity is not correct.");
-        assertEq(subject().strike(), basicParams.strike, "Strike is not correct.");
-        assertEq(subject().sigma(), basicParams.sigma, "Sigma is not correct.");
-        assertEq(subject().fee(), basicParams.fee, "Fee is not correct.");
-        assertEq(subject().maturity(), basicParams.maturity, "Maturity is not correct.");
-        assertEq(subject().initTimestamp(), block.timestamp, "Init timestamp is not correct.");
-        assertEq(subject().lastTimestamp(), block.timestamp, "Last timestamp is not correct.");
-        assertEq(subject().curator(), basicParams.curator, "Curator is not correct.");
-    }
-
     function test_swapX_basic() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
@@ -629,48 +490,6 @@ contract RMMTest is Test {
         (uint256 amountOut,) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
         assertTrue(SY.balanceOf(address(this)) >= amountOut, "Token X balance is not greater than 0.");
-    }
-
-    function test_allocate() public basic {
-        uint256 deltaX = 1 ether;
-        uint256 deltaY = 1 ether;
-        deal(address(SY), address(this), deltaX);
-        deal(address(PT), address(this), deltaY);
-        SY.approve(address(subject()), deltaX);
-        PT.approve(address(subject()), deltaY);
-
-        uint256 prevReserveY = subject().reserveY();
-        uint256 prevLiquidity = subject().totalLiquidity();
-        uint256 deltaLiquidity = subject().allocate(deltaX, deltaY, 1, address(this));
-        assertTrue(deltaLiquidity >= 1, "Delta liquidity is not at least minDeltaLiquidity");
-        assertEq(subject().reserveX(), basicParams.amountX + deltaX, "Reserve X did not increase by delta X.");
-        assertEq(subject().reserveY(), prevReserveY + deltaY, "Reserve Y did not increase by delta Y.");
-        assertEq(
-            subject().totalLiquidity(),
-            prevLiquidity + deltaLiquidity,
-            "Total liquidity did not increase by delta liquidity."
-        );
-    }
-
-    function test_deallocate() public basic {
-        uint256 amount = 1 ether;
-        deal(address(SY), address(this), amount);
-        SY.approve(address(subject()), amount);
-        deal(address(PT), address(this), amount);
-        PT.approve(address(subject()), amount);
-
-        uint256 deltaLiquidity = subject().allocate(amount, amount, 1, address(this));
-
-        uint256 prevBalanceX = balanceWad(address(SY), address(this));
-        uint256 prevBalanceY = balanceWad(address(PT), address(this));
-        (uint256 deltaX, uint256 deltaY) = subject().deallocate(deltaLiquidity, 1, 1, address(this));
-
-        assertEq(
-            balanceWad(address(SY), address(this)), prevBalanceX + deltaX, "Balance X did not increase by delta X."
-        );
-        assertEq(
-            balanceWad(address(PT), address(this)), prevBalanceY + deltaY, "Balance Y did not increase by delta Y."
-        );
     }
 }
 

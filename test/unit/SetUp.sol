@@ -11,7 +11,7 @@ import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.s
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 
-import {RMM} from "./../src/RMM.sol";
+import {RMM} from "./../../src/RMM.sol";
 
 struct InitParams {
     uint256 priceX;

@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {PYIndex, IPYieldToken} from "./../src/RMM.sol";
+import {PYIndex, IPYieldToken} from "./../../src/RMM.sol";
 import {SetUp, RMM} from "./SetUp.sol";
 
 contract SwapXTest is SetUp {
