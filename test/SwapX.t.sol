@@ -45,6 +45,20 @@ contract SwapXTest is SetUp {
         assertEq(preRMMBalanceY - amountOut, PT.balanceOf(address(rmm)));
     }
 
-    function test_swapX_EmitsSwap() public {}
+    function test_swapX_EmitsSwap() public initDefaultPool dealSY(address(this), 1_000 ether) {
+        (uint256 deltaXWad, uint256 deltaYWad,,) =
+            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+
+        PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
+        uint256 amountIn = 1 ether;
+        (,, uint256 minAmountOut, int256 deltaLiquidity,) =
+            rmm.prepareSwap(address(SY), address(PT), amountIn, block.timestamp, index);
+        vm.expectEmit(true, true, true, true);
+
+        emit RMM.Swap(address(this), address(this), address(SY), address(PT), amountIn, minAmountOut, deltaLiquidity);
+        rmm.swapX(amountIn, minAmountOut, address(this), "");
+    }
+
     function test_swapX_RevertsWhenInsufficientOutput() public {}
 }
