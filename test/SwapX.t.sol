@@ -11,10 +11,16 @@ contract SwapXTest is SetUp {
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) =
-            rmm.prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
-        rmm.swapX(deltaX, minAmountOut, address(this), "");
+        uint256 amountIn = 1 ether;
+        (,, uint256 minAmountOut,,) = rmm.prepareSwap(address(SY), address(PT), amountIn, block.timestamp, index);
+
+        uint256 preReserveX = rmm.reserveX();
+        uint256 preReserveY = rmm.reserveY();
+
+        (uint256 amountOut,) = rmm.swapX(amountIn, minAmountOut, address(this), "");
+
+        assertEq(rmm.reserveX(), preReserveX + amountIn);
+        assertEq(rmm.reserveY(), preReserveY - amountOut);
     }
 
     function test_swapX_TransfersTokens() public {}
