@@ -9,6 +9,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import {bisection} from "./lib/BisectionLib.sol";
 
 interface Token {
     function decimals() external view returns (uint8);
@@ -26,6 +27,8 @@ struct PoolPreCompute {
     uint256 strike_;
     uint256 tau_;
 }
+
+uint256 constant impliedRateTime = 365 * 86400;
 
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
@@ -178,8 +181,8 @@ contract RMM is ERC20 {
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
         _adjust(toInt(amountX), toInt(amountY), toInt(totalLiquidity_), strike_, index);
-        _debit(address(SY), reserveX, "");
-        _debit(address(PT), reserveY, "");
+        _debit(address(SY), reserveX);
+        _debit(address(PT), reserveY);
 
         emit Init(
             msg.sender,
@@ -211,10 +214,10 @@ contract RMM is ERC20 {
         }
 
         _adjust(deltaX, deltaY, deltaLiquidity, strike, index);
-        if (deltaX < 0) _credit(address(SY), msg.sender, uint256(-deltaX));
-        if (deltaY < 0) _credit(address(PT), msg.sender, uint256(-deltaY));
-        if (deltaX > 0) _debit(address(SY), uint256(deltaX), "");
-        if (deltaY > 0) _debit(address(PT), uint256(deltaY), "");
+        if (deltaX < 0) _credit(address(SY), msg.sender, uint256(-deltaX), 0, "");
+        if (deltaY < 0) _credit(address(PT), msg.sender, uint256(-deltaY), 0, "");
+        if (deltaX > 0) _debit(address(SY), uint256(deltaX));
+        if (deltaY > 0) _debit(address(PT), uint256(deltaY));
     }
 
     /// @dev Applies an adjustment to the reserves, liquidity, and last timestamp before validating it with the trading function.
@@ -227,7 +230,8 @@ contract RMM is ERC20 {
         reserveY = sum(reserveY, deltaY);
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
         strike = strike_;
-        lastImpliedPrice = approxSpotPrice(index.syToAsset(reserveX));
+        uint256 timeToExpiry = maturity - block.timestamp;
+        lastImpliedPrice = timeToExpiry > 0 ? uint256(int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(impliedRateTime) / int256(timeToExpiry)) : 1 ether;
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
@@ -242,6 +246,7 @@ contract RMM is ERC20 {
         amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+        console2.log("comp strike", comp.strike_);
         uint256 nextLiquidity;
         uint256 nextReserve;
         if (xIn) {
@@ -281,9 +286,10 @@ contract RMM is ERC20 {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
+
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(SY), amountInWad, data);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad, 0, data);
+        (uint256 debitNative) = _debit(address(SY), amountInWad);
 
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
@@ -296,6 +302,7 @@ contract RMM is ERC20 {
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
+        uint256 delta;
         PYIndex index = YT.newIndex();
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
             prepareSwap(address(PT), address(SY), amountIn, block.timestamp, index);
@@ -305,10 +312,28 @@ contract RMM is ERC20 {
         }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(PT), amountInWad, data);
+        if (data.length > 0) {
+            delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        }
+        (uint256 creditNative) = _credit(address(SY), to, amountOutWad, delta, data);
+        (uint256 debitNative) = _debit(address(PT), amountInWad);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
+    }
+
+    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
+        external
+        payable
+        returns (uint256 amountOut)
+    {
+        if (tokenIn == address(0)) {
+            amountOut =
+                SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
+        } else {
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
+            amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
+        }
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
@@ -354,8 +379,8 @@ contract RMM is ERC20 {
         _mint(to, lptMinted);
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), strike, index);
 
-        (uint256 debitNativeX) = _debit(address(SY), deltaXWad, "");
-        (uint256 debitNativeY) = _debit(address(PT), deltaYWad, "");
+        (uint256 debitNativeX) = _debit(address(SY), deltaXWad);
+        (uint256 debitNativeY) = _debit(address(PT), deltaYWad);
 
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
@@ -393,8 +418,8 @@ contract RMM is ERC20 {
         _burn(msg.sender, lptBurned); // uses state totalLiquidity
         _adjust(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity), strike, YT.newIndex());
 
-        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad);
-        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
+        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad, 0, "");
+        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad, 0, "");
 
         emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }
@@ -402,19 +427,12 @@ contract RMM is ERC20 {
     // payments
 
     /// @dev Handles the request of payment for a given token.
-    /// @param data Avoid the callback by passing empty data. Trigger the callback and pass the data through otherwise.
-    function _debit(address token, uint256 amountWad, bytes memory data) internal returns (uint256 paymentNative) {
+    function _debit(address token, uint256 amountWad) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
-        if (data.length > 0) {
-            if (!ICallback(msg.sender).callback(token, amountNative, data)) {
-                revert PaymentFailed(token, msg.sender, address(this), amountNative);
-            }
-        } else {
-            if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
-                revert PaymentFailed(token, msg.sender, address(this), amountNative);
-            }
+        if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
+            revert PaymentFailed(token, msg.sender, address(this), amountNative);
         }
 
         paymentNative = _balanceNative(token) - balanceNative;
@@ -424,22 +442,28 @@ contract RMM is ERC20 {
     }
 
     /// @dev Handles sending tokens as payment to the recipient `to`.
-    function _credit(address token, address to, uint256 amount) internal returns (uint256 paymentNative) {
+    function _credit(address token, address to, uint256 amount, uint256 delta, bytes memory data) internal returns (uint256 paymentNative) {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
         // Send the tokens to the recipient.
-        if (!Token(token).transfer(to, amountNative)) {
+        if (data.length > 0) {
+            if (!Token(token).transferFrom(msg.sender, address(this), delta)) {
+                revert PaymentFailed(token, msg.sender, address(this), delta);
+            }
+            mintPtYt(amount + delta, msg.sender);
+        } else if (!Token(token).transfer(to, amountNative)) {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
         paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
+            console2.log("in credit");
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
     }
 
-    function preparePoolPreCompute(PYIndex index, uint256 blockTime) internal view returns (PoolPreCompute memory) {
+    function preparePoolPreCompute(PYIndex index, uint256 blockTime) public view returns (PoolPreCompute memory) {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
         uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
@@ -562,12 +586,17 @@ contract RMM is ERC20 {
         view
         returns (uint256)
     {
-        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
-        // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
-        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        int256 timeToExpiry = int256(maturity - block.timestamp);
+        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(impliedRateTime);
+        int256 rate = rt.expWad();
+        return uint256(rate);
+        // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // // // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        // int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        // return uint256(rate).divWadDown(uint256(exp));
 
-        return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
+        // return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
     }
 
     /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)
@@ -713,8 +742,8 @@ contract RMM is ERC20 {
     {
         L = initialGuess;
         int256 L_next;
+        int256 toleranceInt = int256(tolerance);
         for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("iters L", i);
             int256 dfx = computeTfDL(args, L);
             int256 fx = findL(args, L);
 
@@ -722,11 +751,11 @@ contract RMM is ERC20 {
                 // Handle division by zero
                 break;
             }
-            L_next = int256(L) - fx * 1e18 / dfx;
+            L_next = int256(L) - (fx * 1e18) / dfx;
 
-            if (abs(int256(L) - L_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+            int256 diff = int256(L) - L_next;
+            if (diff <= toleranceInt && diff >= -toleranceInt || fx <= toleranceInt && fx >= -toleranceInt) {
                 L = uint256(L_next);
-                console2.log("terminal L", L);
                 break;
             }
 
@@ -830,7 +859,42 @@ contract RMM is ERC20 {
         int256 result = 1e36 / (KL * pdf_a / 1e18);
         return result;
     }
+
+    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 min = exactSYIn;
+        uint256 max = initialGuess;
+        for (uint256 iter = 0; iter < 100; ++iter) {
+            uint256 guess = (min + max) / 2;
+            (,, uint256 amountOut,,) = prepareSwap(address(PT), address(SY), guess, blockTime, index);
+            uint256 netSyToPt = index.assetToSyUp(guess);
+
+            uint256 netSyToPull = netSyToPt - amountOut;
+            if (netSyToPull <= exactSYIn) {
+                if (isASmallerApproxB(netSyToPull, exactSYIn, 10_000)) {
+                    return guess;
+                }
+                min = guess;
+            } else {
+                max = guess - 1;
+            }
+        }
+    }
+
+    function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
+        return a <= b && a >= b.mulWadDown(1e18 - eps);
+    }
+
+    function mintPtYt(uint256 amount, address to) internal returns (uint256 amountPY) {
+        SY.transfer(address(YT), amount);
+        amountPY = YT.mintPY(to, to);
+    }
+
 }
+
 // utils
 
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
