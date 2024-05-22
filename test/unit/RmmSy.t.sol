@@ -132,7 +132,7 @@ contract ForkRMMTest is Test {
             priceX: price,
             amountX: uint256(ms.totalSy - 100 ether),
             strike_: uint256(mp.rateAnchor),
-            sigma_: 0.03 ether,
+            sigma_: 0.04 ether,
             fee_: 0.0002 ether,
             curator_: address(0x55)
         });
@@ -323,39 +323,46 @@ contract ForkRMMTest is Test {
         console2.log("netYtOutMarket", netYtOutMarket);
     }
 
-    function test_pendle_exchangeRate_over_time() public basic_sy {
-        int256 rate1 = getExchangeRateFromImplied();
+    function test_pendle_rateAnchor_over_time() public basic_sy {
+        int256 rate1 = getPendleRateAnchor();
         vm.warp(block.timestamp + 10 days);
-        int256 rate2 = getExchangeRateFromImplied();
+        int256 rate2 = getPendleRateAnchor();
+        console2.log("rate1", rate1);
+        console2.log("rate2", rate2);
         console2.log("rate1 - rate2", rate1 - rate2);
     }
 
     function test_rmm_k_over_time() public basic_sy {
-        uint256 k1 = getKFromImplied();
-        vm.warp(block.timestamp + 1 days);
-        uint256 k2 = getKFromImplied();
+        uint256 k1 = getRmmStrikePrice();
+        vm.warp(block.timestamp + 10 days);
+        uint256 k2 = getRmmStrikePrice();
         console2.log("k1", k1);
         console2.log("k2", k2);
         console2.log("k1 - k2", k1 - k2);
     }
 
-    function getExchangeRateFromImplied() public returns (int256 rate) {
-        MarketState memory mkt = market.readState(address(router));
-        console2.log("time to expiry", mkt.expiry - block.timestamp);
-        uint256 rt = (mkt.lastLnImpliedRate * (mkt.expiry - block.timestamp)) / impliedRateTime;
-        console2.log("lnImpliedRate", mkt.lastLnImpliedRate);
-        console2.log("rt", rt);
-
-        rate = int256(rt).expWad();
-        console2.log("exchangeRate", rate);
+    function test_diff_k_rateAnchor_over_time() public basic_sy {
+        uint256 k1 = getRmmStrikePrice();
+        int256 rate1 = getPendleRateAnchor();
+        vm.warp(block.timestamp + 10 days);
+        uint256 k2 = getRmmStrikePrice();
+        int256 rate2 = getPendleRateAnchor();
+        console2.log("k1", k1);
+        console2.log("rate1", rate1);
+        console2.log("k2", k2);
+        console2.log("rate2", rate2);
+        console2.log("k1 - k2", k1 - k2);
+        console2.log("rate1 - rate2", rate1 - rate2);
     }
 
-    function getKFromImplied() public returns (uint256 k) {
+    function getPendleRateAnchor() public returns (int256 rateAnchor) {
+        (, MarketPreCompute memory mp) = getPendleMarketData();
+        rateAnchor = mp.rateAnchor;
+    }
+
+    function getRmmStrikePrice() public returns (uint256 k) {
         PYIndex index = YT.newIndex();
         PoolPreCompute memory comp = subject().preparePoolPreCompute(index, block.timestamp);
-        console2.log("k", comp.strike_);
         k = comp.strike_;
     }
-
-    function computeRateAnchor() public returns (uint256 rateAnchor) {}
 }
