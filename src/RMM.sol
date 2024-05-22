@@ -325,7 +325,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwap(address(PT), address(SY), guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapY(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
@@ -402,38 +402,6 @@ contract RMM is ERC20 {
         amountOut = downscaleDown(amountOutWad, scalar(address(SY)));
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
-    }
-
-    function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
-        public
-        view
-        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
-    {
-        if (tokenIn != address(SY) && tokenIn != address(PT)) revert("Invalid tokenIn");
-        if (tokenOut != address(SY) && tokenOut != address(PT)) revert("Invalid tokenOut");
-
-        bool xIn = tokenIn == address(SY);
-        amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
-        uint256 feeAmount = amountInWad.mulWadUp(fee);
-        PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
-        uint256 nextLiquidity;
-        uint256 nextReserve;
-        if (xIn) {
-            comp.reserveInAsset += index.syToAsset(feeAmount);
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma);
-            comp.reserveInAsset -= index.syToAsset(feeAmount);
-            nextReserve = solveY(
-                comp.reserveInAsset + index.syToAsset(amountInWad), nextLiquidity, comp.strike_, sigma, comp.tau_
-            );
-            amountOutWad = reserveY - nextReserve;
-        } else {
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma);
-            nextReserve = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
-            amountOutWad = reserveX - index.assetToSy(nextReserve);
-        }
-        strike_ = comp.strike_;
-        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
-        amountOut = downscaleDown(amountOutWad, xIn ? scalar(address(PT)) : scalar(address(SY)));
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
