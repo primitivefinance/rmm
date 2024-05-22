@@ -457,6 +457,7 @@ contract RMM is ERC20 {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
         uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
+        // uint256 strike_ = 1.00967 ether;
         return PoolPreCompute(totalAsset, strike_, tau_);
     }
 
@@ -534,6 +535,10 @@ contract RMM is ERC20 {
         return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
     }
 
+    function approxSpotPrice2() public view returns (uint256) {
+        return computePriceGivenY(reserveY, totalLiquidity, strike, sigma, lastTau());
+    }
+
     /// @dev price(x) = μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
     /// @notice
     /// * As lim_x->0, price(x) = +infinity for all `τ` > 0 and `σ` > 0.
@@ -553,6 +558,23 @@ contract RMM is ERC20 {
         // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
         int256 exp = (a * b / 1 ether - c).expWad();
         // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
+        return strike_.mulWadUp(uint256(exp));
+    }
+
+    function computePriceGivenY(uint256 rY, uint256 L, uint256 strike_, uint256 sigma_, uint256 tau_)
+        public
+        pure
+        returns (uint256)
+    {
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+
+        // $$\Phi^{-1} (\frac{y}{\mu L})$$
+        int256 b = Gaussian.ppf(int256(rY.divWadDown(strike_.mulWadDown(L))));
+
+        // $$\exp (\Phi^{-1} (\frac{y}{\mu L}) \sigma  + \frac{1}{2} \sigma^2  )$$
+        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 + int256(a)).expWad();
+
+        // $$\mu \exp (\Phi^{-1} (\frac{y}{\mu L}) \sigma  + \frac{1}{2} \sigma^2  )$$
         return strike_.mulWadUp(uint256(exp));
     }
 
@@ -576,12 +598,30 @@ contract RMM is ERC20 {
         view
         returns (uint256)
     {
-        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(5e17);
         // $$\Phi^{-1} (1 - \frac{x}{L})$$
         int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
         int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
 
         return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
+        // return lastImpliedPrice.divWadDown(uint256(exp));
+        // Compute sigmaTau and 'a' term
+        // uint256 sigmaTau = sigma_.mulWadDown(sigma_).mulWadDown(tau_);
+        // uint256 a = sigmaTau.mulWadDown(5e17);
+
+        // // Compute Φ⁻¹(1 - x / L)
+        // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+
+        // // Compute the exponential term
+        // int256 expTerm = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+
+        // // Adjust the last implied price with a logarithmic decay factor
+        // int256 adjustedLastImpliedPrice = int256(uint256(int256(lastImpliedPrice).lnWad()).mulWadDown(tau_)).expWad();
+
+        // // Compute new K
+        // uint256 newK = uint256(adjustedLastImpliedPrice).divWadDown(uint256(expTerm));
+
+        // return newK;
     }
 
     /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)
