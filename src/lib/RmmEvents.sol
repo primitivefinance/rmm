@@ -15,8 +15,8 @@ event Init(
     uint256 maturity,
     address indexed curator
 );
-/// @dev Emitted on swaps.
 
+/// @dev Emitted on swaps.
 event Swap(
     address caller,
     address indexed to,
@@ -26,9 +26,9 @@ event Swap(
     uint256 amountOut,
     int256 deltaLiquidity
 );
+
 /// @dev Emitted on allocatess.
-
 event Allocate(address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
-/// @dev Emitted on deallocates.
 
+/// @dev Emitted on deallocates.
 event Deallocate(address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
 /// @dev Thrown if trying to initialize a pool with an invalid strike price (strike < 1e18).
