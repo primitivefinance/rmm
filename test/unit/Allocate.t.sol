@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 import {PYIndex} from "./../../src/RMM.sol";
 import {SetUp, RMM} from "./SetUp.sol";
+import {Allocate} from "../../src/lib/RmmEvents.sol";
+import {InsufficientLiquidityOut} from "../../src/lib/RmmErrors.sol";
 
 contract AllocateTest is SetUp {
     function test_allocate_MintsLiquidity() public initDefaultPool dealSY(address(this), 1_000 ether) {
@@ -67,7 +69,7 @@ contract AllocateTest is SetUp {
 
         vm.expectEmit(true, true, true, true);
 
-        emit RMM.Allocate(address(this), address(this), deltaXWad, deltaYWad, deltaLiquidity);
+        emit Allocate(address(this), address(this), deltaXWad, deltaYWad, deltaLiquidity);
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
     }
 
@@ -79,7 +81,7 @@ contract AllocateTest is SetUp {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RMM.InsufficientLiquidityOut.selector, deltaXWad, deltaYWad, deltaLiquidity + 1, deltaLiquidity
+                InsufficientLiquidityOut.selector, deltaXWad, deltaYWad, deltaLiquidity + 1, deltaLiquidity
             )
         );
         rmm.allocate(deltaXWad, deltaYWad, deltaLiquidity + 1, address(this));

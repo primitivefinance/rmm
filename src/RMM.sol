@@ -103,8 +103,9 @@ contract RMM is ERC20 {
 
         strike = strike_;
         sigma = sigma_;
-        fee = fee_;
         maturity = PT.expiry();
+        fee = fee_;
+
         initTimestamp = block.timestamp;
         curator = curator_;
 
@@ -380,7 +381,7 @@ contract RMM is ERC20 {
     function preparePoolPreCompute(PYIndex index, uint256 blockTime) public view returns (PoolPreCompute memory) {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
-        uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
+        uint256 strike_ = computeKGivenLastPrice();
         return PoolPreCompute(totalAsset, strike_, tau_);
     }
 
@@ -439,11 +440,7 @@ contract RMM is ERC20 {
         return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
     }
 
-    function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
-        public
-        view
-        returns (uint256)
-    {
+    function computeKGivenLastPrice() public view returns (uint256) {
         int256 timeToExpiry = int256(maturity - block.timestamp);
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
         int256 rate = rt.expWad();
@@ -479,10 +476,6 @@ contract RMM is ERC20 {
                 max = guess - 1;
             }
         }
-    }
-
-    function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
-        return a <= b && a >= b.mulWadDown(1e18 - eps);
     }
 
     function mintPtYt(uint256 amount, address to) internal returns (uint256 amountPY) {

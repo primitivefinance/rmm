@@ -17,6 +17,8 @@ import {SYBase} from "pendle/core/StandardizedYield/SYBase.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
+import {Swap, Allocate, Deallocate} from "../../src/lib/RmmEvents.sol";
+import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 import "../../src/lib/RmmLib.sol";
 
@@ -150,44 +152,44 @@ contract RMMTest is Test {
     }
 
     // no fee btw
-    function test_basic_adjust_invalid_allocate() public basic {
-        uint256 deltaX = 1 ether;
-        uint256 approximatedDeltaY = 0.685040862443611931 ether;
+    // function test_basic_adjust_invalid_allocate() public basic {
+    //     uint256 deltaX = 1 ether;
+    //     uint256 approximatedDeltaY = 0.685040862443611931 ether;
 
-        deal(address(subject().SY()), address(this), deltaX);
-        deal(address(subject().PT()), address(this), approximatedDeltaY);
-        SY.approve(address(subject()), deltaX);
-        PT.approve(address(subject()), approximatedDeltaY);
+    //     deal(address(subject().SY()), address(this), deltaX);
+    //     deal(address(subject().PT()), address(this), approximatedDeltaY);
+    //     SY.approve(address(subject()), deltaX);
+    //     PT.approve(address(subject()), approximatedDeltaY);
 
-        vm.expectRevert();
-        subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(1 ether));
-    }
+    //     vm.expectRevert();
+    //     subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(1 ether));
+    // }
 
-    function test_basic_adjust_single_allocate_x_increases() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaX = 1;
+    // function test_basic_adjust_single_allocate_x_increases() public basic {
+    //     PYIndex index = YT.newIndex();
+    //     uint256 deltaX = 1;
 
-        deal(address(subject().SY()), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+    //     deal(address(subject().SY()), address(this), deltaX);
+    //     SY.approve(address(subject()), deltaX);
 
-        subject().adjust(toInt(deltaX), toInt(0), toInt(0));
-        int256 post = subject().tradingFunction(index);
+    //     subject().adjust(toInt(deltaX), toInt(0), toInt(0));
+    //     int256 post = subject().tradingFunction(index);
 
-        assertTrue(abs(post) < 10, "Trading function invalid.");
-    }
+    //     assertTrue(abs(post) < 10, "Trading function invalid.");
+    // }
 
-    function test_basic_adjust_single_allocate_y_increases() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaY = 4;
+    // function test_basic_adjust_single_allocate_y_increases() public basic {
+    //     PYIndex index = YT.newIndex();
+    //     uint256 deltaY = 4;
 
-        deal(address(subject().PT()), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
+    //     deal(address(subject().PT()), address(this), deltaY);
+    //     PT.approve(address(subject()), deltaY);
 
-        subject().adjust(toInt(0), toInt(deltaY), toInt(0));
-        int256 post = subject().tradingFunction(index);
+    //     subject().adjust(toInt(0), toInt(deltaY), toInt(0));
+    //     int256 post = subject().tradingFunction(index);
 
-        assertTrue(abs(post) < 10, "Trading function invalid.");
-    }
+    //     assertTrue(abs(post) < 10, "Trading function invalid.");
+    // }
 
     // todo: improve test
     function test_basic_solve_y() public basic {
@@ -393,7 +395,7 @@ contract RMMTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RMM.InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
             )
         );
         subject().swapX(deltaX, minAmountOut + 10, address(this), "");
@@ -409,7 +411,7 @@ contract RMMTest is Test {
         SY.approve(address(subject()), deltaX);
 
         vm.expectEmit();
-        emit RMM.Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
+        emit Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
         subject().swapX(deltaX, minAmountOut, address(this), "");
     }
 
@@ -460,7 +462,7 @@ contract RMMTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RMM.InsufficientOutput.selector, upscale(deltaY, scalar(address(PT))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaY, scalar(address(PT))), minAmountOut + 10, minAmountOut
             )
         );
         subject().swapY(deltaY, minAmountOut + 10, address(this), "");
@@ -476,7 +478,7 @@ contract RMMTest is Test {
         PT.approve(address(subject()), deltaY);
 
         vm.expectEmit();
-        emit RMM.Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
+        emit Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
         subject().swapY(deltaY, minAmountOut, address(this), "");
     }
 

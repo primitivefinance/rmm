@@ -57,9 +57,7 @@ contract ForkRMMTest is Test {
     IStandardizedYield public SY;
     IPPrincipalToken public PT;
     IPYieldToken public YT;
-    MarketState public pendleMarketState;
-    int256 pendleRateAnchor;
-    int256 pendleRateScalar;
+
     uint256 timeToExpiry;
 
     function setUp() public {
@@ -68,12 +66,8 @@ contract ForkRMMTest is Test {
         __subject__ = new RMM(WETH_ADDRESS, "LPToken", "LPT");
         vm.label(address(__subject__), "RMM");
         (SY, PT, YT) = IPMarket(market).readTokens();
-        pendleMarketState = market.readState(address(router));
-        timeToExpiry = pendleMarketState.expiry - block.timestamp;
-        pendleRateScalar = pendleMarketState._getRateScalar(timeToExpiry);
-        pendleRateAnchor = pendleMarketState.totalPt._getRateAnchor(
-            pendleMarketState.lastLnImpliedRate, pendleMarketState.totalSy, pendleRateScalar, timeToExpiry
-        );
+        (MarketState memory ms,) = getPendleMarketData();
+        timeToExpiry = ms.expiry - block.timestamp;
 
         deal(wstETH, address(this), 1_000_000e18);
 
@@ -93,6 +87,12 @@ contract ForkRMMTest is Test {
         IERC20(market).approve(address(router), type(uint256).max);
     }
 
+    function getPendleMarketData() public returns (MarketState memory ms, MarketPreCompute memory mp) {
+        PYIndex index = YT.newIndex();
+        ms = market.readState(address(router));
+        mp = ms.getMarketPreCompute(index, block.timestamp);
+    }
+
     function subject() public view returns (RMM) {
         return __subject__;
     }
@@ -105,9 +105,9 @@ contract ForkRMMTest is Test {
         return MockERC20(token).balanceOf(account);
     }
 
-    function getPtExchangeRate() internal view returns (int256) {
-        return
-            pendleMarketState.totalPt._getExchangeRate(pendleMarketState.totalSy, pendleRateScalar, pendleRateAnchor, 0);
+    function getPtExchangeRate() internal returns (int256) {
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
+        return ms.totalPt._getExchangeRate(mp.totalAsset, mp.rateScalar, mp.rateAnchor, 0);
     }
 
     function balanceWad(address token, address account) internal view returns (uint256) {
@@ -125,17 +125,13 @@ contract ForkRMMTest is Test {
     }
 
     modifier basic_sy() {
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
         uint256 price = uint256(getPtExchangeRate());
-        console2.log("initial price", price);
-        console2.log("rate anchor", pendleRateAnchor);
-        console2.log("totalSY", pendleMarketState.totalSy);
-        console2.log("totalPT", pendleMarketState.totalPt);
-        console2.log("scalar", pendleRateScalar);
         subject().init({
             PT_: address(PT),
             priceX: price,
-            amountX: uint256(pendleMarketState.totalSy - 100 ether),
-            strike_: uint256(pendleRateAnchor),
+            amountX: uint256(ms.totalSy - 100 ether),
+            strike_: uint256(mp.rateAnchor),
             sigma_: 0.03 ether,
             fee_: 0.0002 ether,
             curator_: address(0x55)
@@ -301,7 +297,6 @@ contract ForkRMMTest is Test {
         // mint 1 SY for the flash swap
         mintSY(1 ether);
 
-
         uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
         (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
 
@@ -319,12 +314,12 @@ contract ForkRMMTest is Test {
     }
 
     function test_approx_sy_pendle() public basic_sy {
-        console2.log("market sy", pendleMarketState.totalSy);
-        console2.log("market pt", pendleMarketState.totalPt);
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
+        console2.log("market sy", ms.totalSy);
+        console2.log("market pt", ms.totalPt);
         ApproxParams memory approx =
             ApproxParams({guessMin: 1 ether, guessMax: 500 ether, guessOffchain: 0, maxIteration: 256, eps: 10_000});
-        (uint256 netYtOutMarket,) =
-            pendleMarketState.approxSwapExactSyForYt(YT.newIndex(), 1 ether, block.timestamp, approx);
+        (uint256 netYtOutMarket,) = ms.approxSwapExactSyForYt(YT.newIndex(), 1 ether, block.timestamp, approx);
         console2.log("netYtOutMarket", netYtOutMarket);
     }
 
@@ -362,7 +357,5 @@ contract ForkRMMTest is Test {
         k = comp.strike_;
     }
 
-    function computeRateAnchor() public returns (uint256 rateAnchor) {
-
-    }
+    function computeRateAnchor() public returns (uint256 rateAnchor) {}
 }

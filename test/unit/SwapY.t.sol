@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 import {PYIndex, IPYieldToken} from "./../../src/RMM.sol";
 import {SetUp, RMM} from "./SetUp.sol";
+import {Swap} from "../../src/lib/RmmEvents.sol";
+import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 contract SwapYTest is SetUp {
     function test_swapY_AdjustsPool() public initDefaultPool dealSY(address(this), 1_000 ether) {
@@ -56,7 +58,7 @@ contract SwapYTest is SetUp {
             rmm.prepareSwap(address(PT), address(SY), amountIn, block.timestamp, index);
         vm.expectEmit(true, true, true, true);
 
-        emit RMM.Swap(address(this), address(this), address(PT), address(SY), amountIn, minAmountOut, deltaLiquidity);
+        emit Swap(address(this), address(this), address(PT), address(SY), amountIn, minAmountOut, deltaLiquidity);
         rmm.swapY(amountIn, minAmountOut, address(this), "");
     }
 
@@ -68,9 +70,7 @@ contract SwapYTest is SetUp {
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
         (,, uint256 minAmountOut,,) = rmm.prepareSwap(address(PT), address(SY), amountIn, block.timestamp, index);
-        vm.expectRevert(
-            abi.encodeWithSelector(RMM.InsufficientOutput.selector, amountIn, minAmountOut + 1, minAmountOut)
-        );
+        vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, amountIn, minAmountOut + 1, minAmountOut));
         rmm.swapY(amountIn, minAmountOut + 1, address(this), "");
     }
 }

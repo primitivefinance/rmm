@@ -370,3 +370,7 @@ function scalar(address token) view returns (uint256) {
     uint256 difference = 18 - decimals;
     return FixedPointMathLib.WAD * 10 ** difference;
 }
+
+function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) pure returns (bool) {
+    return a <= b && a >= b.mulWadDown(1e18 - eps);
+}
