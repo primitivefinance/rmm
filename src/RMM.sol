@@ -94,6 +94,7 @@ contract RMM is ERC20 {
         address curator_
     ) external lock {
         if (strike != 0) revert AlreadyInitialized();
+        if (strike_ < 1e18) revert InvalidStrike();
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
@@ -232,21 +233,6 @@ contract RMM is ERC20 {
         (uint256 debitNative) = _debit(address(PT), amountInWad);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
-    }
-
-    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
-        external
-        payable
-        returns (uint256 amountOut)
-    {
-        if (tokenIn == address(0)) {
-            amountOut =
-                SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
-        } else {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
-            ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
-            amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
-        }
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
@@ -393,34 +379,6 @@ contract RMM is ERC20 {
         return abi.decode(data, (uint256));
     }
 
-    // maths
-
-    /// @dev Computes the time to maturity based on the `lastTimestamp` and converts it to units of WAD years.
-    function lastTau() public view returns (uint256) {
-        if (maturity < lastTimestamp) {
-            return 0;
-        }
-
-        return computeTauWadYears(maturity - lastTimestamp);
-    }
-
-    /// @dev Computes the time to maturity based on the current `block.timestamp` and converts it to units of WAD years.
-    function currentTau() public view returns (uint256) {
-        if (maturity < block.timestamp) {
-            return 0;
-        }
-
-        return computeTauWadYears(maturity - block.timestamp);
-    }
-
-    function futureTau(uint256 timestamp) public view returns (uint256) {
-        if (maturity < timestamp) {
-            return 0;
-        }
-
-        return computeTauWadYears(maturity - timestamp);
-    }
-
     /// @dev Computes the trading function result using the current state.
     function tradingFunction(PYIndex index) public view returns (int256) {
         if (totalLiquidity == 0) return 0; // Not initialized.
@@ -478,8 +436,51 @@ contract RMM is ERC20 {
         }
     }
 
+    // tau computing
+    /// @dev Computes the time to maturity based on the `lastTimestamp` and converts it to units of WAD years.
+    function lastTau() public view returns (uint256) {
+        if (maturity < lastTimestamp) {
+            return 0;
+        }
+
+        return computeTauWadYears(maturity - lastTimestamp);
+    }
+
+    /// @dev Computes the time to maturity based on the current `block.timestamp` and converts it to units of WAD years.
+    function currentTau() public view returns (uint256) {
+        if (maturity < block.timestamp) {
+            return 0;
+        }
+
+        return computeTauWadYears(maturity - block.timestamp);
+    }
+
+    function futureTau(uint256 timestamp) public view returns (uint256) {
+        if (maturity < timestamp) {
+            return 0;
+        }
+
+        return computeTauWadYears(maturity - timestamp);
+    }
+
+    // token minting
     function mintPtYt(uint256 amount, address to) internal returns (uint256 amountPY) {
         SY.transfer(address(YT), amount);
         amountPY = YT.mintPY(to, to);
+    }
+
+    function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
+        external
+        payable
+        returns (uint256 amountOut)
+    {
+        if (tokenIn == address(0)) {
+            amountOut =
+                SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
+        } else {
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
+            amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
+        }
     }
 }

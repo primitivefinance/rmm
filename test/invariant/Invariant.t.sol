@@ -200,7 +200,7 @@ contract InvariantTest is Test {
         selectors[0] = handler.handle_sanity.selector;
         selectors[1] = handler.handle_init.selector;
         // selectors[2] = handler.handle_adjust.selector;
-        selectors[3] = handler.handle_allocate.selector;
+        selectors[2] = handler.handle_allocate.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         rmm = handler.rmm();
         handler.reset(); // Sets a pool up.
