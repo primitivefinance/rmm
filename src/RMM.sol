@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Gaussian} from "solstat/Gaussian.sol";
-import {console2} from "forge-std/console2.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
@@ -17,6 +16,7 @@ import "./lib/RmmEvents.sol";
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
+
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
 
@@ -184,18 +184,15 @@ contract RMM is ERC20 {
         amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
         uint256 feeAmount = amountInWad.mulWadUp(fee);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
-        console2.log("comp strike", comp.strike_);
         uint256 nextLiquidity;
         uint256 nextReserve;
         if (xIn) {
             comp.reserveInAsset += index.syToAsset(feeAmount);
             nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma);
             comp.reserveInAsset -= index.syToAsset(feeAmount);
-            console2.log("next L", nextLiquidity);
             nextReserve = solveY(
                 comp.reserveInAsset + index.syToAsset(amountInWad), nextLiquidity, comp.strike_, sigma, comp.tau_
             );
-            console2.log("next reserve", nextReserve);
             amountOutWad = reserveY - nextReserve;
         } else {
             nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma);
@@ -398,7 +395,6 @@ contract RMM is ERC20 {
 
         paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
-            console2.log("in credit");
             revert InsufficientPayment(token, paymentNative, amountNative);
         }
     }
