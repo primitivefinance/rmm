@@ -301,19 +301,20 @@ contract RMM is ERC20 {
         return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
     }
 
-    function computeKGivenLastPrice() public view returns (uint256) {
+    function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
+        public
+        view
+        returns (uint256)
+    {
         int256 timeToExpiry = int256(maturity - block.timestamp);
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
-        int256 rate = rt.expWad();
-        return uint256(rate);
+        int256 lastPrice = rt.expWad();
 
-        // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
-        // // // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
-        // int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
-        // return uint256(rate).divWadDown(uint256(exp));
-
-        // return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        return uint256(lastPrice).divWadDown(uint256(exp));
     }
 
     function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
@@ -443,7 +444,7 @@ contract RMM is ERC20 {
     function preparePoolPreCompute(PYIndex index, uint256 blockTime) public view returns (PoolPreCompute memory) {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
-        uint256 strike_ = computeKGivenLastPrice();
+        uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
         return PoolPreCompute(totalAsset, strike_, tau_);
     }
 

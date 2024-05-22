@@ -301,8 +301,8 @@ contract ForkRMMTest is Test {
         (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
 
         // assert balance of address(this) is 0 for SY, PT, and YT
-        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
-        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance of address(this) is not 0.");
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance at the end of the test is not 0.");
+        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not 0.");
     }
 
     function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
@@ -332,7 +332,7 @@ contract ForkRMMTest is Test {
 
     function test_rmm_k_over_time() public basic_sy {
         uint256 k1 = getKFromImplied();
-        vm.warp(block.timestamp + 50 days);
+        vm.warp(block.timestamp + 1 days);
         uint256 k2 = getKFromImplied();
         console2.log("k1", k1);
         console2.log("k2", k2);
