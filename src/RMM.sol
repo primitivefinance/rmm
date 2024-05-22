@@ -129,8 +129,7 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
         PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwap(address(SY), address(PT), amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -153,8 +152,7 @@ contract RMM is ERC20 {
         uint256 strike_;
         uint256 delta;
         PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwap(address(PT), address(SY), amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -308,6 +306,7 @@ contract RMM is ERC20 {
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
         int256 rate = rt.expWad();
         return uint256(rate);
+
         // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
         // // // $$\Phi^{-1} (1 - \frac{x}{L})$$
         // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
@@ -354,6 +353,55 @@ contract RMM is ERC20 {
         amountY =
             computeY({reserveX_: totalAsset, liquidity: initialLiquidity, strike_: strike_, sigma_: sigma_, tau_: tau_});
         totalLiquidity_ = solveL(comp, initialLiquidity, amountY, sigma_);
+    }
+
+    function prepareSwapX(uint256 amountIn, uint256 timestamp, PYIndex index)
+        public
+        view
+        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
+    {
+        amountInWad = upscale(amountIn, scalar(address(SY)));
+        // convert amountIn to assetIn, only for swapping X in
+        uint256 amountInAsset = index.syToAsset(amountIn);
+
+        PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+        // compute liquidity
+        uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+        uint256 nextLiquidity = computeDeltaLXIn(
+            amountInAsset, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+        ) + computedL;
+
+        // compute reserves in asset
+        uint256 nextReserveY =
+            solveY(comp.reserveInAsset + amountInAsset, nextLiquidity, comp.strike_, sigma, comp.tau_);
+
+        amountOutWad = reserveY - nextReserveY;
+        amountOut = downscaleDown(amountOutWad, scalar(address(PT)));
+        strike_ = comp.strike_;
+        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
+    }
+
+    function prepareSwapY(uint256 amountIn, uint256 timestamp, PYIndex index)
+        public
+        view
+        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
+    {
+        amountInWad = upscale(amountIn, scalar(address(PT)));
+        PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+
+        // compute liquidity
+        uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+        uint256 nextLiquidity = computeDeltaLYIn(
+            amountIn, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+        ) + computedL;
+
+        // compute reserves
+        uint256 nextReserveX = solveX(reserveY + amountIn, nextLiquidity, comp.strike_, sigma, comp.tau_);
+
+        amountOutWad = reserveX - index.assetToSy(nextReserveX);
+        amountOut = downscaleDown(amountOutWad, scalar(address(SY)));
+        strike_ = comp.strike_;
+        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)

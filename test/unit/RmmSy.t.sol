@@ -154,10 +154,10 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
 
@@ -165,7 +165,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
         uint256 balanceSyBefore = SY.balanceOf(address(this));
-        subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        subject().prepareSwapY(deltaY, block.timestamp, index);
         (uint256 amtOut,) = subject().swapY(deltaY, 0, address(this), "");
         console2.log("amtOut", amtOut);
 
@@ -197,7 +197,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().prepareSwapX(deltaX, block.timestamp, index);
         subject().swapX(deltaX, 0, address(this), "");
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
@@ -206,7 +206,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().prepareSwapX(deltaX, block.timestamp, index);
         subject().swapX(deltaX, 0, address(this), "");
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
