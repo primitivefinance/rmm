@@ -11,12 +11,8 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 
 import "./lib/RmmLib.sol";
-
-interface ICallback {
-    function callback(address token, uint256 amountNative, bytes calldata data) external returns (bool);
-}
-
-uint256 constant impliedRateTime = 365 * 86400;
+import "./lib/RmmErrors.sol";
+import "./lib/RmmEvents.sol";
 
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
@@ -24,59 +20,8 @@ contract RMM is ERC20 {
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
 
-    /// @dev Thrown if trying to initialize an already initialized pool.
-    error AlreadyInitialized();
-    /// @dev Thrown when a `balanceOf` call fails or returns unexpected data.
-    error BalanceError();
-    /// @dev Thrown when a payment to this contract is insufficient.
-    error InsufficientPayment(address token, uint256 actual, uint256 expected);
-    /// @dev Thrown when a mint does not output enough liquidity.
-    error InsufficientLiquidityOut(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
-    /// @dev Thrown when a swap does not output enough tokens.
-    error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
-    /// @dev Thrown when an allocate would reduce the liquidity.
-    error InvalidAllocate(uint256 deltaX, uint256 deltaY, uint256 currLiquidity, uint256 nextLiquidity);
-    /// @dev Thrown on `init` when a token has invalid decimals.
-    error InvalidDecimals(address token, uint256 decimals);
-    /// @dev Thrown when the trading function result is less than the previous invariant.
-    error OutOfRange(int256 initial, int256 terminal);
-    /// @dev Thrown when a payment to or from the user returns false or no data.
-    error PaymentFailed(address token, address from, address to, uint256 amount);
-    /// @dev Thrown when an external call is made within the same frame as another.
-    error Reentrancy();
-
-    /// @dev Emitted on pool creation.
-    event Init(
-        address caller,
-        address indexed tokenX,
-        address indexed tokenY,
-        uint256 reserveX,
-        uint256 reserveY,
-        uint256 totalLiquidity,
-        uint256 strike,
-        uint256 sigma,
-        uint256 fee,
-        uint256 maturity,
-        address indexed curator
-    );
-    /// @dev Emitted on swaps.
-    event Swap(
-        address caller,
-        address indexed to,
-        address indexed tokenIn,
-        address indexed tokenOut,
-        uint256 amountIn,
-        uint256 amountOut,
-        int256 deltaLiquidity
-    );
-    /// @dev Emitted on allocatess.
-    event Allocate(address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity);
-    /// @dev Emitted on deallocates.
-    event Deallocate(
-        address indexed caller, address indexed to, uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity
-    );
-
     int256 public constant INIT_UPPER_BOUND = 30;
+    uint256 public constant IMPLIED_RATE_TIME = 365 * 86400;
     uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
 
@@ -221,7 +166,8 @@ contract RMM is ERC20 {
         uint256 timeToExpiry = maturity - block.timestamp;
         lastImpliedPrice = timeToExpiry > 0
             ? uint256(
-                int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(impliedRateTime) / int256(timeToExpiry)
+                int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(IMPLIED_RATE_TIME)
+                    / int256(timeToExpiry)
             )
             : 1 ether;
     }
@@ -519,35 +465,13 @@ contract RMM is ERC20 {
         return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
     }
 
-    /// @dev price(x) = μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
-    /// @notice
-    /// * As lim_x->0, price(x) = +infinity for all `τ` > 0 and `σ` > 0.
-    /// * As lim_x->1, price(x) = 0 for all `τ` > 0 and `σ` > 0.
-    /// * If `τ` or `σ` is zero, price is equal to strike.
-    function computeSpotPrice(uint256 reserveX_, uint256 totalLiquidity_, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256)
-    {
-        // Φ^-1(1 - x/L)
-        int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(totalLiquidity_)));
-        // σ√τ
-        int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
-        // 1/2σ^2τ
-        int256 c = toInt(0.5 ether * sigma_ * sigma_ * tau_ / (1e18 ** 3));
-        // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
-        int256 exp = (a * b / 1 ether - c).expWad();
-        // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
-        return strike_.mulWadUp(uint256(exp));
-    }
-
     function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
         public
         view
         returns (uint256)
     {
         int256 timeToExpiry = int256(maturity - block.timestamp);
-        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(impliedRateTime);
+        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
         int256 rate = rt.expWad();
         return uint256(rate);
         // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);

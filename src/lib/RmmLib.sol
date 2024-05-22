@@ -54,6 +54,27 @@ function computeTradingFunction(
     return a + b + c;
 }
 
+/// @dev price(x) = μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
+/// @notice
+/// * As lim_x->0, price(x) = +infinity for all `τ` > 0 and `σ` > 0.
+/// * As lim_x->1, price(x) = 0 for all `τ` > 0 and `σ` > 0.
+/// * If `τ` or `σ` is zero, price is equal to strike.
+function computeSpotPrice(uint256 reserveX_, uint256 totalLiquidity_, uint256 strike_, uint256 sigma_, uint256 tau_)
+    pure
+    returns (uint256)
+{
+    // Φ^-1(1 - x/L)
+    int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(totalLiquidity_)));
+    // σ√τ
+    int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
+    // 1/2σ^2τ
+    int256 c = toInt(0.5 ether * sigma_ * sigma_ * tau_ / (1e18 ** 3));
+    // Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ
+    int256 exp = (a * b / 1 ether - c).expWad();
+    // μe^(Φ^-1(1 - x/L)σ√τ - 1/2σ^2τ)
+    return strike_.mulWadUp(uint256(exp));
+}
+
 /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)
 function computeY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
     pure
