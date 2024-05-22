@@ -9,23 +9,11 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import {bisection} from "./lib/BisectionLib.sol";
 
-interface Token {
-    function decimals() external view returns (uint8);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
+import "./lib/RmmLib.sol";
 
 interface ICallback {
     function callback(address token, uint256 amountNative, bytes calldata data) external returns (bool);
-}
-
-struct PoolPreCompute {
-    uint256 reserveInAsset;
-    uint256 strike_;
-    uint256 tau_;
 }
 
 uint256 constant impliedRateTime = 365 * 86400;
@@ -231,7 +219,11 @@ contract RMM is ERC20 {
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
         strike = strike_;
         uint256 timeToExpiry = maturity - block.timestamp;
-        lastImpliedPrice = timeToExpiry > 0 ? uint256(int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(impliedRateTime) / int256(timeToExpiry)) : 1 ether;
+        lastImpliedPrice = timeToExpiry > 0
+            ? uint256(
+                int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(impliedRateTime) / int256(timeToExpiry)
+            )
+            : 1 ether;
     }
 
     function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
@@ -285,7 +277,6 @@ contract RMM is ERC20 {
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
-
 
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _credit(address(PT), to, amountOutWad, 0, data);
@@ -442,7 +433,10 @@ contract RMM is ERC20 {
     }
 
     /// @dev Handles sending tokens as payment to the recipient `to`.
-    function _credit(address token, address to, uint256 amount, uint256 delta, bytes memory data) internal returns (uint256 paymentNative) {
+    function _credit(address token, address to, uint256 amount, uint256 delta, bytes memory data)
+        internal
+        returns (uint256 paymentNative)
+    {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
@@ -513,25 +507,6 @@ contract RMM is ERC20 {
         return computeTradingFunction(totalAsset, reserveY, totalLiquidity, strike, sigma, lastTau());
     }
 
-    /// @dev k = Φ⁻¹(x/L) + Φ⁻¹(y/μL)  + σ√τ
-    function computeTradingFunction(
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 liquidity,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) public pure returns (int256) {
-        uint256 a_i = reserveX_ * 1e18 / liquidity;
-
-        uint256 b_i = reserveY_ * 1e36 / (strike_ * liquidity);
-
-        int256 a = Gaussian.ppf(toInt(a_i));
-        int256 b = Gaussian.ppf(toInt(b_i));
-        int256 c = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
-        return a + b + c;
-    }
-
     /// @notice Uses state and approximate spot price to approximate the total value of the pool in terms of Y token.
     /// @dev Do not rely on this for onchain calculations.
     // function totalValue(total) public view returns (uint256) {
@@ -566,21 +541,6 @@ contract RMM is ERC20 {
         return strike_.mulWadUp(uint256(exp));
     }
 
-    function computeLnSDivK(uint256 S, uint256 strike_) public pure returns (int256) {
-        return int256(S.divWadDown(strike_)).lnWad();
-    }
-
-    /// @dev Computes σ√τ given `sigma_` σ and `tau` τ.
-    function computeSigmaSqrtTau(uint256 sigma_, uint256 tau_) internal pure returns (uint256) {
-        uint256 sqrtTau = FixedPointMathLib.sqrt(tau_) * 1e9; // 1e9 is the precision of the square root function
-        return sigma_.mulWadUp(sqrtTau);
-    }
-
-    /// @dev Converts seconds (units of block.timestamp) into years in WAD units.
-    function computeTauWadYears(uint256 tauSeconds) public pure returns (uint256) {
-        return tauSeconds.mulDivDown(1e18, 365 days);
-    }
-
     function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
         public
         view
@@ -597,267 +557,6 @@ contract RMM is ERC20 {
         // return uint256(rate).divWadDown(uint256(exp));
 
         // return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
-    }
-
-    /// @dev ~y = LKΦ(Φ⁻¹(1-x/L) - σ√τ)
-    function computeY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256)
-    {
-        int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWadDown(liquidity)));
-        int256 b = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
-        int256 c = Gaussian.cdf(a - b);
-
-        return liquidity * strike_ * toUint(c) / (1e18 ** 2);
-    }
-
-    /// @dev ~x = L(1 - Φ(Φ⁻¹(y/(LK)) + σ√τ))
-    function computeX(uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256)
-    {
-        int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
-        int256 b = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
-        int256 c = Gaussian.cdf(a + b);
-
-        return liquidity * (1 ether - toUint(c)) / 1e18;
-    }
-
-    /// @dev ~L = x / (1 - Φ(Φ⁻¹(y/(LK)) + σ√τ))
-    function computeL(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 prevTau, uint256 newTau)
-        public
-        pure
-        returns (uint256)
-    {
-        int256 a = Gaussian.ppf(toInt(reserveX_ * 1 ether / liquidity));
-        int256 c = Gaussian.cdf(
-            (
-                (a * toInt(computeSigmaSqrtTau(sigma_, prevTau)) / 1 ether)
-                    + toInt(sigma_ * sigma_ * prevTau / (2 ether * 1 ether))
-                    + toInt(sigma_ * sigma_ * newTau / (2 ether * 1 ether))
-            ) * 1 ether / toInt(computeSigmaSqrtTau(sigma_, newTau))
-        );
-
-        return reserveX_ * 1 ether / toUint(1 ether - c);
-    }
-
-    function computeLGivenYK(
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 liquidity,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 newTau
-    ) public pure returns (uint256) {
-        int256 a = Gaussian.ppf(toInt(reserveY_ * 1e36 / (liquidity * strike_)));
-        int256 b = newTau != 0 ? toInt(computeSigmaSqrtTau(sigma_, newTau)) : int256(0);
-        int256 c = Gaussian.cdf(a + b);
-
-        return reserveX_ * 1 ether / toUint(1 ether - c);
-    }
-
-    function computeLGivenX(uint256 reserveX_, uint256 S, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256)
-    {
-        int256 lnSDivK = computeLnSDivK(S, strike_);
-        uint256 sigmaSqrtTau = computeSigmaSqrtTau(sigma_, tau_);
-        uint256 halfSigmaSquaredTau = sigma_.mulWadDown(sigma_).mulWadDown(0.5 ether).mulWadDown(tau_);
-        int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) / int256(sigmaSqrtTau);
-        uint256 cdf = uint256(Gaussian.cdf(d1));
-
-        return reserveX_.divWadUp(1 ether - cdf);
-    }
-
-    /// @dev x is independent variable, y and L are dependent variables.
-    function findX(bytes memory data, uint256 x) internal pure returns (int256) {
-        (uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
-
-        return RMM.computeTradingFunction(x, reserveY_, liquidity, strike_, sigma_, tau_);
-    }
-
-    /// @dev y is independent variable, x and L are dependent variables.
-    function findY(bytes memory data, uint256 y) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
-
-        return RMM.computeTradingFunction(reserveX_, y, liquidity, strike_, sigma_, tau_);
-    }
-
-    /// @dev L is independent variable, x and y are dependent variables.
-    function findL(bytes memory data, uint256 liquidity) internal pure returns (int256) {
-        (uint256 reserveX_, uint256 reserveY_, uint256 strike_, uint256 sigma_, uint256 tau_) =
-            abi.decode(data, (uint256, uint256, uint256, uint256, uint256));
-
-        return RMM.computeTradingFunction(reserveX_, reserveY_, liquidity, strike_, sigma_, tau_);
-    }
-
-    /// todo: figure out what happens when result of trading function is negative or positive.
-    function solveX(uint256 reserveY_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256 reserveX_)
-    {
-        bytes memory args = abi.encode(reserveY_, liquidity, strike_, sigma_, tau_);
-        uint256 initialGuess = computeX(reserveY_, liquidity, strike_, sigma_, tau_);
-        console2.log("initial x guess", initialGuess);
-        // at maturity the `initialGuess` will == L therefore we must reduce it by 1 wei
-        reserveX_ = findRootNewX(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
-    }
-
-    function solveY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256 sigma_, uint256 tau_)
-        public
-        pure
-        returns (uint256 reserveY_)
-    {
-        bytes memory args = abi.encode(reserveX_, liquidity, strike_, sigma_, tau_);
-        uint256 initialGuess = computeY(reserveX_, liquidity, strike_, sigma_, tau_);
-        // at maturity the `initialGuess` will == LK (K == WAD, K*L == L) therefore we must reduce it by 1 wei
-        console2.log("initialGuess y", initialGuess);
-        reserveY_ = findRootNewY(args, tau_ != 0 ? initialGuess : initialGuess - 1, 20, 10);
-    }
-
-    function solveL(PoolPreCompute memory comp, uint256 initialLiquidity, uint256 reserveY_, uint256 sigma_)
-        public
-        pure
-        returns (uint256 liquidity_)
-    {
-        console2.log("prev liquidity", initialLiquidity);
-        bytes memory args = abi.encode(comp.reserveInAsset, reserveY_, comp.strike_, sigma_, comp.tau_);
-        uint256 initialGuess =
-            computeLGivenYK(comp.reserveInAsset, reserveY_, initialLiquidity, comp.strike_, sigma_, comp.tau_);
-        console2.log("initial guess", initialGuess);
-        liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 10);
-        console2.log("new liquidity", liquidity_);
-    }
-
-    function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
-        public
-        pure
-        returns (uint256 L)
-    {
-        L = initialGuess;
-        int256 L_next;
-        int256 toleranceInt = int256(tolerance);
-        for (uint256 i = 0; i < maxIterations; i++) {
-            int256 dfx = computeTfDL(args, L);
-            int256 fx = findL(args, L);
-
-            if (dfx == 0) {
-                // Handle division by zero
-                break;
-            }
-            L_next = int256(L) - (fx * 1e18) / dfx;
-
-            int256 diff = int256(L) - L_next;
-            if (diff <= toleranceInt && diff >= -toleranceInt || fx <= toleranceInt && fx >= -toleranceInt) {
-                L = uint256(L_next);
-                break;
-            }
-
-            L = uint256(L_next);
-        }
-    }
-
-    function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
-        public
-        pure
-        returns (uint256 reserveX_)
-    {
-        reserveX_ = initialGuess;
-        int256 reserveX_next;
-        for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("iters x", i);
-            int256 dfx = computeTfDReserveX(args, reserveX_);
-            int256 fx = findX(args, reserveX_);
-
-            if (dfx == 0) {
-                // Handle division by zero
-                break;
-            }
-
-            reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
-
-            if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
-                reserveX_ = uint256(reserveX_next);
-                console2.log("terminal reserveX_", reserveX_);
-                break;
-            }
-
-            reserveX_ = uint256(reserveX_next);
-        }
-    }
-
-    function findRootNewY(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
-        public
-        pure
-        returns (uint256 reserveY_)
-    {
-        reserveY_ = initialGuess;
-        int256 reserveY_next;
-        for (uint256 i = 0; i < maxIterations; i++) {
-            console2.log("iters y", i);
-            int256 fx = findY(args, reserveY_);
-            int256 dfx = computeTfDReserveY(args, reserveY_);
-
-            if (dfx == 0) {
-                // Handle division by zero
-                break;
-            }
-
-            reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
-
-            if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
-                reserveY_ = uint256(reserveY_next);
-                console2.log("terminal reserveY_", reserveY_);
-                break;
-            }
-
-            reserveY_ = uint256(reserveY_next);
-        }
-    }
-
-    function computeTfDL(bytes memory args, uint256 L) public pure returns (int256) {
-        (uint256 rX, uint256 rY, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
-        int256 x = int256(rX);
-        int256 y = int256(rY);
-        int256 mu = int256(K);
-        int256 L_squared = int256(L.mulWadDown(L));
-
-        int256 a = Gaussian.ppf(int256(rX.divWadUp(L)));
-        int256 b = Gaussian.ppf(int256(rY.divWadUp(L.mulWadUp(K))));
-
-        int256 pdf_a = Gaussian.pdf(a);
-        int256 pdf_b = Gaussian.pdf(b);
-
-        int256 term1 = x * 1 ether / (int256(L_squared) * (pdf_a) / 1 ether);
-
-        int256 term2a = mu * int256(L_squared) / 1 ether;
-        int256 term2b = term2a * pdf_b / 1 ether;
-        int256 term2 = y * 1 ether / term2b;
-
-        return -term1 - term2;
-    }
-
-    function computeTfDReserveX(bytes memory args, uint256 rX) public pure returns (int256) {
-        (, uint256 L,,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
-        int256 a = Gaussian.ppf(toInt(rX * 1e18 / L));
-        int256 pdf_a = Gaussian.pdf(a);
-        int256 result = 1e36 / (int256(L) * pdf_a / 1e18);
-        return result;
-    }
-
-    function computeTfDReserveY(bytes memory args, uint256 rY) public pure returns (int256) {
-        (, uint256 L, uint256 K,,) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
-        int256 KL = int256(K * L / 1e18);
-        int256 a = Gaussian.ppf(int256(rY) * 1e18 / KL);
-        int256 pdf_a = Gaussian.pdf(a);
-        int256 result = 1e36 / (KL * pdf_a / 1e18);
-        return result;
     }
 
     function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
@@ -891,62 +590,5 @@ contract RMM is ERC20 {
     function mintPtYt(uint256 amount, address to) internal returns (uint256 amountPY) {
         SY.transfer(address(YT), amount);
         amountPY = YT.mintPY(to, to);
-    }
-
-}
-
-// utils
-
-/// @dev Computes the scalar to multiply to convert between WAD and native units.
-function scalar(address token) view returns (uint256) {
-    uint256 decimals = Token(token).decimals();
-    uint256 difference = 18 - decimals;
-    return FixedPointMathLib.WAD * 10 ** difference;
-}
-
-/// @dev Converts native decimal amount to WAD amount, rounding down.
-function upscale(uint256 amount, uint256 scalingFactor) pure returns (uint256) {
-    return FixedPointMathLib.mulWadDown(amount, scalingFactor);
-}
-
-/// @dev Converts a WAD amount to a native DECIMAL amount, rounding down.
-function downscaleDown(uint256 amount, uint256 scalar_) pure returns (uint256) {
-    return FixedPointMathLib.divWadDown(amount, scalar_);
-}
-
-/// @dev Converts a WAD amount to a native DECIMAL amount, rounding up.
-function downscaleUp(uint256 amount, uint256 scalar_) pure returns (uint256) {
-    return FixedPointMathLib.divWadUp(amount, scalar_);
-}
-
-/// @dev Casts a positived signed integer to an unsigned integer, reverting if `x` is negative.
-function toUint(int256 x) pure returns (uint256) {
-    require(x >= 0, "toUint: negative");
-    return uint256(x);
-}
-
-function abs(int256 x) pure returns (int256) {
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
-}
-
-/// @dev Casts an unsigned integer to a signed integer, reverting if `x` is too large.
-function toInt(uint256 x) pure returns (int256) {
-    // Safe cast below because `type(int256).max` is positive.
-    require(x <= uint256(type(int256).max), "toInt: overflow");
-    return int256(x);
-}
-
-/// @dev Sums an unsigned integer with a signed integer, reverting if the result overflows.
-function sum(uint256 a, int256 b) pure returns (uint256) {
-    if (b < 0) {
-        require(a >= uint256(-b), "sum: underflow");
-        return a - uint256(-b);
-    } else {
-        require(a + uint256(b) >= a, "sum: overflow");
-        return a + uint256(b);
     }
 }

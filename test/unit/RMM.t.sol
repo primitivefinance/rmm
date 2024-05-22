@@ -18,6 +18,8 @@ import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleY
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
 
+import "../../src/lib/RmmLib.sol";
+
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
 uint256 constant PT_SLOT = 0 + offset;
@@ -190,7 +192,7 @@ contract RMMTest is Test {
     // todo: improve test
     function test_basic_solve_y() public basic {
         uint256 deltaX = 1 ether;
-        uint256 computedYGivenXAdjustment = subject().computeY(
+        uint256 computedYGivenXAdjustment = computeY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
             subject().strike(),
@@ -199,7 +201,7 @@ contract RMMTest is Test {
         );
         console2.log("computedYGivenXAdjustment", computedYGivenXAdjustment);
 
-        uint256 nextReserveY = subject().solveY(
+        uint256 nextReserveY = solveY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
             subject().strike(),
@@ -229,7 +231,7 @@ contract RMMTest is Test {
         console2.log("proportionalLGivenX", proportionalLGivenX);
         console2.log("proportionalLGivenY", proportionalLGivenY);
 
-        uint256 computedXGivenYAdjustment = subject().computeX(
+        uint256 computedXGivenYAdjustment = computeX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
             subject().strike(),
@@ -238,7 +240,7 @@ contract RMMTest is Test {
         );
         console2.log("computedXGivenYAdjustment", computedXGivenYAdjustment);
 
-        uint256 nextReserveX = subject().solveX(
+        uint256 nextReserveX = solveX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
             subject().strike(),
