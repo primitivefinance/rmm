@@ -40,11 +40,10 @@ contract RMM is ERC20 {
 
     uint256 public initTimestamp; // slot 16
     uint256 public lastTimestamp; // slot 17
+    uint256 public lastImpliedPrice; // slot 18
 
-    address public curator; // slot 18
-    uint256 public lock_ = 1; // slot 19
-
-    uint256 public lastImpliedPrice; // slot 20
+    address public curator; // slot 19
+    uint256 public lock_ = 1; // slot 20
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -130,27 +129,6 @@ contract RMM is ERC20 {
             maturity,
             curator_
         );
-    }
-
-    /// @dev Allows an arbitrary adjustment to the reserves and liquidity, if it is valid.
-    function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity) external lock {
-        uint256 feeAmount;
-        PYIndex index = YT.newIndex();
-
-        // Deallocating
-        if (deltaLiquidity < 0) {
-            if (deltaY > 0 && deltaX <= 0) {
-                feeAmount = toUint(deltaY).mulWadUp(fee);
-            } else if (deltaX > 0 && deltaY <= 0) {
-                feeAmount = toUint(deltaX).mulWadUp(fee);
-            }
-        }
-
-        _adjust(deltaX, deltaY, deltaLiquidity, strike, index);
-        if (deltaX < 0) _credit(address(SY), msg.sender, uint256(-deltaX), 0, "");
-        if (deltaY < 0) _credit(address(PT), msg.sender, uint256(-deltaY), 0, "");
-        if (deltaX > 0) _debit(address(SY), uint256(deltaX));
-        if (deltaY > 0) _debit(address(PT), uint256(deltaY));
     }
 
     /// @dev Applies an adjustment to the reserves, liquidity, and last timestamp before validating it with the trading function.
