@@ -196,10 +196,9 @@ contract InvariantTest is Test {
         vm.warp(0);
         handler = new InvariantHandler();
         targetContract(address(handler));
-        bytes4[] memory selectors = new bytes4[](4);
+        bytes4[] memory selectors = new bytes4[](3);
         selectors[0] = handler.handle_sanity.selector;
         selectors[1] = handler.handle_init.selector;
-        // selectors[2] = handler.handle_adjust.selector;
         selectors[2] = handler.handle_allocate.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         rmm = handler.rmm();

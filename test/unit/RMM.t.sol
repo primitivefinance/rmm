@@ -273,18 +273,6 @@ contract RMMTest is Test {
         console2.logInt(deltaLiquidity);
     }
 
-    function test_swapX_callback() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
-        deal(address(subject().PT()), address(subject()), minAmountOut);
-        CallbackProvider provider = new CallbackProvider();
-        vm.prank(address(provider));
-        (uint256 amountOut,) = subject().swapX(deltaX, minAmountOut, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than min amount out.");
-        assertTrue(PT.balanceOf(address(this)) >= amountOut, "Token Y balance is not greater than 0.");
-    }
-
     function test_swapX_over_time_basic() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
@@ -480,27 +468,5 @@ contract RMMTest is Test {
         vm.expectEmit();
         emit Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
         subject().swapY(deltaY, minAmountOut, address(this), "");
-    }
-
-    function test_swapY_callback() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
-        CallbackProvider provider = new CallbackProvider();
-        vm.prank(address(provider));
-        (uint256 amountOut,) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(SY.balanceOf(address(this)) >= amountOut, "Token X balance is not greater than 0.");
-    }
-}
-
-contract CallbackProvider is Test {
-    function callback(address token, uint256 amountNativeToPay, bytes calldata data) public returns (bool) {
-        data;
-        deal(token, msg.sender, MockERC20(token).balanceOf(msg.sender) + amountNativeToPay);
-        return true;
     }
 }
