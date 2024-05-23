@@ -132,8 +132,8 @@ contract ForkRMMTest is Test {
             priceX: price,
             amountX: uint256(ms.totalSy - 100 ether),
             strike_: uint256(mp.rateAnchor),
-            sigma_: 0.03 ether,
-            fee_: 0.0002 ether,
+            sigma_: 0.025 ether,
+            fee_: 0.0003 ether,
             curator_: address(0x55)
         });
         console2.log("tau", subject().futureTau(block.timestamp));
@@ -154,10 +154,10 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
     }
 
@@ -165,7 +165,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
         uint256 balanceSyBefore = SY.balanceOf(address(this));
-        subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        subject().prepareSwapY(deltaY, block.timestamp, index);
         (uint256 amtOut,) = subject().swapY(deltaY, 0, address(this), "");
         console2.log("amtOut", amtOut);
 
@@ -197,7 +197,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().prepareSwapX(deltaX, block.timestamp, index);
         subject().swapX(deltaX, 0, address(this), "");
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
@@ -206,7 +206,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        subject().prepareSwapX(deltaX, block.timestamp, index);
         subject().swapX(deltaX, 0, address(this), "");
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
@@ -249,16 +249,6 @@ contract ForkRMMTest is Test {
         // assertEq(sharesOut, expectedShares, "Minting with ETH did not return the expected amount of shares.");
     }
 
-    function test_pt_flash_swap_calculation() public basic_sy {
-        PYIndex index = YT.newIndex();
-        uint256 rPT = subject().reserveX();
-        uint256 rSY = subject().reserveY();
-        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        console2.log("ytOut", ytOut);
-        console2.log("rPT", rPT);
-        console2.log("rSY", rSY);
-    }
-
     function test_pt_flash_swap_changes_balances() public basic_sy {
         SY.transfer(address(0x55), SY.balanceOf(address(this)));
         PT.transfer(address(0x55), PT.balanceOf(address(this)));
@@ -268,7 +258,6 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
         uint256 rSY = subject().reserveY();
-        // vm.warp(block.timestamp + 10 days);
         console2.log("SY balance before", SY.balanceOf(address(this)));
         uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
         console2.log("ytOut", ytOut);
@@ -301,61 +290,76 @@ contract ForkRMMTest is Test {
         (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
 
         // assert balance of address(this) is 0 for SY, PT, and YT
-        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
-        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance of address(this) is not 0.");
-    }
-
-    function callback(address token, uint256 amount, bytes calldata) external returns (bool) {
-        console2.log("SYBalance after", SY.balanceOf(address(this)));
-        uint256 amountPY = mintPtYt(SY.balanceOf(address(this)));
-        console2.log("amountPY", amountPY);
-        PT.transfer(msg.sender, amountPY);
-        return true;
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance at the end of the test is not 0.");
+        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not 0.");
     }
 
     function test_approx_sy_pendle() public basic_sy {
         (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
         console2.log("market sy", ms.totalSy);
         console2.log("market pt", ms.totalPt);
+        vm.warp(block.timestamp + 30 days);
+        int256 rateAnchor = getPendleRateAnchor();
         ApproxParams memory approx =
             ApproxParams({guessMin: 1 ether, guessMax: 500 ether, guessOffchain: 0, maxIteration: 256, eps: 10_000});
         (uint256 netYtOutMarket,) = ms.approxSwapExactSyForYt(YT.newIndex(), 1 ether, block.timestamp, approx);
         console2.log("netYtOutMarket", netYtOutMarket);
+        console2.log("rateAnchor", rateAnchor);
     }
 
-    function test_pendle_exchangeRate_over_time() public basic_sy {
-        int256 rate1 = getExchangeRateFromImplied();
+    function test_pt_flash_swap_calculation() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 rPT = subject().reserveX();
+        uint256 rSY = subject().reserveY();
+        vm.warp(block.timestamp + 30 days);
+        uint256 k = getRmmStrikePrice();
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        console2.log("k", k);
+        console2.log("ytOut", ytOut);
+        console2.log("rPT", rPT);
+        console2.log("rSY", rSY);
+    }
+
+    function test_pendle_rateAnchor_over_time() public basic_sy {
+        int256 rate1 = getPendleRateAnchor();
         vm.warp(block.timestamp + 10 days);
-        int256 rate2 = getExchangeRateFromImplied();
+        int256 rate2 = getPendleRateAnchor();
+        console2.log("rate1", rate1);
+        console2.log("rate2", rate2);
         console2.log("rate1 - rate2", rate1 - rate2);
     }
 
     function test_rmm_k_over_time() public basic_sy {
-        uint256 k1 = getKFromImplied();
-        vm.warp(block.timestamp + 50 days);
-        uint256 k2 = getKFromImplied();
+        uint256 k1 = getRmmStrikePrice();
+        vm.warp(block.timestamp + 10 days);
+        uint256 k2 = getRmmStrikePrice();
         console2.log("k1", k1);
         console2.log("k2", k2);
         console2.log("k1 - k2", k1 - k2);
     }
 
-    function getExchangeRateFromImplied() public returns (int256 rate) {
-        MarketState memory mkt = market.readState(address(router));
-        console2.log("time to expiry", mkt.expiry - block.timestamp);
-        uint256 rt = (mkt.lastLnImpliedRate * (mkt.expiry - block.timestamp)) / impliedRateTime;
-        console2.log("lnImpliedRate", mkt.lastLnImpliedRate);
-        console2.log("rt", rt);
-
-        rate = int256(rt).expWad();
-        console2.log("exchangeRate", rate);
+    function test_diff_k_rateAnchor_over_time() public basic_sy {
+        uint256 k1 = getRmmStrikePrice();
+        int256 rate1 = getPendleRateAnchor();
+        vm.warp(block.timestamp + 10 days);
+        uint256 k2 = getRmmStrikePrice();
+        int256 rate2 = getPendleRateAnchor();
+        console2.log("k1", k1);
+        console2.log("rate1", rate1);
+        console2.log("k2", k2);
+        console2.log("rate2", rate2);
+        console2.log("k1 - k2", k1 - k2);
+        console2.log("rate1 - rate2", rate1 - rate2);
     }
 
-    function getKFromImplied() public returns (uint256 k) {
+    function getPendleRateAnchor() public returns (int256 rateAnchor) {
+        (, MarketPreCompute memory mp) = getPendleMarketData();
+        rateAnchor = mp.rateAnchor;
+    }
+
+    function getRmmStrikePrice() public returns (uint256 k) {
         PYIndex index = YT.newIndex();
         PoolPreCompute memory comp = subject().preparePoolPreCompute(index, block.timestamp);
-        console2.log("k", comp.strike_);
         k = comp.strike_;
     }
-
-    function computeRateAnchor() public returns (uint256 rateAnchor) {}
 }

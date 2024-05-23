@@ -225,8 +225,7 @@ contract RMMTest is Test {
     function test_basic_solve_x() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        (,, uint256 approximatedDeltaY,,) =
-            subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 approximatedDeltaY,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
 
         uint256 proportionalLGivenX = deltaX * subject().totalLiquidity() / subject().reserveX();
         uint256 proportionalLGivenY = approximatedDeltaY * subject().totalLiquidity() / subject().reserveY();
@@ -276,7 +275,7 @@ contract RMMTest is Test {
     function test_swapX_over_time_basic() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         deal(address(subject().PT()), address(subject()), 1 ether);
         deal(address(subject().SY()), address(this), deltaX);
         SY.approve(address(subject()), deltaX);
@@ -337,7 +336,7 @@ contract RMMTest is Test {
     function test_swapX_basic() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
         deal(address(SY), address(this), deltaX);
         SY.approve(address(subject()), deltaX);
@@ -376,7 +375,7 @@ contract RMMTest is Test {
     function test_swapX_reverts_InsufficientOutput() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
         deal(address(SY), address(this), deltaX);
         SY.approve(address(subject()), deltaX);
@@ -392,8 +391,7 @@ contract RMMTest is Test {
     function test_swapX_event() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) =
-            subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
+        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapX(deltaX, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
         deal(address(SY), address(this), deltaX);
         SY.approve(address(subject()), deltaX);
@@ -406,7 +404,7 @@ contract RMMTest is Test {
     function test_swapY() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapY(deltaY, block.timestamp, index);
         deal(address(SY), address(subject()), minAmountOut);
         deal(address(PT), address(this), deltaY);
         PT.approve(address(subject()), deltaY);
@@ -443,7 +441,7 @@ contract RMMTest is Test {
     function test_swapY_reverts_InsufficientOutput() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapY(deltaY, block.timestamp, index);
 
         mintSY(minAmountOut);
         mintPtYt(deltaY);
@@ -459,8 +457,7 @@ contract RMMTest is Test {
     function test_swapY_event() public basic {
         PYIndex index = YT.newIndex();
         uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) =
-            subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
+        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapY(deltaY, block.timestamp, index);
         deal(address(SY), address(subject()), minAmountOut);
         deal(address(PT), address(this), deltaY);
         PT.approve(address(subject()), deltaY);

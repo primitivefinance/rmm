@@ -199,6 +199,36 @@ function solveL(PoolPreCompute memory comp, uint256 initialLiquidity, uint256 re
     liquidity_ = findRootNewLiquidity(args, initialGuess, 20, 10);
 }
 
+function computeDeltaLXIn(
+    uint256 amountIn,
+    uint256 reserveX,
+    uint256 reserveY,
+    uint256 totalLiquidity,
+    uint256 swapFee,
+    uint256 strike,
+    uint256 sigma,
+    uint256 tau
+) pure returns (uint256 deltaL) {
+    uint256 fees = swapFee.mulWadUp(amountIn);
+    uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
+    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+}
+
+function computeDeltaLYIn(
+    uint256 amountIn,
+    uint256 reserveX,
+    uint256 reserveY,
+    uint256 totalLiquidity,
+    uint256 swapFee,
+    uint256 strike,
+    uint256 sigma,
+    uint256 tau
+) pure returns (uint256 deltaL) {
+    uint256 fees = swapFee.mulWadUp(amountIn);
+    uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
+    deltaL = totalLiquidity.mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+}
+
 function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
     pure
     returns (uint256 L)

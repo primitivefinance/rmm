@@ -129,8 +129,7 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
         PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwap(address(SY), address(PT), amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -153,8 +152,7 @@ contract RMM is ERC20 {
         uint256 strike_;
         uint256 delta;
         PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwap(address(PT), address(SY), amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -303,18 +301,20 @@ contract RMM is ERC20 {
         return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
     }
 
-    function computeKGivenLastPrice() public view returns (uint256) {
+    function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
+        public
+        view
+        returns (uint256)
+    {
         int256 timeToExpiry = int256(maturity - block.timestamp);
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
-        int256 rate = rt.expWad();
-        return uint256(rate);
-        // uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
-        // // // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        // int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
-        // int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
-        // return uint256(rate).divWadDown(uint256(exp));
+        int256 lastPrice = rt.expWad();
 
-        // return uint256(int256(lastImpliedPrice).powWad(int256(tau_))).divWadDown(uint256(exp));
+        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        // // $$\Phi^{-1} (1 - \frac{x}{L})$$
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
+        return uint256(lastPrice).divWadDown(uint256(exp));
     }
 
     function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
@@ -326,7 +326,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwap(address(PT), address(SY), guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapY(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
@@ -356,36 +356,53 @@ contract RMM is ERC20 {
         totalLiquidity_ = solveL(comp, initialLiquidity, amountY, sigma_);
     }
 
-    function prepareSwap(address tokenIn, address tokenOut, uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapX(uint256 amountIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
-        if (tokenIn != address(SY) && tokenIn != address(PT)) revert("Invalid tokenIn");
-        if (tokenOut != address(SY) && tokenOut != address(PT)) revert("Invalid tokenOut");
+        amountInWad = upscale(amountIn, scalar(address(SY)));
+        // convert amountIn to assetIn, only for swapping X in
+        uint256 amountInAsset = index.syToAsset(amountIn);
 
-        bool xIn = tokenIn == address(SY);
-        amountInWad = xIn ? upscale(amountIn, scalar(address(SY))) : upscale(amountIn, scalar(address(PT)));
-        uint256 feeAmount = amountInWad.mulWadUp(fee);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
-        uint256 nextLiquidity;
-        uint256 nextReserve;
-        if (xIn) {
-            comp.reserveInAsset += index.syToAsset(feeAmount);
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY, sigma);
-            comp.reserveInAsset -= index.syToAsset(feeAmount);
-            nextReserve = solveY(
-                comp.reserveInAsset + index.syToAsset(amountInWad), nextLiquidity, comp.strike_, sigma, comp.tau_
-            );
-            amountOutWad = reserveY - nextReserve;
-        } else {
-            nextLiquidity = solveL(comp, totalLiquidity, reserveY + feeAmount, sigma);
-            nextReserve = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
-            amountOutWad = reserveX - index.assetToSy(nextReserve);
-        }
+        // compute liquidity
+        uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+        uint256 nextLiquidity = computeDeltaLXIn(
+            amountInAsset, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+        ) + computedL;
+
+        // compute reserves in asset
+        uint256 nextReserveY =
+            solveY(comp.reserveInAsset + amountInAsset, nextLiquidity, comp.strike_, sigma, comp.tau_);
+
+        amountOutWad = reserveY - nextReserveY;
+        amountOut = downscaleDown(amountOutWad, scalar(address(PT)));
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
-        amountOut = downscaleDown(amountOutWad, xIn ? scalar(address(PT)) : scalar(address(SY)));
+    }
+
+    function prepareSwapY(uint256 amountIn, uint256 timestamp, PYIndex index)
+        public
+        view
+        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
+    {
+        amountInWad = upscale(amountIn, scalar(address(PT)));
+        PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+
+        // compute liquidity
+        uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+        uint256 nextLiquidity = computeDeltaLYIn(
+            amountIn, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+        ) + computedL;
+
+        // compute reserves
+        uint256 nextReserveX = solveX(reserveY + amountIn, nextLiquidity, comp.strike_, sigma, comp.tau_);
+
+        amountOutWad = reserveX - index.assetToSy(nextReserveX);
+        amountOut = downscaleDown(amountOutWad, scalar(address(SY)));
+        strike_ = comp.strike_;
+        deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
@@ -427,7 +444,7 @@ contract RMM is ERC20 {
     function preparePoolPreCompute(PYIndex index, uint256 blockTime) public view returns (PoolPreCompute memory) {
         uint256 tau_ = futureTau(blockTime);
         uint256 totalAsset = index.syToAsset(reserveX);
-        uint256 strike_ = computeKGivenLastPrice();
+        uint256 strike_ = computeKGivenLastPrice(totalAsset, totalLiquidity, sigma, tau_);
         return PoolPreCompute(totalAsset, strike_, tau_);
     }
 
