@@ -155,10 +155,10 @@ contract ForkRMMTest is Test {
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(address(SY), deltaX, 0, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
         (,, minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (amountOut, deltaLiquidity) = subject().swapX(address(SY), deltaX, 0, address(this), "");
+        (amountOut, deltaLiquidity) = subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
     }
 
     function test_swap_y() public basic_sy {
@@ -198,7 +198,7 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
         subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(address(SY), deltaX, 0, address(this), "");
+        subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
 
@@ -207,7 +207,7 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
         subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(address(SY), deltaX, 0, address(this), "");
+        subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
             1 ether,
@@ -361,5 +361,48 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         PoolPreCompute memory comp = subject().preparePoolPreCompute(index, block.timestamp);
         k = comp.strike_;
+    }
+
+    function test_swapX_usingIbToken() public basic_sy {
+        uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));
+        uint256 deltaX = 1 ether;
+        uint256 minSYMinted = SY.previewDeposit(address(wstETH), deltaX);
+        subject().swapX(address(wstETH), minSYMinted, deltaX, 0, address(this), "");
+        uint256 wstethBalanceAfter = IERC20(wstETH).balanceOf(address(this));
+        assertTrue(
+            wstethBalanceAfter < wstethBalanceInitial, "wstETH balance after swap is not greater than initial balance."
+        );
+        assertTrue(
+            wstethBalanceInitial - 1e18 == wstethBalanceAfter,
+            "wstETH balance after swap is not 1e18 less than initial balance."
+        );
+    }
+
+    function test_swapX_usingNativeToken() public basic_sy {
+        uint256 balanceEthInitial = address(this).balance;
+        uint256 deltaX = 1 ether;
+        uint256 minSYMinted = SY.previewDeposit(address(0), deltaX);
+        subject().swapX{value: deltaX}(address(0), minSYMinted, deltaX, 0, address(this), "");
+        uint256 balanceEthAfter = address(this).balance;
+        assertTrue(balanceEthAfter < balanceEthInitial, "wstETH balance after swap is not less than initial balance.");
+        assertTrue(
+            balanceEthInitial - 1e18 == balanceEthAfter,
+            "wstETH balance after swap is not 1e18 less than initial balance."
+        );
+    }
+
+    function test_swapX_usingWETH() public basic_sy {
+        deal(subject().WETH(), address(this), 1 ether);
+        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+        uint256 balanceWethInitial = IERC20(subject().WETH()).balanceOf(address(this));
+        uint256 deltaX = 1 ether;
+        uint256 minSYMinted = SY.previewDeposit(address(subject().WETH()), deltaX);
+        subject().swapX(address(subject().WETH()), minSYMinted, deltaX, 0, address(this), "");
+        uint256 balanceWethAfter = IERC20(subject().WETH()).balanceOf(address(this));
+        assertTrue(balanceWethAfter < balanceWethInitial, "wstETH balance after swap is not less than initial balance.");
+        assertTrue(
+            balanceWethInitial - 1e18 == balanceWethAfter,
+            "wstETH balance after swap is not 1e18 less than initial balance."
+        );
     }
 }

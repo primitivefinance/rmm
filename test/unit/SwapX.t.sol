@@ -19,7 +19,7 @@ contract SwapXTest is SetUp {
         uint256 preReserveX = rmm.reserveX();
         uint256 preReserveY = rmm.reserveY();
 
-        (uint256 amountOut,) = rmm.swapX(address(SY), amountIn, minAmountOut, address(this), "");
+        (uint256 amountOut,) = rmm.swapX(address(SY), 0, amountIn, minAmountOut, address(this), "");
 
         assertEq(rmm.reserveX(), preReserveX + amountIn);
         assertEq(rmm.reserveY(), preReserveY - amountOut);
@@ -39,7 +39,7 @@ contract SwapXTest is SetUp {
         uint256 preBalanceX = SY.balanceOf(address(this));
         uint256 preBalanceY = PT.balanceOf(address(this));
 
-        (uint256 amountOut,) = rmm.swapX(address(SY), amountIn, minAmountOut, address(this), "");
+        (uint256 amountOut,) = rmm.swapX(address(SY), 0, amountIn, minAmountOut, address(this), "");
 
         assertEq(preBalanceX - amountIn, SY.balanceOf(address(this)));
         assertEq(preBalanceY + amountOut, PT.balanceOf(address(this)));
@@ -58,7 +58,7 @@ contract SwapXTest is SetUp {
         vm.expectEmit(true, true, true, true);
 
         emit Swap(address(this), address(this), address(SY), address(PT), amountIn, minAmountOut, deltaLiquidity);
-        rmm.swapX(address(SY), amountIn, minAmountOut, address(this), "");
+        rmm.swapX(address(SY), 0, amountIn, minAmountOut, address(this), "");
     }
 
     function test_swapX_RevertsWhenInsufficientOutput() public initDefaultPool dealSY(address(this), 1_000 ether) {
@@ -70,6 +70,6 @@ contract SwapXTest is SetUp {
         uint256 amountIn = 1 ether;
         (,, uint256 minAmountOut,,) = rmm.prepareSwapX(amountIn, block.timestamp, index);
         vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, amountIn, minAmountOut + 1, minAmountOut));
-        rmm.swapX(address(SY), amountIn, minAmountOut + 1, address(this), "");
+        rmm.swapX(address(SY), 0, amountIn, minAmountOut + 1, address(this), "");
     }
 }

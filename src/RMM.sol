@@ -124,17 +124,20 @@ contract RMM is ERC20 {
     }
 
     /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
-    function swapX(address tokenIn, uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
-        external
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
+    function swapX(
+        address tokenIn,
+        uint256 minSYMinted,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address to,
+        bytes calldata data
+    ) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
         if (tokenIn != address(SY)) {
-            amountIn = mintSY(msg.sender, tokenIn, amountIn, index.assetToSyUp(amountIn));
+            amountIn = mintSY(msg.sender, tokenIn, amountIn, minSYMinted);
         }
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
 
