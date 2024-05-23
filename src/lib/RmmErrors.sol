@@ -21,5 +21,7 @@ error InvalidDecimals(address token, uint256 decimals);
 error OutOfRange(int256 initial, int256 terminal);
 /// @dev Thrown when a payment to or from the user returns false or no data.
 error PaymentFailed(address token, address from, address to, uint256 amount);
+/// @dev Thrown when a token passed to `mintSY` is not valid
+error InvalidTokenIn(address tokenIn);
 /// @dev Thrown when an external call is made within the same frame as another.
 error Reentrancy();

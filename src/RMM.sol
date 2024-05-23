@@ -146,7 +146,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
-    function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
+    function swapY(uint256 tokenIn, uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
@@ -490,6 +490,9 @@ contract RMM is ERC20 {
         payable
         returns (uint256 amountOut)
     {
+        if (!SY.isValidTokenIn(tokenIn)) {
+            revert InvalidTokenIn(tokenIn);
+        }
         if (tokenIn == address(0)) {
             amountOut =
                 SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
