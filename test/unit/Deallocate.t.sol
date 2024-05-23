@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 import {PYIndex} from "./../../src/RMM.sol";
 import {SetUp, RMM} from "./SetUp.sol";
+import {Deallocate} from "../../src/lib/RmmEvents.sol";
+import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 contract DeallocateTest is SetUp {
     function test_deallocate_BurnsLiquidity() public initDefaultPool dealSY(address(this), 1_000 ether) {
@@ -66,7 +68,7 @@ contract DeallocateTest is SetUp {
         (deltaXWad, deltaYWad, lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
 
         vm.expectEmit(true, true, true, true);
-        emit RMM.Deallocate(address(this), address(this), deltaXWad, deltaYWad, deltaLiquidity / 2);
+        emit Deallocate(address(this), address(this), deltaXWad, deltaYWad, deltaLiquidity / 2);
         rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
     }
 
@@ -82,7 +84,7 @@ contract DeallocateTest is SetUp {
 
         (deltaXWad, deltaYWad, lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
         vm.expectRevert(
-            abi.encodeWithSelector(RMM.InsufficientOutput.selector, deltaLiquidity / 2, deltaXWad + 1, deltaXWad)
+            abi.encodeWithSelector(InsufficientOutput.selector, deltaLiquidity / 2, deltaXWad + 1, deltaXWad)
         );
         rmm.deallocate(deltaLiquidity / 2, deltaXWad + 1, 0, address(this));
     }
@@ -99,7 +101,7 @@ contract DeallocateTest is SetUp {
 
         (deltaXWad, deltaYWad, lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
         vm.expectRevert(
-            abi.encodeWithSelector(RMM.InsufficientOutput.selector, deltaLiquidity / 2, deltaYWad + 1, deltaYWad)
+            abi.encodeWithSelector(InsufficientOutput.selector, deltaLiquidity / 2, deltaYWad + 1, deltaYWad)
         );
         rmm.deallocate(deltaLiquidity / 2, 0, deltaYWad + 1, address(this));
     }

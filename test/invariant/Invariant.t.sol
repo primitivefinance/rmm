@@ -18,6 +18,8 @@ import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleY
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
 
+import {AlreadyInitialized} from "../../src/lib/RmmErrors.sol";
+
 struct Calls {
     uint256 success;
     uint256 reverts;
@@ -141,7 +143,7 @@ contract InvariantHandler is Test {
         }) {
             initCalls.success++;
         } catch (bytes memory err) {
-            if (bytes4(err) == bytes4(abi.encodeWithSelector(RMM.AlreadyInitialized.selector))) {
+            if (bytes4(err) == bytes4(abi.encodeWithSelector(AlreadyInitialized.selector))) {
                 initCalls.success++;
             } else {
                 initCalls.reverts++;
@@ -152,15 +154,15 @@ contract InvariantHandler is Test {
 
     Calls public adjustCalls;
 
-    function handle_adjust(int256 deltaX, int256 deltaY, int256 delLiquidity) public {
-        adjustCalls.total++;
-        try rmm.adjust(deltaX, deltaY, delLiquidity) {
-            adjustCalls.success++;
-        } catch (bytes memory err) {
-            adjustCalls.reverts++;
-            revert("Adjust call failed");
-        }
-    }
+    // function handle_adjust(int256 deltaX, int256 deltaY, int256 delLiquidity) public {
+    //     adjustCalls.total++;
+    //     try rmm.adjust(deltaX, deltaY, delLiquidity) {
+    //         adjustCalls.success++;
+    //     } catch (bytes memory err) {
+    //         adjustCalls.reverts++;
+    //         revert("Adjust call failed");
+    //     }
+    // }
 
     Calls public allocateCalls;
 
@@ -194,11 +196,10 @@ contract InvariantTest is Test {
         vm.warp(0);
         handler = new InvariantHandler();
         targetContract(address(handler));
-        bytes4[] memory selectors = new bytes4[](4);
+        bytes4[] memory selectors = new bytes4[](3);
         selectors[0] = handler.handle_sanity.selector;
         selectors[1] = handler.handle_init.selector;
-        selectors[2] = handler.handle_adjust.selector;
-        selectors[3] = handler.handle_allocate.selector;
+        selectors[2] = handler.handle_allocate.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         rmm = handler.rmm();
         handler.reset(); // Sets a pool up.

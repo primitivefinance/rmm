@@ -2,6 +2,8 @@
 pragma solidity ^0.8.13;
 
 import {SetUp, RMM, InitParams} from "./SetUp.sol";
+import {Init} from "../../src/lib/RmmEvents.sol";
+import {AlreadyInitialized} from "../../src/lib/RmmErrors.sol";
 
 contract InitTest is SetUp {
     function test_init_StoresInitParams() public {
@@ -125,7 +127,7 @@ contract InitTest is SetUp {
 
         vm.expectEmit(true, true, true, true);
 
-        emit RMM.Init(
+        emit Init(
             address(this),
             address(SY),
             address(PT),
@@ -153,7 +155,7 @@ contract InitTest is SetUp {
     function test_init_RevertsIfAlreadyInitialized() public initDefaultPool {
         InitParams memory initParams = getDefaultParams();
 
-        vm.expectRevert(RMM.AlreadyInitialized.selector);
+        vm.expectRevert(AlreadyInitialized.selector);
 
         rmm.init(
             initParams.PT,

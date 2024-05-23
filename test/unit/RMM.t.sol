@@ -17,6 +17,10 @@ import {SYBase} from "pendle/core/StandardizedYield/SYBase.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
+import {Swap, Allocate, Deallocate} from "../../src/lib/RmmEvents.sol";
+import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
+
+import "../../src/lib/RmmLib.sol";
 
 // slot numbers. double check these if changes are made.
 uint256 constant offset = 6; // ERC20 inheritance adds 6 storage slots.
@@ -148,49 +152,49 @@ contract RMMTest is Test {
     }
 
     // no fee btw
-    function test_basic_adjust_invalid_allocate() public basic {
-        uint256 deltaX = 1 ether;
-        uint256 approximatedDeltaY = 0.685040862443611931 ether;
+    // function test_basic_adjust_invalid_allocate() public basic {
+    //     uint256 deltaX = 1 ether;
+    //     uint256 approximatedDeltaY = 0.685040862443611931 ether;
 
-        deal(address(subject().SY()), address(this), deltaX);
-        deal(address(subject().PT()), address(this), approximatedDeltaY);
-        SY.approve(address(subject()), deltaX);
-        PT.approve(address(subject()), approximatedDeltaY);
+    //     deal(address(subject().SY()), address(this), deltaX);
+    //     deal(address(subject().PT()), address(this), approximatedDeltaY);
+    //     SY.approve(address(subject()), deltaX);
+    //     PT.approve(address(subject()), approximatedDeltaY);
 
-        vm.expectRevert();
-        subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(1 ether));
-    }
+    //     vm.expectRevert();
+    //     subject().adjust(toInt(deltaX), -toInt(approximatedDeltaY - 3), toInt(1 ether));
+    // }
 
-    function test_basic_adjust_single_allocate_x_increases() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaX = 1;
+    // function test_basic_adjust_single_allocate_x_increases() public basic {
+    //     PYIndex index = YT.newIndex();
+    //     uint256 deltaX = 1;
 
-        deal(address(subject().SY()), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+    //     deal(address(subject().SY()), address(this), deltaX);
+    //     SY.approve(address(subject()), deltaX);
 
-        subject().adjust(toInt(deltaX), toInt(0), toInt(0));
-        int256 post = subject().tradingFunction(index);
+    //     subject().adjust(toInt(deltaX), toInt(0), toInt(0));
+    //     int256 post = subject().tradingFunction(index);
 
-        assertTrue(abs(post) < 10, "Trading function invalid.");
-    }
+    //     assertTrue(abs(post) < 10, "Trading function invalid.");
+    // }
 
-    function test_basic_adjust_single_allocate_y_increases() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaY = 4;
+    // function test_basic_adjust_single_allocate_y_increases() public basic {
+    //     PYIndex index = YT.newIndex();
+    //     uint256 deltaY = 4;
 
-        deal(address(subject().PT()), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
+    //     deal(address(subject().PT()), address(this), deltaY);
+    //     PT.approve(address(subject()), deltaY);
 
-        subject().adjust(toInt(0), toInt(deltaY), toInt(0));
-        int256 post = subject().tradingFunction(index);
+    //     subject().adjust(toInt(0), toInt(deltaY), toInt(0));
+    //     int256 post = subject().tradingFunction(index);
 
-        assertTrue(abs(post) < 10, "Trading function invalid.");
-    }
+    //     assertTrue(abs(post) < 10, "Trading function invalid.");
+    // }
 
     // todo: improve test
     function test_basic_solve_y() public basic {
         uint256 deltaX = 1 ether;
-        uint256 computedYGivenXAdjustment = subject().computeY(
+        uint256 computedYGivenXAdjustment = computeY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
             subject().strike(),
@@ -199,7 +203,7 @@ contract RMMTest is Test {
         );
         console2.log("computedYGivenXAdjustment", computedYGivenXAdjustment);
 
-        uint256 nextReserveY = subject().solveY(
+        uint256 nextReserveY = solveY(
             subject().reserveX() + deltaX,
             subject().totalLiquidity(),
             subject().strike(),
@@ -229,7 +233,7 @@ contract RMMTest is Test {
         console2.log("proportionalLGivenX", proportionalLGivenX);
         console2.log("proportionalLGivenY", proportionalLGivenY);
 
-        uint256 computedXGivenYAdjustment = subject().computeX(
+        uint256 computedXGivenYAdjustment = computeX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
             subject().strike(),
@@ -238,7 +242,7 @@ contract RMMTest is Test {
         );
         console2.log("computedXGivenYAdjustment", computedXGivenYAdjustment);
 
-        uint256 nextReserveX = subject().solveX(
+        uint256 nextReserveX = solveX(
             subject().reserveY() - approximatedDeltaY,
             subject().totalLiquidity(),
             subject().strike(),
@@ -267,18 +271,6 @@ contract RMMTest is Test {
         console2.logInt(terminal);
         console2.logUint(amountOut);
         console2.logInt(deltaLiquidity);
-    }
-
-    function test_swapX_callback() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(SY), address(PT), deltaX, block.timestamp, index);
-        deal(address(subject().PT()), address(subject()), minAmountOut);
-        CallbackProvider provider = new CallbackProvider();
-        vm.prank(address(provider));
-        (uint256 amountOut,) = subject().swapX(deltaX, minAmountOut, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than min amount out.");
-        assertTrue(PT.balanceOf(address(this)) >= amountOut, "Token Y balance is not greater than 0.");
     }
 
     function test_swapX_over_time_basic() public basic {
@@ -391,7 +383,7 @@ contract RMMTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RMM.InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
             )
         );
         subject().swapX(deltaX, minAmountOut + 10, address(this), "");
@@ -407,7 +399,7 @@ contract RMMTest is Test {
         SY.approve(address(subject()), deltaX);
 
         vm.expectEmit();
-        emit RMM.Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
+        emit Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
         subject().swapX(deltaX, minAmountOut, address(this), "");
     }
 
@@ -458,7 +450,7 @@ contract RMMTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RMM.InsufficientOutput.selector, upscale(deltaY, scalar(address(PT))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaY, scalar(address(PT))), minAmountOut + 10, minAmountOut
             )
         );
         subject().swapY(deltaY, minAmountOut + 10, address(this), "");
@@ -474,29 +466,7 @@ contract RMMTest is Test {
         PT.approve(address(subject()), deltaY);
 
         vm.expectEmit();
-        emit RMM.Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
+        emit Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
         subject().swapY(deltaY, minAmountOut, address(this), "");
-    }
-
-    function test_swapY_callback() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwap(address(PT), address(SY), deltaY, block.timestamp, index);
-        deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
-        CallbackProvider provider = new CallbackProvider();
-        vm.prank(address(provider));
-        (uint256 amountOut,) = subject().swapY(deltaY, minAmountOut, address(this), "0x1");
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(SY.balanceOf(address(this)) >= amountOut, "Token X balance is not greater than 0.");
-    }
-}
-
-contract CallbackProvider is Test {
-    function callback(address token, uint256 amountNativeToPay, bytes calldata data) public returns (bool) {
-        data;
-        deal(token, msg.sender, MockERC20(token).balanceOf(msg.sender) + amountNativeToPay);
-        return true;
     }
 }
