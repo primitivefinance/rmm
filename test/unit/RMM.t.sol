@@ -264,7 +264,8 @@ contract RMMTest is Test {
         int256 initial = subject().tradingFunction(index);
         console2.log("loss", uint256(685_040_862_443_611_928) - uint256(685_001_492_551_417_433));
         console2.log("loss %", uint256(39_369_892_194_495) * 1 ether / uint256(685_001_492_551_417_433));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapX(address(SY), deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction(index);
         console2.logInt(initial);
         console2.logInt(terminal);
@@ -285,7 +286,8 @@ contract RMMTest is Test {
 
         uint256 expectedL = 2_763_676_832_322_849_396;
         console2.log("expectedL", expectedL);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapX(address(SY), deltaX, minAmountOut, address(this), "");
         int256 terminal = subject().tradingFunction(index);
 
         console2.log("initialInvariant", initial);
@@ -346,7 +348,8 @@ contract RMMTest is Test {
         uint256 prevReserveY = subject().reserveY();
         uint256 prevPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
         uint256 prevLiquidity = subject().totalLiquidity();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapX(address(SY), deltaX, minAmountOut - 3, address(this), "");
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
         assertTrue(abs(subject().tradingFunction(index)) < 100, "Invalid trading function state.");
@@ -385,7 +388,7 @@ contract RMMTest is Test {
                 InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
             )
         );
-        subject().swapX(deltaX, minAmountOut + 10, address(this), "");
+        subject().swapX(address(SY), deltaX, minAmountOut + 10, address(this), "");
     }
 
     function test_swapX_event() public basic {
@@ -398,7 +401,7 @@ contract RMMTest is Test {
 
         vm.expectEmit();
         emit Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
-        subject().swapX(deltaX, minAmountOut, address(this), "");
+        subject().swapX(address(SY), deltaX, minAmountOut, address(this), "");
     }
 
     function test_swapY() public basic {

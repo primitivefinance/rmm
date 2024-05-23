@@ -155,10 +155,10 @@ contract ForkRMMTest is Test {
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
         (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(address(SY), deltaX, 0, address(this), "");
         vm.warp(block.timestamp + 5 days);
         (,, minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (amountOut, deltaLiquidity) = subject().swapX(deltaX, 0, address(this), "");
+        (amountOut, deltaLiquidity) = subject().swapX(address(SY), deltaX, 0, address(this), "");
     }
 
     function test_swap_y() public basic_sy {
@@ -198,7 +198,7 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
         subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(deltaX, 0, address(this), "");
+        subject().swapX(address(SY), deltaX, 0, address(this), "");
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
 
@@ -207,7 +207,7 @@ contract ForkRMMTest is Test {
         uint256 deltaX = 1 ether;
         vm.warp(subject().maturity());
         subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(deltaX, 0, address(this), "");
+        subject().swapX(address(SY), deltaX, 0, address(this), "");
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
             1 ether,

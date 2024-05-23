@@ -124,15 +124,18 @@ contract RMM is ERC20 {
     }
 
     /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
-    function swapX(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
+    function swapX(address tokenIn, uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
         external
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
+        PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
-        PYIndex index = YT.newIndex();
+        if (tokenIn != address(SY)) {
+            amountIn = mintSY(msg.sender, tokenIn, amountIn, index.assetToSyUp(amountIn));
+        }
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
@@ -146,16 +149,17 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
-    function swapY(uint256 tokenIn, uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
+    function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
         external
+        payable
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
+        PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
         uint256 delta;
-        PYIndex index = YT.newIndex();
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
@@ -486,7 +490,7 @@ contract RMM is ERC20 {
     }
 
     function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
-        external
+        public
         payable
         returns (uint256 amountOut)
     {
