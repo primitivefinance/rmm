@@ -58,14 +58,17 @@ contract DeployPool is Script {
         timeToExpiry = mktState.expiry - block.timestamp;
     }
 
-    function getPendleMarketData() public returns (MarketState memory ms, MarketPreCompute memory mp) {
-        PYIndex index = YT.newIndex();
+    function getPendleMarketData(PYIndex index)
+        public
+        view
+        returns (MarketState memory ms, MarketPreCompute memory mp)
+    {
         ms = market.readState(address(router));
         mp = ms.getMarketPreCompute(index, block.timestamp);
     }
 
-    function getPtExchangeRate() internal returns (int256) {
-        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
+    function getPtExchangeRate(PYIndex index) public view returns (int256) {
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
         return ms.totalPt._getExchangeRate(mp.totalAsset, mp.rateScalar, mp.rateAnchor, 0);
     }
 
@@ -101,8 +104,9 @@ contract DeployPool is Script {
         IERC20(YT).approve(address(router), type(uint256).max);
         IERC20(market).approve(address(router), type(uint256).max);
 
-        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
-        uint256 price = uint256(getPtExchangeRate());
+        PYIndex index = YT.newIndex();
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
+        uint256 price = uint256(getPtExchangeRate(index));
         rmm.init({
             PT_: address(PT),
             priceX: price,
