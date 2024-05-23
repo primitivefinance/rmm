@@ -67,6 +67,10 @@ contract RMM is ERC20 {
         WETH = weth_;
     }
 
+    function version() public pure returns (string memory) {
+        return "0.1.0-rc0";
+    }
+
     receive() external payable {}
 
     /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
