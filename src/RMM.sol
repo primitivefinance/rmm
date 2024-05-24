@@ -69,7 +69,7 @@ contract RMM is ERC20 {
     }
 
     function version() public pure returns (string memory) {
-        return "0.1.0-rc0";
+        return "0.1.1-rc0";
     }
 
     receive() external payable {}
