@@ -124,58 +124,6 @@ contract RMM is ERC20 {
         );
     }
 
-    /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
-    function swapX(
-        address tokenIn,
-        uint256 minSYMinted,
-        uint256 amountIn,
-        uint256 minAmountOut,
-        address to,
-        bytes calldata data
-    ) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
-        PYIndex index = YT.newIndex();
-        uint256 amountInWad;
-        uint256 amountOutWad;
-        uint256 strike_;
-        if (tokenIn != address(SY)) {
-            amountIn = mintSY(msg.sender, tokenIn, amountIn, minSYMinted);
-        }
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
-
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
-        }
-
-        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(SY), amountInWad);
-
-        emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
-    }
-
-    function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
-        external
-        payable
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
-        PYIndex index = YT.newIndex();
-        uint256 amountInWad;
-        uint256 amountOutWad;
-        uint256 strike_;
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
-
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
-        }
-
-        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
-        (uint256 debitNative) = _debit(address(PT), amountInWad);
-
-        emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
-    }
-
     function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
         PYIndex index = YT.newIndex();
         uint256 amountInWad;

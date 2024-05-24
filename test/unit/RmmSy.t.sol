@@ -151,22 +151,22 @@ contract ForkRMMTest is Test {
 
     function test_swapX_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
+        uint256 deltaSy = 1 ether;
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
+        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaSy, block.timestamp, index);
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
-        (amountOut, deltaLiquidity) = subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
+        (,, minAmountOut,,) = subject().prepareSwapX(deltaSy, block.timestamp, index);
+        (amountOut, deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
     }
 
     function test_swap_y() public basic_sy {
         PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
+        uint256 deltaPt = 1 ether;
         uint256 balanceSyBefore = SY.balanceOf(address(this));
-        subject().prepareSwapY(deltaY, block.timestamp, index);
-        (uint256 amtOut,) = subject().swapY(deltaY, 0, address(this), "");
+        subject().prepareSwapY(deltaPt, block.timestamp, index);
+        (uint256 amtOut,) = subject().swapExactPtForSy(deltaPt, 0, address(this));
         console2.log("amtOut", amtOut);
 
         uint256 balanceSyAfter = SY.balanceOf(address(this));
@@ -186,8 +186,8 @@ contract ForkRMMTest is Test {
         uint256 totalAsset = index.syToAsset(subject().reserveX());
         uint256 price = subject().approxSpotPrice(totalAsset);
         console2.log("initialPrice", price);
-        uint256 deltaY = 100 ether;
-        (uint256 amountOut,) = subject().swapY(deltaY, 0, address(this), "");
+        uint256 deltaPt = 100 ether;
+        (uint256 amountOut,) = subject().swapExactPtForSy(deltaPt, 0, address(this));
         console2.log("amountOut", amountOut);
         uint256 priceAfter = subject().approxSpotPrice(totalAsset);
         console2.log("priceAfter", priceAfter);
@@ -195,19 +195,19 @@ contract ForkRMMTest is Test {
 
     function test_strike_converges_to_one_at_maturity() public basic_sy {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
+        uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
+        subject().prepareSwapX(deltaSy, block.timestamp, index);
+        subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
 
     function test_spot_price_at_maturity() public basic_sy {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
+        uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapX(deltaX, block.timestamp, index);
-        subject().swapX(address(SY), 0, deltaX, 0, address(this), "");
+        subject().prepareSwapX(deltaSy, block.timestamp, index);
+        subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
             1 ether,
@@ -263,7 +263,7 @@ contract ForkRMMTest is Test {
         console2.log("ytOut", ytOut);
         console2.log("rPT", rPT);
         console2.log("rSY", rSY);
-        (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
+        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, 0, address(this));
         console2.log("amtOut", amtOut);
         console2.log("SY balance after", SY.balanceOf(address(this)));
         console2.log("YT balance after", YT.balanceOf(address(this)));
@@ -365,46 +365,47 @@ contract ForkRMMTest is Test {
         k = comp.strike_;
     }
 
-    function test_swapX_usingIbToken() public basic_sy {
-        uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));
-        uint256 deltaX = 1 ether;
-        uint256 minSYMinted = SY.previewDeposit(address(wstETH), deltaX);
-        subject().swapX(address(wstETH), minSYMinted, deltaX, 0, address(this), "");
-        uint256 wstethBalanceAfter = IERC20(wstETH).balanceOf(address(this));
-        assertTrue(
-            wstethBalanceAfter < wstethBalanceInitial, "wstETH balance after swap is not greater than initial balance."
-        );
-        assertTrue(
-            wstethBalanceInitial - 1e18 == wstethBalanceAfter,
-            "wstETH balance after swap is not 1e18 less than initial balance."
-        );
-    }
+    // TODO: add functionality for handling these on the new swaps
+    // function test_swapX_usingIbToken() public basic_sy {
+    //     uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));
+    //     uint256 deltaX = 1 ether;
+    //     uint256 minSYMinted = SY.previewDeposit(address(wstETH), deltaX);
+    //     subject().swapX(address(wstETH), minSYMinted, deltaX, 0, address(this), "");
+    //     uint256 wstethBalanceAfter = IERC20(wstETH).balanceOf(address(this));
+    //     assertTrue(
+    //         wstethBalanceAfter < wstethBalanceInitial, "wstETH balance after swap is not greater than initial balance."
+    //     );
+    //     assertTrue(
+    //         wstethBalanceInitial - 1e18 == wstethBalanceAfter,
+    //         "wstETH balance after swap is not 1e18 less than initial balance."
+    //     );
+    // }
 
-    function test_swapX_usingNativeToken() public basic_sy {
-        uint256 balanceEthInitial = address(this).balance;
-        uint256 deltaX = 1 ether;
-        uint256 minSYMinted = SY.previewDeposit(address(0), deltaX);
-        subject().swapX{value: deltaX}(address(0), minSYMinted, deltaX, 0, address(this), "");
-        uint256 balanceEthAfter = address(this).balance;
-        assertTrue(balanceEthAfter < balanceEthInitial, "wstETH balance after swap is not less than initial balance.");
-        assertTrue(
-            balanceEthInitial - 1e18 == balanceEthAfter,
-            "wstETH balance after swap is not 1e18 less than initial balance."
-        );
-    }
+    // function test_swapX_usingNativeToken() public basic_sy {
+    //     uint256 balanceEthInitial = address(this).balance;
+    //     uint256 deltaX = 1 ether;
+    //     uint256 minSYMinted = SY.previewDeposit(address(0), deltaX);
+    //     subject().swapX{value: deltaX}(address(0), minSYMinted, deltaX, 0, address(this), "");
+    //     uint256 balanceEthAfter = address(this).balance;
+    //     assertTrue(balanceEthAfter < balanceEthInitial, "wstETH balance after swap is not less than initial balance.");
+    //     assertTrue(
+    //         balanceEthInitial - 1e18 == balanceEthAfter,
+    //         "wstETH balance after swap is not 1e18 less than initial balance."
+    //     );
+    // }
 
-    function test_swapX_usingWETH() public basic_sy {
-        deal(subject().WETH(), address(this), 1 ether);
-        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
-        uint256 balanceWethInitial = IERC20(subject().WETH()).balanceOf(address(this));
-        uint256 deltaX = 1 ether;
-        uint256 minSYMinted = SY.previewDeposit(address(subject().WETH()), deltaX);
-        subject().swapX(address(subject().WETH()), minSYMinted, deltaX, 0, address(this), "");
-        uint256 balanceWethAfter = IERC20(subject().WETH()).balanceOf(address(this));
-        assertTrue(balanceWethAfter < balanceWethInitial, "wstETH balance after swap is not less than initial balance.");
-        assertTrue(
-            balanceWethInitial - 1e18 == balanceWethAfter,
-            "wstETH balance after swap is not 1e18 less than initial balance."
-        );
-    }
+    // function test_swapX_usingWETH() public basic_sy {
+    //     deal(subject().WETH(), address(this), 1 ether);
+    //     IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+    //     uint256 balanceWethInitial = IERC20(subject().WETH()).balanceOf(address(this));
+    //     uint256 deltaX = 1 ether;
+    //     uint256 minSYMinted = SY.previewDeposit(address(subject().WETH()), deltaX);
+    //     subject().swapX(address(subject().WETH()), minSYMinted, deltaX, 0, address(this), "");
+    //     uint256 balanceWethAfter = IERC20(subject().WETH()).balanceOf(address(this));
+    //     assertTrue(balanceWethAfter < balanceWethInitial, "wstETH balance after swap is not less than initial balance.");
+    //     assertTrue(
+    //         balanceWethInitial - 1e18 == balanceWethAfter,
+    //         "wstETH balance after swap is not 1e18 less than initial balance."
+    //     );
+    // }
 }
