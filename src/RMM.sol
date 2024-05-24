@@ -176,6 +176,25 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
 
+    function swapExactSyForPt(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
+        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
+        (uint256 debitNative) = _debit(address(SY), amountInWad);
+
+        emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
+    }
+
     /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
     /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
     function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
@@ -195,12 +214,14 @@ contract RMM is ERC20 {
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
         uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
         uint256 ytOut = amountOut + delta;
+        console2.log("delta", delta);
+        console2.log("ytOut", ytOut);
         (uint256 debitNative) = _debit(address(SY), delta);
+
         amountOut = mintPtYt(ytOut, msg.sender);
         _debit(address(PT), amountOut);
 
-        emit Swap(msg.sender, to, address(PT), address(SY), debitNative, ytOut, deltaLiquidity);
-
+        emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
     /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
