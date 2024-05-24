@@ -12,10 +12,10 @@ contract MockRMM is RMM {
         return _debit(token, amountWad);
     }
 
-    function credit(address token, address to, uint256 amount, uint256 delta, bytes memory data)
+    function credit(address token, address to, uint256 amount)
         internal
         returns (uint256 paymentNative)
     {
-        return _credit(token, to, amount, delta, data);
+        return _credit(token, to, amount);
     }
 }

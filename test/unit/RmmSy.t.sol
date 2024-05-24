@@ -287,11 +287,13 @@ contract ForkRMMTest is Test {
         mintSY(1 ether);
 
         uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        (uint256 amtOut,) = subject().swapY(ytOut, 0, address(this), "0x55");
+        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, 0, address(this));
 
         // assert balance of address(this) is 0 for SY, PT, and YT
         assertEq(PT.balanceOf(address(this)), 0, "PT balance at the end of the test is not 0.");
-        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not 0.");
+        assertApproxEqAbs(SY.balanceOf(address(this)), 0, 10_000, "SY balance at the end of the test is not approx 0.");
+        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not equal to the returned ytOut.");
+        assertEq(YT.balanceOf(address(this)), amtOut, "YT balance at the end of the test is not equal to the returned amtOut.");
     }
 
     function test_approx_sy_pendle() public basic_sy {

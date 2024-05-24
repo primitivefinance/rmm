@@ -8,6 +8,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -146,7 +147,7 @@ contract RMM is ERC20 {
         }
 
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(PT), to, amountOutWad, 0, data);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
         (uint256 debitNative) = _debit(address(SY), amountInWad);
 
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
@@ -162,7 +163,6 @@ contract RMM is ERC20 {
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
-        uint256 delta;
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
@@ -170,13 +170,37 @@ contract RMM is ERC20 {
         }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
-        if (data.length > 0) {
-            delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        }
-        (uint256 creditNative) = _credit(address(SY), to, amountOutWad, delta, data);
+        (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
         (uint256 debitNative) = _debit(address(PT), amountInWad);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
+    }
+
+    /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
+    /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
+    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
+        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
+
+        // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
+        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        uint256 ytOut = amountOut + delta;
+        (uint256 debitNative) = _debit(address(SY), delta);
+        amountOut = mintPtYt(ytOut, msg.sender);
+        _debit(address(PT), amountOut);
+
+        emit Swap(msg.sender, to, address(PT), address(SY), debitNative, ytOut, deltaLiquidity);
+
     }
 
     /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
@@ -225,8 +249,8 @@ contract RMM is ERC20 {
         _burn(msg.sender, lptBurned); // uses state totalLiquidity
         _adjust(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity), strike, YT.newIndex());
 
-        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad, 0, "");
-        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad, 0, "");
+        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad);
+        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
 
         emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }
@@ -268,20 +292,14 @@ contract RMM is ERC20 {
     }
 
     /// @dev Handles sending tokens as payment to the recipient `to`.
-    function _credit(address token, address to, uint256 amount, uint256 delta, bytes memory data)
+    function _credit(address token, address to, uint256 amount)
         internal
         returns (uint256 paymentNative)
     {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
-        // Send the tokens to the recipient.
-        if (data.length > 0) {
-            if (!Token(token).transferFrom(msg.sender, address(this), delta)) {
-                revert PaymentFailed(token, msg.sender, address(this), delta);
-            }
-            mintPtYt(amount + delta, msg.sender);
-        } else if (!Token(token).transfer(to, amountNative)) {
+        if (!Token(token).transfer(to, amountNative)) {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
