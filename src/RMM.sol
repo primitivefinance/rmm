@@ -131,12 +131,14 @@ contract RMM is ERC20 {
         uint256 strike_;
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
+        console2.log("amountInWad", amountInWad);
+        console2.log("amountOutWad", amountOutWad);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
-        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
+        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
         (uint256 debitNative) = _debit(address(PT), amountInWad);
 
