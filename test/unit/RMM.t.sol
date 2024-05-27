@@ -388,7 +388,7 @@ contract RMMTest is Test {
                 InsufficientOutput.selector, upscale(deltaSy, scalar(address(SY))), minAmountOut + 10, minAmountOut
             )
         );
-        subject().swapExactSyForPt(deltaSy, 0, address(this));
+        subject().swapExactSyForPt(deltaSy, minAmountOut + 10, address(this));
     }
 
     function test_swapSy_event() public basic {
