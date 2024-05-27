@@ -371,6 +371,28 @@ contract ForkRMMTest is Test {
         subject().swapExactYtForSy(ytIn, maxSyIn, address(this));
     }
 
+    function test_Swapping1YtForSyUpdatesBalancesCorrectly() public basic_sy {
+        PT.transfer(address(0x55), PT.balanceOf(address(this)));
+        YT.transfer(address(0x55), YT.balanceOf(address(this)));
+
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
+        assertEq(YT.balanceOf(address(this)), 0, "YT balance of address(this) is not 0.");
+
+        mintPtYt(1 ether);
+
+        SY.transfer(address(0x55), SY.balanceOf(address(this)));
+        PT.transfer(address(0x55), PT.balanceOf(address(this)));
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
+        assertEq(SY.balanceOf(address(this)), 0, "SY balance of address(this) is not 0.");
+
+
+        uint256 ytIn = YT.balanceOf(address(this));
+        uint256 maxSyIn = 10 ether;
+        (uint256 amountOut,,) = subject().swapExactYtForSy(ytIn, maxSyIn, address(this));
+        assertEq(YT.balanceOf(address(this)), 0, "YT balance of address(this) is not 0.");
+        assertEq(SY.balanceOf(address(this)), amountOut, "SY balance of address(this) is not equal to amountOut.");
+    }
+
     // TODO: add functionality for handling these on the new swaps
     // function test_swapX_usingIbToken() public basic_sy {
     //     uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));

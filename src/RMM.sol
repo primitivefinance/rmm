@@ -162,7 +162,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
-    function swapExactYtForSy(uint256 ytIn, uint256 maxSyIn, address to) external lock returns (uint256 amountIn, int256 deltaLiquidity) {
+    function swapExactYtForSy(uint256 ytIn, uint256 maxSyIn, address to) external lock returns (uint256 amountOut, uint256 amountIn, int256 deltaLiquidity) {
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
@@ -177,8 +177,9 @@ contract RMM is ERC20 {
 
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _debit(address(YT), ytIn);
-        redeemPy(ytIn, to);
+        uint256 amountSy = redeemPy(ytIn, to);
         (uint256 debitNative) = _debit(address(SY), amountInWad);
+        amountOut = amountSy - amountInWad;
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
