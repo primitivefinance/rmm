@@ -13,6 +13,8 @@ error InsufficientPayment(address token, uint256 actual, uint256 expected);
 error InsufficientLiquidityOut(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
 /// @dev Thrown when a swap does not output enough tokens.
 error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
+/// @dev Thrown when a swap expects greater input than is allowed
+error ExcessInput(uint256 amountOut, uint256 maxAmountIn, uint256 amountIn);
 /// @dev Thrown when an allocate would reduce the liquidity.
 error InvalidAllocate(uint256 deltaX, uint256 deltaY, uint256 currLiquidity, uint256 nextLiquidity);
 /// @dev Thrown on `init` when a token has invalid decimals.

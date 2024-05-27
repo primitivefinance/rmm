@@ -365,6 +365,12 @@ contract ForkRMMTest is Test {
         k = comp.strike_;
     }
 
+    function test_exact_yt_for_sy() public basic_sy {
+        uint256 ytIn = 1 ether;
+        uint256 maxSyIn = 1000 ether;
+        subject().swapExactYtForSy(ytIn, maxSyIn, address(this));
+    }
+
     // TODO: add functionality for handling these on the new swaps
     // function test_swapX_usingIbToken() public basic_sy {
     //     uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));

@@ -214,6 +214,21 @@ function computeDeltaLXIn(
     deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
 }
 
+function computeDeltaLYOut(
+    uint256 amountOut,
+    uint256 reserveX,
+    uint256 reserveY,
+    uint256 totalLiquidity,
+    uint256 swapFee,
+    uint256 strike,
+    uint256 sigma,
+    uint256 tau
+) pure returns (uint256 deltaL) {
+    uint256 fees = swapFee.mulWadUp(amountOut);
+    uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
+    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+}
+
 function computeDeltaLYIn(
     uint256 amountIn,
     uint256 reserveX,
