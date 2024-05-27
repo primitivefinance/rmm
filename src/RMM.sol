@@ -130,7 +130,7 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapPt(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -149,7 +149,7 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapSy(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -192,7 +192,7 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapPt(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -363,7 +363,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwapY(guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapPt(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
@@ -412,14 +412,14 @@ contract RMM is ERC20 {
             deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
         }
 
-    function prepareSwapX(uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapSy(uint256 amountIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
         amountInWad = upscale(amountIn, scalar(address(SY)));
         // convert amountIn to assetIn, only for swapping X in
-        uint256 amountInAsset = index.syToAsset(amountIn);
+        uint256 amountInAsset = index.syToAsset(amountInWad);
 
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
         // compute liquidity
@@ -438,22 +438,22 @@ contract RMM is ERC20 {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
-    function prepareSwapY(uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapPt(uint256 ptIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
-        amountInWad = upscale(amountIn, scalar(address(PT)));
+        amountInWad = upscale(ptIn, scalar(address(PT)));
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
 
         // compute liquidity
         uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
         uint256 nextLiquidity = computeDeltaLYIn(
-            amountIn, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+            amountInWad, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
         ) + computedL;
 
         // compute reserves
-        uint256 nextReserveX = solveX(reserveY + amountIn, nextLiquidity, comp.strike_, sigma, comp.tau_);
+        uint256 nextReserveX = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
 
         amountOutWad = reserveX - index.assetToSy(nextReserveX);
         amountOut = downscaleDown(amountOutWad, scalar(address(SY)));

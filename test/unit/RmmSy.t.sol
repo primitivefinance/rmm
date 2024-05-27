@@ -149,23 +149,23 @@ contract ForkRMMTest is Test {
         assertTrue(abs(result) <= 10, "Trading function result is not within init epsilon.");
     }
 
-    function test_swapX_over_time_sy() public basic_sy {
+    function test_swapSy_over_time_sy() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaSy = 1 ether;
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaSy, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwapX(deltaSy, block.timestamp, index);
+        (,, minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
     }
 
-    function test_swap_y() public basic_sy {
+    function test_swap_pt() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 deltaPt = 1 ether;
         uint256 balanceSyBefore = SY.balanceOf(address(this));
-        subject().prepareSwapY(deltaPt, block.timestamp, index);
+        subject().prepareSwapPt(deltaPt, block.timestamp, index);
         (uint256 amtOut,) = subject().swapExactPtForSy(deltaPt, 0, address(this));
         console2.log("amtOut", amtOut);
 
@@ -197,7 +197,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapX(deltaSy, block.timestamp, index);
+        subject().prepareSwapSy(deltaSy, block.timestamp, index);
         subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
@@ -206,7 +206,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapX(deltaSy, block.timestamp, index);
+        subject().prepareSwapSy(deltaSy, block.timestamp, index);
         subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
