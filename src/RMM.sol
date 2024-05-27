@@ -8,6 +8,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -67,6 +68,10 @@ contract RMM is ERC20 {
         WETH = weth_;
     }
 
+    function version() public pure returns (string memory) {
+        return "0.1.1-rc0";
+    }
+
     receive() external payable {}
 
     /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
@@ -119,53 +124,92 @@ contract RMM is ERC20 {
         );
     }
 
-    /// @dev Swaps tokenX to tokenY, sending at least `minAmountOut` tokenY to `to`.
-    function swapX(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
-        external
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
+    function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
-        PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapX(amountIn, block.timestamp, index);
 
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
-        }
-
-        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
-        (uint256 creditNative) = _credit(address(PT), to, amountOutWad, 0, data);
-        (uint256 debitNative) = _debit(address(SY), amountInWad);
-
-        emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
-    }
-
-    function swapY(uint256 amountIn, uint256 minAmountOut, address to, bytes calldata data)
-        external
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
-        uint256 amountInWad;
-        uint256 amountOutWad;
-        uint256 strike_;
-        uint256 delta;
-        PYIndex index = YT.newIndex();
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapPt(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
         }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
-        if (data.length > 0) {
-            delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        }
-        (uint256 creditNative) = _credit(address(SY), to, amountOutWad, delta, data);
+        (uint256 creditNative) = _credit(address(SY), to, amountOutWad);
         (uint256 debitNative) = _debit(address(PT), amountInWad);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
+    }
+
+    function swapExactSyForPt(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapSy(amountIn, block.timestamp, index);
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
+        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
+        (uint256 creditNative) = _credit(address(PT), to, amountOutWad);
+        (uint256 debitNative) = _debit(address(SY), amountInWad);
+
+        emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
+    }
+
+    function swapExactYtForSy(uint256 ytIn, uint256 maxSyIn, address to) external lock returns (uint256 amountOut, uint256 amountIn, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        // amount PT out must == ytIn so that we can recombine to SY and cover the SY in side of the swap
+        (amountInWad, amountOutWad, amountIn, deltaLiquidity, strike_) = prepareSwapSyForExactPt(ytIn, block.timestamp, index);
+
+        if (amountIn > maxSyIn) {
+            revert ExcessInput(ytIn, maxSyIn, amountIn);
+        }
+
+        _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
+        (uint256 creditNative) = _debit(address(YT), ytIn);
+        uint256 amountSy = redeemPy(ytIn, address(this));
+        amountOut = amountSy - amountInWad;
+        (uint256 debitNative) = _credit(address(SY), to, amountOut);
+
+        emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
+    }
+
+
+    /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
+    /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
+    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapPt(amountIn, block.timestamp, index);
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
+        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
+
+        // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
+        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        uint256 ytOut = amountOut + delta;
+        (uint256 debitNative) = _debit(address(SY), delta);
+
+        amountOut = mintPtYt(ytOut, address(this));
+        _credit(address(YT), to, amountOut);
+
+        emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
     /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
@@ -214,8 +258,8 @@ contract RMM is ERC20 {
         _burn(msg.sender, lptBurned); // uses state totalLiquidity
         _adjust(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity), strike, YT.newIndex());
 
-        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad, 0, "");
-        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad, 0, "");
+        (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad);
+        (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
 
         emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
     }
@@ -257,20 +301,14 @@ contract RMM is ERC20 {
     }
 
     /// @dev Handles sending tokens as payment to the recipient `to`.
-    function _credit(address token, address to, uint256 amount, uint256 delta, bytes memory data)
+    function _credit(address token, address to, uint256 amount)
         internal
         returns (uint256 paymentNative)
     {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
-        // Send the tokens to the recipient.
-        if (data.length > 0) {
-            if (!Token(token).transferFrom(msg.sender, address(this), delta)) {
-                revert PaymentFailed(token, msg.sender, address(this), delta);
-            }
-            mintPtYt(amount + delta, msg.sender);
-        } else if (!Token(token).transfer(to, amountNative)) {
+        if (!Token(token).transfer(to, amountNative)) {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
@@ -326,7 +364,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwapY(guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapPt(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
@@ -356,14 +394,33 @@ contract RMM is ERC20 {
         totalLiquidity_ = solveL(comp, initialLiquidity, amountY, sigma_);
     }
 
-    function prepareSwapX(uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapSyForExactPt(uint256 ptOut, uint256 timestamp, PYIndex index)
+        public
+        view
+        returns (uint256 amountInWad, uint256 ptOutWad, uint256 amountIn, int256 deltaLiquidity, uint256 strike_) {
+            ptOutWad = upscale(ptOut, scalar(address(PT)));
+            // convert amountIn to assetIn, only for swapping X in
+            PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
+            uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+            uint256 nextLiquidity = computeDeltaLYOut(
+                ptOut, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+            ) + computedL;
+
+            uint256 nextReserveX = solveX(reserveY - ptOutWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
+            amountInWad = index.assetToSy(nextReserveX) - reserveX;
+            amountIn = downscaleDown(amountInWad, scalar(address(SY)));
+            strike_ = comp.strike_;
+            deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
+        }
+
+    function prepareSwapSy(uint256 amountIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
         amountInWad = upscale(amountIn, scalar(address(SY)));
         // convert amountIn to assetIn, only for swapping X in
-        uint256 amountInAsset = index.syToAsset(amountIn);
+        uint256 amountInAsset = index.syToAsset(amountInWad);
 
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
         // compute liquidity
@@ -382,22 +439,22 @@ contract RMM is ERC20 {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
-    function prepareSwapY(uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapPt(uint256 ptIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
-        amountInWad = upscale(amountIn, scalar(address(PT)));
+        amountInWad = upscale(ptIn, scalar(address(PT)));
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
 
         // compute liquidity
         uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
         uint256 nextLiquidity = computeDeltaLYIn(
-            amountIn, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+            amountInWad, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
         ) + computedL;
 
         // compute reserves
-        uint256 nextReserveX = solveX(reserveY + amountIn, nextLiquidity, comp.strike_, sigma, comp.tau_);
+        uint256 nextReserveX = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
 
         amountOutWad = reserveX - index.assetToSy(nextReserveX);
         amountOut = downscaleDown(amountOutWad, scalar(address(SY)));
@@ -482,10 +539,13 @@ contract RMM is ERC20 {
     }
 
     function mintSY(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
-        external
+        public
         payable
         returns (uint256 amountOut)
     {
+        if (!SY.isValidTokenIn(tokenIn)) {
+            revert InvalidTokenIn(tokenIn);
+        }
         if (tokenIn == address(0)) {
             amountOut =
                 SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
@@ -494,5 +554,11 @@ contract RMM is ERC20 {
             ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
             amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
         }
+    }
+
+    function redeemPy(uint256 amount, address to) internal returns (uint256 amountOut) {
+        PT.transfer(address(YT), amount);
+        YT.transfer(address(YT), amount);
+        amountOut = YT.redeemPY(to);
     }
 }

@@ -34,7 +34,7 @@ contract DeployPool is Script {
     address public constant PT_ADDRESS = address(0);
     uint256 public constant fee = 0.0002 ether;
     address public constant curator = address(0);
-    Factory FACTORY = Factory(0x7E6cF695a8BeA4b2bF94FbB5434a7da3f39A2f8D);
+    Factory FACTORY = Factory(0x6755436568792bC8E69020d8d77230fADCC4C9ef);
     IPMarket market = IPMarket(0xC374f7eC85F8C7DE3207a10bB1978bA104bdA3B2);
     IPAllActionV3 router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
     address wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
@@ -56,13 +56,20 @@ contract DeployPool is Script {
         console2.log("expiry", mktState.expiry);
         console2.log("timestamp", block.timestamp);
         timeToExpiry = mktState.expiry - block.timestamp;
-        rateScalar = mktState._getRateScalar(timeToExpiry);
-        rateAnchor =
-            mktState.totalPt._getRateAnchor(mktState.lastLnImpliedRate, mktState.totalSy, rateScalar, timeToExpiry);
     }
 
-    function getPtExchangeRate() internal view returns (int256) {
-        return mktState.totalPt._getExchangeRate(mktState.totalSy, rateScalar, rateAnchor, 0);
+    function getPendleMarketData(PYIndex index)
+        public
+        view
+        returns (MarketState memory ms, MarketPreCompute memory mp)
+    {
+        ms = market.readState(address(router));
+        mp = ms.getMarketPreCompute(index, block.timestamp);
+    }
+
+    function getPtExchangeRate(PYIndex index) public view returns (int256) {
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
+        return ms.totalPt._getExchangeRate(mp.totalAsset, mp.rateScalar, mp.rateAnchor, 0);
     }
 
     function mintSY(uint256 amount) public {
@@ -97,12 +104,14 @@ contract DeployPool is Script {
         IERC20(YT).approve(address(router), type(uint256).max);
         IERC20(market).approve(address(router), type(uint256).max);
 
-        uint256 price = uint256(getPtExchangeRate());
+        PYIndex index = YT.newIndex();
+        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
+        uint256 price = uint256(getPtExchangeRate(index));
         rmm.init({
             PT_: address(PT),
             priceX: price,
-            amountX: uint256(mktState.totalSy),
-            strike_: uint256(rateAnchor),
+            amountX: uint256(ms.totalSy),
+            strike_: uint256(mp.rateAnchor),
             sigma_: 0.02 ether,
             fee_: fee,
             curator_: address(0x55)

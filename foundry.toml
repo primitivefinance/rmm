@@ -10,3 +10,6 @@ fail_on_revert = false
 mainnet = "${MAINNET_RPC_URL}"
 op_sepolia = "${OP_SEPOLIA_RPC_URL}"
 testnet = "${TESTNET_RPC_URL}"
+rmm_testnet = "${RMM_TESTNET_RPC_URL}"
+
+unknown_chain = { key = "${TENDERLY_ACCESS_KEY}", chain = 1, url = "${RMM_TESTNET_RPC_URL}" }

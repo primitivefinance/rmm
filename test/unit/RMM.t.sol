@@ -224,10 +224,10 @@ contract RMMTest is Test {
     // todo: improve test
     function test_basic_solve_x() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 approximatedDeltaY,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
+        uint256 deltaSy = 1 ether;
+        (,, uint256 approximatedDeltaY,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
 
-        uint256 proportionalLGivenX = deltaX * subject().totalLiquidity() / subject().reserveX();
+        uint256 proportionalLGivenX = deltaSy * subject().totalLiquidity() / subject().reserveX();
         uint256 proportionalLGivenY = approximatedDeltaY * subject().totalLiquidity() / subject().reserveY();
         console2.log("proportionalLGivenX", proportionalLGivenX);
         console2.log("proportionalLGivenY", proportionalLGivenY);
@@ -253,18 +253,19 @@ contract RMMTest is Test {
         console2.log("actualDeltaX", actualDeltaX);
     }
 
-    function test_swap_x() public basic {
+    function test_swap_sy() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
+        uint256 deltaSy = 1 ether;
         uint256 minAmountOut = 0.685040862443611931 ether;
         deal(address(subject().PT()), address(subject()), minAmountOut * 150 / 100);
-        deal(address(subject().SY()), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+        deal(address(subject().SY()), address(this), deltaSy);
+        SY.approve(address(subject()), deltaSy);
 
         int256 initial = subject().tradingFunction(index);
         console2.log("loss", uint256(685_040_862_443_611_928) - uint256(685_001_492_551_417_433));
         console2.log("loss %", uint256(39_369_892_194_495) * 1 ether / uint256(685_001_492_551_417_433));
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapExactSyForPt(deltaSy, 0, address(this));
         int256 terminal = subject().tradingFunction(index);
         console2.logInt(initial);
         console2.logInt(terminal);
@@ -272,20 +273,21 @@ contract RMMTest is Test {
         console2.logInt(deltaLiquidity);
     }
 
-    function test_swapX_over_time_basic() public basic {
+    function test_swapSy_over_time_basic() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
+        uint256 deltaSy = 1 ether;
+        (,, uint256 minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         deal(address(subject().PT()), address(subject()), 1 ether);
-        deal(address(subject().SY()), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+        deal(address(subject().SY()), address(this), deltaSy);
+        SY.approve(address(subject()), deltaSy);
 
         int256 initial = subject().tradingFunction(index);
         vm.warp(365 days / 2);
 
         uint256 expectedL = 2_763_676_832_322_849_396;
         console2.log("expectedL", expectedL);
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapExactSyForPt(deltaSy, 0, address(this));
         int256 terminal = subject().tradingFunction(index);
 
         console2.log("initialInvariant", initial);
@@ -333,24 +335,25 @@ contract RMMTest is Test {
 
     // init
 
-    function test_swapX_basic() public basic {
+    function test_swapSy_basic() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
+        uint256 deltaSy = 1 ether;
+        (,, uint256 minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
-        deal(address(SY), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+        deal(address(SY), address(this), deltaSy);
+        SY.approve(address(subject()), deltaSy);
 
         uint256 prevBalanceX = balanceWad(address(SY), address(this));
         uint256 prevBalanceY = balanceWad(address(PT), address(this));
         uint256 prevReserveY = subject().reserveY();
         uint256 prevPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
         uint256 prevLiquidity = subject().totalLiquidity();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapX(deltaX, minAmountOut - 3, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) =
+            subject().swapExactSyForPt(deltaSy, 0, address(this));
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
         assertTrue(abs(subject().tradingFunction(index)) < 100, "Invalid trading function state.");
-        assertEq(subject().reserveX(), basicParams.amountX + deltaX, "Reserve X did not increase by delta X.");
+        assertEq(subject().reserveX(), basicParams.amountX + deltaSy, "Reserve X did not increase by delta X.");
         assertEq(subject().reserveY(), prevReserveY - amountOut, "Reserve Y did not decrease by amount out.");
         assertEq(
             subject().totalLiquidity(),
@@ -359,7 +362,7 @@ contract RMMTest is Test {
         );
 
         assertEq(
-            balanceWad(address(SY), address(this)), prevBalanceX - deltaX, "Balance X did not decrease by delta X."
+            balanceWad(address(SY), address(this)), prevBalanceX - deltaSy, "Balance Sy did not decrease by delta X."
         );
         assertEq(
             balanceWad(address(PT), address(this)),
@@ -372,54 +375,54 @@ contract RMMTest is Test {
         );
     }
 
-    function test_swapX_reverts_InsufficientOutput() public basic {
+    function test_swapSy_reverts_InsufficientOutput() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapX(deltaX, block.timestamp, index);
+        uint256 deltaSy = 1 ether;
+        (,, uint256 minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
-        deal(address(SY), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+        deal(address(SY), address(this), deltaSy);
+        SY.approve(address(subject()), deltaSy);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                InsufficientOutput.selector, upscale(deltaX, scalar(address(SY))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaSy, scalar(address(SY))), minAmountOut + 10, minAmountOut
             )
         );
-        subject().swapX(deltaX, minAmountOut + 10, address(this), "");
+        subject().swapExactSyForPt(deltaSy, minAmountOut + 10, address(this));
     }
 
-    function test_swapX_event() public basic {
+    function test_swapSy_event() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaX = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapX(deltaX, block.timestamp, index);
+        uint256 deltaSy = 1 ether;
+        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
         deal(address(PT), address(subject()), minAmountOut);
-        deal(address(SY), address(this), deltaX);
-        SY.approve(address(subject()), deltaX);
+        deal(address(SY), address(this), deltaSy);
+        SY.approve(address(subject()), deltaSy);
 
         vm.expectEmit();
-        emit Swap(address(this), address(this), address(SY), address(PT), deltaX, minAmountOut, delLiq);
-        subject().swapX(deltaX, minAmountOut, address(this), "");
+        emit Swap(address(this), address(this), address(SY), address(PT), deltaSy, minAmountOut, delLiq);
+        subject().swapExactSyForPt(deltaSy, 0, address(this));
     }
 
     function test_swapY() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapY(deltaY, block.timestamp, index);
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut,,) = subject().prepareSwapPt(deltaPt, block.timestamp, index);
         deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
+        deal(address(PT), address(this), deltaPt);
+        PT.approve(address(subject()), deltaPt);
 
         uint256 prevBalanceX = balanceWad(address(SY), address(this));
         uint256 prevBalanceY = balanceWad(address(PT), address(this));
         uint256 prevPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
         uint256 prevReserveY = subject().reserveY();
         uint256 prevLiquidity = subject().totalLiquidity();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapY(deltaY, minAmountOut, address(this), "");
+        (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactPtForSy(deltaPt, minAmountOut, address(this));
 
         assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
         assertTrue(abs(subject().tradingFunction(index)) < 100, "Trading function invalid");
         assertEq(subject().reserveX(), basicParams.amountX - amountOut, "Reserve X did not decrease by amount in.");
-        assertEq(subject().reserveY(), prevReserveY + deltaY, "Reserve Y did not increase by delta Y.");
+        assertEq(subject().reserveY(), prevReserveY + deltaPt, "Reserve Y did not increase by delta Y.");
         assertEq(
             subject().totalLiquidity(),
             sum(prevLiquidity, deltaLiquidity),
@@ -430,7 +433,7 @@ contract RMMTest is Test {
             balanceWad(address(SY), address(this)), prevBalanceX + amountOut, "Balance X did not increase by amount in."
         );
         assertEq(
-            balanceWad(address(PT), address(this)), prevBalanceY - deltaY, "Balance Y did not decrease by delta Y."
+            balanceWad(address(PT), address(this)), prevBalanceY - deltaPt, "Balance Y did not decrease by delta Y."
         );
         assertTrue(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())) > prevPrice,
@@ -438,32 +441,32 @@ contract RMMTest is Test {
         );
     }
 
-    function test_swapY_reverts_InsufficientOutput() public basic {
+    function test_swapPt_reverts_InsufficientOutput() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapY(deltaY, block.timestamp, index);
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut,,) = subject().prepareSwapPt(deltaPt, block.timestamp, index);
 
         mintSY(minAmountOut);
-        mintPtYt(deltaY);
+        mintPtYt(deltaPt);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                InsufficientOutput.selector, upscale(deltaY, scalar(address(PT))), minAmountOut + 10, minAmountOut
+                InsufficientOutput.selector, upscale(deltaPt, scalar(address(PT))), minAmountOut + 10, minAmountOut
             )
         );
-        subject().swapY(deltaY, minAmountOut + 10, address(this), "");
+        subject().swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
     }
 
-    function test_swapY_event() public basic {
+    function test_swapPt_event() public basic {
         PYIndex index = YT.newIndex();
-        uint256 deltaY = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapY(deltaY, block.timestamp, index);
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapPt(deltaPt, block.timestamp, index);
         deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaY);
-        PT.approve(address(subject()), deltaY);
+        deal(address(PT), address(this), deltaPt);
+        PT.approve(address(subject()), deltaPt);
 
         vm.expectEmit();
-        emit Swap(address(this), address(this), address(PT), address(SY), deltaY, minAmountOut, delLiq);
-        subject().swapY(deltaY, minAmountOut, address(this), "");
+        emit Swap(address(this), address(this), address(PT), address(SY), deltaPt, minAmountOut, delLiq);
+        subject().swapExactPtForSy(deltaPt, minAmountOut, address(this));
     }
 }
