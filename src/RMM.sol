@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -131,8 +130,6 @@ contract RMM is ERC20 {
         uint256 strike_;
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) = prepareSwapY(amountIn, block.timestamp, index);
-        console2.log("amountInWad", amountInWad);
-        console2.log("amountOutWad", amountOutWad);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -183,8 +180,6 @@ contract RMM is ERC20 {
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
         uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
         uint256 ytOut = amountOut + delta;
-        console2.log("delta", delta);
-        console2.log("ytOut", ytOut);
         (uint256 debitNative) = _debit(address(SY), delta);
 
         amountOut = mintPtYt(ytOut, msg.sender);
