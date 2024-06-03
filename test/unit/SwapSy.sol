@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {PYIndex, IPYieldToken} from "./../../src/RMM.sol";
-import {SetUp, RMM} from "./SetUp.sol";
+import {SetUp, RMM} from "../SetUp.sol";
 import {Swap} from "../../src/lib/RmmEvents.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 

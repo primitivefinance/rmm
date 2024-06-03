@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp, RMM, InitParams} from "./SetUp.sol";
+import {SetUp, RMM, InitParams} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
 import {AlreadyInitialized} from "../../src/lib/RmmErrors.sol";
 

@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, RMM} from "./SetUp.sol";
+import {Test, RMM} from "../SetUp.sol";
 
 contract ConstructorTest is Test {
     function test_constructor_InitializesParameters() public {

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {PYIndex} from "./../../src/RMM.sol";
-import {SetUp, RMM} from "./SetUp.sol";
+import {SetUp, RMM} from "../SetUp.sol";
 import {Allocate} from "../../src/lib/RmmEvents.sol";
 import {InsufficientLiquidityOut} from "../../src/lib/RmmErrors.sol";
 
