@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -26,25 +25,25 @@ contract RMM is ERC20 {
     uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
 
-    IPPrincipalToken public PT; // slot 6
-    IStandardizedYield public SY; // slot 7
-    IPYieldToken public YT; // slot 8
+    IPPrincipalToken public PT;
+    IStandardizedYield public SY;
+    IPYieldToken public YT;
 
-    uint256 public reserveX; // slot 9
-    uint256 public reserveY; // slot 10
-    uint256 public totalLiquidity; // slot 11
+    uint256 public reserveX;
+    uint256 public reserveY;
+    uint256 public totalLiquidity;
 
-    uint256 public strike; // slot 12
-    uint256 public sigma; // slot 13
-    uint256 public fee; // slot 14
-    uint256 public maturity; // slot 15
+    uint256 public strike;
+    uint256 public sigma;
+    uint256 public fee;
+    uint256 public maturity;
 
-    uint256 public initTimestamp; // slot 16
-    uint256 public lastTimestamp; // slot 17
-    uint256 public lastImpliedPrice; // slot 18
+    uint256 public initTimestamp;
+    uint256 public lastTimestamp;
+    uint256 public lastImpliedPrice;
 
-    address public curator; // slot 19
-    uint256 public lock_ = 1; // slot 20
+    address public curator;
+    uint256 public lock_ = 1;
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -141,7 +140,7 @@ contract RMM is ERC20 {
 
         if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
             amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
-        } 
+        }
 
         if (token != address(0)) {
             ERC20(token).transferFrom(msg.sender, address(this), amountIn);
@@ -173,8 +172,6 @@ contract RMM is ERC20 {
 
         // Converts the SY received from minting it into its components PT and YT.
         amountYtOut = mintPtYt(ytOut, address(this));
-        console2.log("got here");
-        console2.log("yt out, ", amountYtOut);
         _credit(address(YT), to, amountYtOut);
 
         uint256 debitSurplus = address(this).balance;
@@ -435,11 +432,13 @@ contract RMM is ERC20 {
         return uint256(lastPrice).divWadDown(uint256(exp));
     }
 
-    function computeTokenToYt(PYIndex index, address token, uint256 exactTokenIn, uint256 blockTime, uint256 initialGuess)
-        public
-        view
-        returns (uint256 amountSyMinted, uint256 amountYtOut)
-    {
+    function computeTokenToYt(
+        PYIndex index,
+        address token,
+        uint256 exactTokenIn,
+        uint256 blockTime,
+        uint256 initialGuess
+    ) public view returns (uint256 amountSyMinted, uint256 amountYtOut) {
         if (!SY.isValidTokenIn(token)) {
             revert InvalidTokenIn(token);
         }
