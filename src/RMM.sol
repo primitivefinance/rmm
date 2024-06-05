@@ -435,15 +435,6 @@ contract RMM is ERC20 {
         return uint256(lastPrice).divWadDown(uint256(exp));
     }
 
-    function computeEthToYt(PYIndex index, uint256 exactEthIn, uint256 blockTime, uint256 initialGuess)
-        public
-        view
-        returns (uint256 amountSyMinted, uint256 amountYtOut)
-    {
-        amountSyMinted = SY.previewDeposit(address(0), exactEthIn);
-        amountYtOut = computeSYToYT(index, amountSyMinted, blockTime, initialGuess);
-    }
-
     function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
         public
         view
