@@ -34,7 +34,7 @@ contract DeployPool is Script {
     address public constant PT_ADDRESS = address(0);
     uint256 public constant fee = 0.0002 ether;
     address public constant curator = address(0);
-    Factory FACTORY = Factory(0x6755436568792bC8E69020d8d77230fADCC4C9ef);
+    Factory FACTORY = Factory(0x5E181032e1373b650175d75da1aFC72469687549);
     IPMarket market = IPMarket(0xC374f7eC85F8C7DE3207a10bB1978bA104bdA3B2);
     IPAllActionV3 router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
     address wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
