@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Gaussian} from "solstat/Gaussian.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
@@ -370,7 +369,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
-        if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
+        if (!ERC20(token).transferFrom(msg.sender, address(this), amountNative)) {
             revert PaymentFailed(token, msg.sender, address(this), amountNative);
         }
 
@@ -385,7 +384,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
-        if (!Token(token).transfer(to, amountNative)) {
+        if (!ERC20(token).transfer(to, amountNative)) {
             revert PaymentFailed(token, address(this), to, amountNative);
         }
 
@@ -397,8 +396,7 @@ contract RMM is ERC20 {
 
     /// @dev Retrieves the balance of a token in this contract, reverting if the call fails or returns unexpected data.
     function _balanceNative(address token) internal view returns (uint256) {
-        (bool success, bytes memory data) =
-            token.staticcall(abi.encodeWithSelector(Token.balanceOf.selector, address(this)));
+        (bool success, bytes memory data) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this)));
         if (!success || data.length != 32) revert BalanceError();
         return abi.decode(data, (uint256));
     }
