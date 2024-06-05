@@ -127,8 +127,7 @@ contract RMM is ERC20 {
     /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
     /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
     function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to)
-        external
-        payable
+        public 
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
@@ -140,10 +139,6 @@ contract RMM is ERC20 {
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
             prepareSwapPtIn(amountIn, block.timestamp, index);
 
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
-        }
-
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
@@ -151,17 +146,23 @@ contract RMM is ERC20 {
         uint256 ytOut = amountOut + delta;
         (uint256 debitNative) = _debit(address(SY), delta);
 
+
         amountOut = mintPtYt(ytOut, address(this));
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
         _credit(address(YT), to, amountOut);
 
         emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
-    function swapExactTokenForYt(address token, uint256 amountIn, uint256 minSyMinted, uint256 minYtOut, address to)
+    function swapExactTokenForYt(address token, uint256 amountTokenIn, uint256 amountPtForFlashSwap, uint256 minSyMinted, uint256 minYtOut, address to)
         external
         payable
         lock
-        returns (uint256 amountYtOut, int256 deltaLiquidity)
+        returns (uint256 amountOut, int256 deltaLiquidity)
     {
         // initialize to msg.value
         uint256 debitNative = msg.value;
@@ -173,14 +174,14 @@ contract RMM is ERC20 {
         }
 
         if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
-            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         } 
 
         if (token != address(0)) {
-            ERC20(token).transferFrom(msg.sender, address(this), amountIn);
-            ERC20(token).approve(address(SY), amountIn);
-            amountSyMinted += SY.deposit(address(this), token, amountIn, minSyMinted);
-            debitNative += amountIn;
+            ERC20(token).transferFrom(msg.sender, address(this), amountTokenIn);
+            ERC20(token).approve(address(SY), amountTokenIn);
+            amountSyMinted += SY.deposit(address(this), token, amountTokenIn, 0);
+            debitNative += amountTokenIn;
         }
 
         if (amountSyMinted < minSyMinted) {
@@ -192,28 +193,34 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
-        (amountInWad, amountOutWad, amountYtOut, deltaLiquidity, strike_) =
-            prepareSwapPtIn(amountSyMinted, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
+            prepareSwapPtIn(amountPtForFlashSwap, block.timestamp, index);
 
-        if (amountYtOut < minYtOut) {
-            revert InsufficientOutput(amountInWad, minYtOut, amountYtOut);
-        }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        uint256 ytOut = amountYtOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        uint256 ytOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        console2.log("ytOut", ytOut);
+        console2.log("amt out 1", amountOut);
 
         // Converts the SY received from minting it into its components PT and YT.
-        amountYtOut = mintPtYt(ytOut, address(this));
-        _credit(address(YT), to, amountYtOut);
+        amountOut = mintPtYt(ytOut, address(this));
+        console2.log("amountOut", amountOut);
+
+        if (amountOut < minYtOut) {
+            revert InsufficientOutput(amountInWad, minYtOut, amountOut);
+        }
+
+        _credit(address(YT), to, amountOut);
 
         uint256 debitSurplus = address(this).balance;
+
         if (debitSurplus > 0) {
             _sendETH(to, debitSurplus);
         }
 
-        emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountYtOut, deltaLiquidity);
+        // emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountOut, deltaLiquidity);
     }
 
     function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to)

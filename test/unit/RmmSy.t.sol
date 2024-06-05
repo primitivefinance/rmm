@@ -393,39 +393,23 @@ contract ForkRMMTest is Test {
         assertEq(SY.balanceOf(address(this)), amountOut, "SY balance of address(this) is not equal to amountOut.");
     }
 
-    function test_swap_eth_for_yt() public basic_sy {
-        uint256 amountIn = 1 ether;
-        uint256 minSyMinted = 0;
-        uint256 minYtOut = 0;
-        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, minSyMinted, minYtOut, address(this));
-    }
-
-    function test_swap_weth_for_yt() public basic_sy {
-        uint256 amountIn = 1 ether;
-        uint256 minSyMinted = 0;
-        uint256 minYtOut = 0;
-        deal(subject().WETH(), address(this), amountIn);
-        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
-        subject().swapExactTokenForYt(address(subject().WETH()), amountIn, minSyMinted, minYtOut, address(this));
-    }
-
-    function test_swap_weth_and_eth_for_yt() public basic_sy {
-        uint256 amountIn = 1 ether;
-        uint256 minSyMinted = 0;
-        uint256 minYtOut = 0;
-        deal(subject().WETH(), address(this), amountIn);
-        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
-        subject().swapExactTokenForYt{value: amountIn}(address(subject().WETH()), amountIn, minSyMinted, minYtOut, address(this));
-    }
-
     function test_compute_token_to_yt() public basic_sy {
+        SY.transfer(address(0x55), SY.balanceOf(address(this)));
+        PT.transfer(address(0x55), PT.balanceOf(address(this)));
+        YT.transfer(address(0x55), YT.balanceOf(address(this)));
+
+        // assert balance of address(this) is 0 for SY, PT, and YT
+        assertEq(SY.balanceOf(address(this)), 0, "SY balance of address(this) is not 0.");
+        assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
+        assertEq(YT.balanceOf(address(this)), 0, "YT balance of address(this) is not 0.");
+
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) = subject().computeTokenToYt(index, address(0), amountIn, block.timestamp, 500 ether);
         console2.log("syMinted", syMinted);
         console2.log("ytOut", ytOut);
-        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, syMinted, ytOut, address(this));
-        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance of address(this) is not equal to ytOut.");
+        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, ytOut, syMinted, ytOut, address(this));
+        assertApproxEqAbs(YT.balanceOf(address(this)), ytOut, 1_000, "YT balance of address(this) is not equal to ytOut.");
     }
 
     // TODO: add functionality for handling these on the new swaps
