@@ -67,7 +67,7 @@ contract RMM is ERC20 {
         WETH = weth_;
     }
 
-    function version() public pure returns (string memory) {
+    function version() external pure returns (string memory) {
         return "0.1.1-rc0";
     }
 
