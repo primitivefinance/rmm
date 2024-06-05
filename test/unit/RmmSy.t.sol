@@ -393,6 +393,13 @@ contract ForkRMMTest is Test {
         assertEq(SY.balanceOf(address(this)), amountOut, "SY balance of address(this) is not equal to amountOut.");
     }
 
+    function test_swap_eth_for_yt() public basic_sy {
+        uint256 amountIn = 1 ether;
+        uint256 minSyMinted = 0;
+        uint256 minYtOut = 0;
+        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, minSyMinted, minYtOut, address(this));
+    }
+
     // TODO: add functionality for handling these on the new swaps
     // function test_swapX_usingIbToken() public basic_sy {
     //     uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));

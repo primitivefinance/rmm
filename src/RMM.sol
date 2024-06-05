@@ -124,21 +124,31 @@ contract RMM is ERC20 {
         );
     }
 
-    function ethForYt(uint256 minSyMinted, uint256 minYtOut, address to)
+    function swapExactTokenForYt(address token, uint256 amountIn, uint256 minSyMinted, uint256 minYtOut, address to)
         external
         payable
         lock
         returns (uint256 amountYtOut, int256 deltaLiquidity)
     {
+        // initialize to msg.value
+        uint256 debitNative = msg.value;
+        uint256 amountSyMinted;
+
         // Convert the eth to SY via minting.
-        if (msg.value == 0) {
-            revert InsufficientPayment(address(0), 0, msg.value);
+        if (!SY.isValidTokenIn(token)) {
+            revert InvalidTokenIn(token);
         }
 
-        uint256 debitNative = msg.value;
+        if (msg.value > 0) {
+            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+        } 
 
-        // Reverts if the `minSyMinted` condition is not met.
-        uint256 amountSyMinted = SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+        if (token != address(0)) {
+            ERC20(token).transferFrom(msg.sender, address(this), amountIn);
+            debitNative += amountIn;
+            ERC20(token).approve(address(SY), amountIn);
+            amountSyMinted += SY.deposit(address(this), token, amountIn, minSyMinted - amountSyMinted);
+        }
 
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
@@ -155,15 +165,18 @@ contract RMM is ERC20 {
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        uint256 ytOut = amountYtOut + delta;
+        uint256 ytOut = amountYtOut + (index.assetToSyUp(amountInWad) - amountOutWad);
 
         // Converts the SY received from minting it into its components PT and YT.
         amountYtOut = mintPtYt(ytOut, address(this));
+        console2.log("got here");
+        console2.log("yt out, ", amountYtOut);
         _credit(address(YT), to, amountYtOut);
 
         uint256 debitSurplus = address(this).balance;
-        _sendETH(to, debitSurplus);
+        if (debitSurplus > 0) {
+            _sendETH(to, debitSurplus);
+        }
 
         emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountYtOut, deltaLiquidity);
     }
