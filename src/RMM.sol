@@ -106,17 +106,7 @@ contract RMM is ERC20 {
         _debit(address(PT), reserveY);
 
         emit Init(
-            msg.sender,
-            address(SY),
-            address(PT_),
-            amountX,
-            amountY,
-            totalLiquidity_,
-            strike_,
-            sigma_,
-            fee_,
-            maturity,
-            curator_
+            msg.sender, address(SY), PT_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity, curator_
         );
     }
 
