@@ -154,10 +154,10 @@ contract ForkRMMTest is Test {
         uint256 deltaSy = 1 ether;
         console2.log("maturity", subject().maturity());
         vm.warp(block.timestamp + 5 days);
-        (,, uint256 minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
         (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
         vm.warp(block.timestamp + 5 days);
-        (,, minAmountOut,,) = subject().prepareSwapSy(deltaSy, block.timestamp, index);
+        (,, minAmountOut,,) = subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
         (amountOut, deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
     }
 
@@ -165,7 +165,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaPt = 1 ether;
         uint256 balanceSyBefore = SY.balanceOf(address(this));
-        subject().prepareSwapPt(deltaPt, block.timestamp, index);
+        subject().prepareSwapPtIn(deltaPt, block.timestamp, index);
         (uint256 amtOut,) = subject().swapExactPtForSy(deltaPt, 0, address(this));
         console2.log("amtOut", amtOut);
 
@@ -197,7 +197,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapSy(deltaSy, block.timestamp, index);
+        subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
         subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
@@ -206,7 +206,7 @@ contract ForkRMMTest is Test {
         PYIndex index = YT.newIndex();
         uint256 deltaSy = 1 ether;
         vm.warp(subject().maturity());
-        subject().prepareSwapSy(deltaSy, block.timestamp, index);
+        subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
         subject().swapExactSyForPt(deltaSy, 0, address(this));
         assertApproxEqAbs(
             subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
@@ -263,7 +263,7 @@ contract ForkRMMTest is Test {
         console2.log("ytOut", ytOut);
         console2.log("rPT", rPT);
         console2.log("rSY", rSY);
-        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, 0, address(this));
+        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, ytOut.mulDivDown(95, 100), address(this));
         console2.log("amtOut", amtOut);
         console2.log("SY balance after", SY.balanceOf(address(this)));
         console2.log("YT balance after", YT.balanceOf(address(this)));
@@ -416,6 +416,16 @@ contract ForkRMMTest is Test {
         deal(subject().WETH(), address(this), amountIn);
         IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
         subject().swapExactTokenForYt{value: amountIn}(address(subject().WETH()), amountIn, minSyMinted, minYtOut, address(this));
+    }
+
+    function test_compute_token_to_yt() public basic_sy {
+        uint256 amountIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        (uint256 syMinted, uint256 ytOut) = subject().computeTokenToYt(index, address(0), amountIn, block.timestamp, 500 ether);
+        console2.log("syMinted", syMinted);
+        console2.log("ytOut", ytOut);
+        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, syMinted, ytOut, address(this));
+        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance of address(this) is not equal to ytOut.");
     }
 
     // TODO: add functionality for handling these on the new swaps
