@@ -440,6 +440,9 @@ contract RMM is ERC20 {
         view
         returns (uint256 amountSyMinted, uint256 amountYtOut)
     {
+        if (!SY.isValidTokenIn(token)) {
+            revert InvalidTokenIn(token);
+        }
         amountSyMinted = SY.previewDeposit(token, exactTokenIn);
         amountYtOut = computeSYToYT(index, amountSyMinted, blockTime, initialGuess);
     }
