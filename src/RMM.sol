@@ -220,7 +220,7 @@ contract RMM is ERC20 {
             _sendETH(to, debitSurplus);
         }
 
-        // emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountOut, deltaLiquidity);
+        emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountOut, deltaLiquidity);
     }
 
     function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to)
