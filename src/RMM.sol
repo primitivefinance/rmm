@@ -139,7 +139,7 @@ contract RMM is ERC20 {
             revert InvalidTokenIn(token);
         }
 
-        if (msg.value > 0) {
+        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
             amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
         } 
 
