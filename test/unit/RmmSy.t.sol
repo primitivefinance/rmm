@@ -400,6 +400,24 @@ contract ForkRMMTest is Test {
         subject().swapExactTokenForYt{value: amountIn}(address(0), 0, minSyMinted, minYtOut, address(this));
     }
 
+    function test_swap_weth_for_yt() public basic_sy {
+        uint256 amountIn = 1 ether;
+        uint256 minSyMinted = 0;
+        uint256 minYtOut = 0;
+        deal(subject().WETH(), address(this), amountIn);
+        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+        subject().swapExactTokenForYt(address(subject().WETH()), amountIn, minSyMinted, minYtOut, address(this));
+    }
+
+    function test_swap_weth_and_eth_for_yt() public basic_sy {
+        uint256 amountIn = 1 ether;
+        uint256 minSyMinted = 0;
+        uint256 minYtOut = 0;
+        deal(subject().WETH(), address(this), amountIn);
+        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
+        subject().swapExactTokenForYt{value: amountIn}(address(subject().WETH()), amountIn, minSyMinted, minYtOut, address(this));
+    }
+
     // TODO: add functionality for handling these on the new swaps
     // function test_swapX_usingIbToken() public basic_sy {
     //     uint256 wstethBalanceInitial = IERC20(wstETH).balanceOf(address(this));

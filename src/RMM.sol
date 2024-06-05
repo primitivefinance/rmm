@@ -145,9 +145,13 @@ contract RMM is ERC20 {
 
         if (token != address(0)) {
             ERC20(token).transferFrom(msg.sender, address(this), amountIn);
-            debitNative += amountIn;
             ERC20(token).approve(address(SY), amountIn);
-            amountSyMinted += SY.deposit(address(this), token, amountIn, minSyMinted - amountSyMinted);
+            amountSyMinted += SY.deposit(address(this), token, amountIn, minSyMinted);
+            debitNative += amountIn;
+        }
+
+        if (amountSyMinted < minSyMinted) {
+            revert InsufficientOutput(amountSyMinted, minSyMinted, amountSyMinted);
         }
 
         PYIndex index = YT.newIndex();
