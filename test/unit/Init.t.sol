@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {SetUp, RMM, InitParams} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
-import {AlreadyInitialized} from "../../src/lib/RmmErrors.sol";
+import {AlreadyInitialized, InvalidStrike} from "../../src/lib/RmmErrors.sol";
 
 contract InitTest is SetUp {
     function test_init_StoresInitParams() public {
@@ -162,6 +162,22 @@ contract InitTest is SetUp {
             initParams.priceX,
             initParams.amountX,
             initParams.strike,
+            initParams.sigma,
+            initParams.fee,
+            initParams.curator
+        );
+    }
+
+    function test_init_RevertsIfInvalidStrike() public {
+        InitParams memory initParams = getDefaultParams();
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidStrike.selector));
+
+        rmm.init(
+            initParams.PT,
+            initParams.priceX,
+            initParams.amountX,
+            1 ether - 1,
             initParams.sigma,
             initParams.fee,
             initParams.curator
