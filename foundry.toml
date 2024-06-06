@@ -13,4 +13,4 @@ mainnet = "${MAINNET_RPC_URL}"
 op_sepolia = "${OP_SEPOLIA_RPC_URL}"
 testnet = "${TESTNET_RPC_URL}"
 
-unknown_chain = { key = "${TENDERLY_ACCESS_KEY}", chain = 8888, url = "${TESTNET_RPC_URL}" }
+unknown_chain = { key = "${TENDERLY_ACCESS_KEY}", chain = 753712, url = "${TESTNET_RPC_URL}" }
