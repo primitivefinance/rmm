@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -201,12 +200,9 @@ contract RMM is ERC20 {
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
         uint256 ytOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
-        console2.log("ytOut", ytOut);
-        console2.log("amt out 1", amountOut);
 
         // Converts the SY received from minting it into its components PT and YT.
         amountOut = mintPtYt(ytOut, address(this));
-        console2.log("amountOut", amountOut);
 
         if (amountOut < minYtOut) {
             revert InsufficientOutput(amountInWad, minYtOut, amountOut);
