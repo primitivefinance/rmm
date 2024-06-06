@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {RMM} from "../SetUp.sol";
+import {MockRMM} from "../MockRMM.sol";
 
 // These imports will be used for extra tests
 import {FeeOnTransferToken} from "../../src/test/FeeOnTransferToken.sol";
