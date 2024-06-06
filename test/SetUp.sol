@@ -56,12 +56,17 @@ contract SetUp is Test {
         _;
     }
 
+    modifier initPool(InitParams memory params) {
+        rmm.init(params.PT, params.priceX, params.amountX, params.strike, params.sigma, params.fee, params.curator);
+        _;
+    }
+
     modifier dealSY(address to, uint256 amount) {
         deal(address(SY), to, amount);
         _;
     }
 
-    function setUp() public {
+    function setUp() public virtual {
         weth = new WETH();
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         IB = new MockERC20("ibToken", "IB", 18);
