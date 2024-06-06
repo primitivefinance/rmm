@@ -279,6 +279,17 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
+    function swapExactYtForPt(uint256 exactPtToFlashswap) external lock {
+        /*
+        
+            1. Flash swap exact same amount of Yt in PT
+            2. PT + YT -> SY
+            3. Sell all SY for PT
+            4. 
+        
+         */
+    }
+
     /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
         external
@@ -447,6 +458,30 @@ contract RMM is ERC20 {
             uint256 netSyToPull = netSyToPt - amountOut;
             if (netSyToPull <= exactSYIn) {
                 if (isASmallerApproxB(netSyToPull, exactSYIn, 10_000)) {
+                    return guess;
+                }
+                min = guess;
+            } else {
+                max = guess - 1;
+            }
+        }
+    }
+
+    function computeYTToPT(PYIndex index, uint256 exactYTIn, uint256 blockTime, uint256 initialGuess)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 min = exactYTIn;
+        uint256 max = initialGuess;
+        for (uint256 iter = 0; iter < 100; ++iter) {
+            uint256 guess = (min + max) / 2;
+            (,, uint256 amountOut,,) = prepareSwapSy(guess, blockTime, index);
+            uint256 netPtToAccount = index.assetToSyUp(guess);
+
+            uint256 netPtToPull = netPtToAccount - amountOut;
+            if (netPtToPull <= exactYTIn) {
+                if (isASmallerApproxB(netPtToPull, exactYTIn, 10_000)) {
                     return guess;
                 }
                 min = guess;
