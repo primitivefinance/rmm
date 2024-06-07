@@ -70,7 +70,7 @@ contract SetUp is Test {
         weth = new WETH();
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         IB = new MockERC20("ibToken", "IB", 18);
-        SY = IStandardizedYield(new PendleERC20SY("SY", "SY", address(IB)));
+        SY = IStandardizedYield(new PendleERC20SY("SY", "SY", address(weth)));
 
         (
             address creationCodeContractA,
@@ -89,14 +89,14 @@ contract SetUp is Test {
         YT = IPYieldToken(factory.getYT(address(SY), DEFAULT_EXPIRY));
         PT = IPPrincipalToken(factory.getPT(address(SY), DEFAULT_EXPIRY));
 
-        deal(address(IB), address(this), 1_000_000 ether);
-        IB.approve(address(SY), type(uint256).max);
-        SY.deposit(address(this), address(IB), DEFAULT_AMOUNT, 1);
+        deal(address(weth), address(this), 1_000_000 ether);
+        weth.approve(address(SY), type(uint256).max);
+        SY.deposit(address(this), address(weth), DEFAULT_AMOUNT, 1);
 
         SY.transfer(address(YT), DEFAULT_AMOUNT - 1 ether);
         YT.mintPY(address(this), address(this));
 
-        IB.approve(address(rmm), type(uint256).max);
+        weth.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
         PT.approve(address(rmm), type(uint256).max);
         YT.approve(address(rmm), type(uint256).max);
