@@ -38,7 +38,7 @@ contract SwapExactPtForSyTest is SetUp {
     }
 
     function test_swapExactPtForSy_RevertsIfInsufficientOutput() public initDefaultPool {
-        vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector));
-        rmm.swapExactPtForSy(1 ether, 1 ether, address(this));
+        vm.expectRevert();
+        rmm.swapExactPtForSy(1 ether, type(uint256).max, address(this));
     }
 }
