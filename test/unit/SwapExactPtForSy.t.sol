@@ -22,6 +22,21 @@ contract SwapExactPtForSyTest is SetUp {
         assertEq(ERC20(address(PT)).balanceOf(address(rmm)), prePTBalanceRMM + amountIn);
     }
 
+    function test_swapExactPtForSy_AdjustsReserves() public initDefaultPool {
+        uint256 preReserveX = rmm.reserveX();
+        uint256 preReserveY = rmm.reserveY();
+        uint256 preLiquidity = rmm.totalLiquidity();
+        uint256 preStrike = rmm.strike();
+
+        uint256 amountIn = 1 ether;
+        (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactPtForSy(amountIn, 0, address(this));
+
+        assertEq(rmm.reserveX(), preReserveX - amountOut);
+        assertEq(rmm.reserveY(), preReserveY + amountIn);
+        assertEq(rmm.totalLiquidity(), preLiquidity + uint256(deltaLiquidity));
+        assertEq(rmm.strike(), preStrike);
+    }
+
     function test_swapExactPtForSy_RevertsIfInsufficientOutput() public initDefaultPool {
         vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector));
         rmm.swapExactPtForSy(1 ether, 1 ether, address(this));
