@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -124,11 +123,45 @@ contract RMM is ERC20 {
         );
     }
 
-    function swapExactTokenForYt(address token, uint256 amountIn, uint256 minSyMinted, uint256 minYtOut, address to)
+    /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
+    /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
+    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to)
+        public 
+        lock
+        returns (uint256 amountOut, int256 deltaLiquidity)
+    {
+        PYIndex index = YT.newIndex();
+        uint256 amountInWad;
+        uint256 amountOutWad;
+        uint256 strike_;
+
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
+            prepareSwapPtIn(amountIn, block.timestamp, index);
+
+        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
+
+        // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
+        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        uint256 ytOut = amountOut + delta;
+        (uint256 debitNative) = _debit(address(SY), delta);
+
+
+        amountOut = mintPtYt(ytOut, address(this));
+
+        if (amountOut < minAmountOut) {
+            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
+        }
+
+        _credit(address(YT), to, amountOut);
+
+        emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
+    }
+
+    function swapExactTokenForYt(address token, uint256 amountTokenIn, uint256 amountPtForFlashSwap, uint256 minSyMinted, uint256 minYtOut, address to)
         external
         payable
         lock
-        returns (uint256 amountYtOut, int256 deltaLiquidity)
+        returns (uint256 amountOut, int256 deltaLiquidity)
     {
         // initialize to msg.value
         uint256 debitNative = msg.value;
@@ -140,18 +173,18 @@ contract RMM is ERC20 {
         }
 
         if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
-            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         } 
 
         if (token != address(0)) {
-            ERC20(token).transferFrom(msg.sender, address(this), amountIn);
-            ERC20(token).approve(address(SY), amountIn);
-            amountSyMinted += SY.deposit(address(this), token, amountIn, minSyMinted);
-            debitNative += amountIn;
+            ERC20(token).transferFrom(msg.sender, address(this), amountTokenIn);
+            ERC20(token).approve(address(SY), amountTokenIn);
+            amountSyMinted += SY.deposit(address(this), token, amountTokenIn, 0);
+            debitNative += amountTokenIn;
         }
 
         if (amountSyMinted < minSyMinted) {
-            revert InsufficientOutput(amountSyMinted, minSyMinted, amountSyMinted);
+            revert InsufficientSYMinted(amountSyMinted, minSyMinted);
         }
 
         PYIndex index = YT.newIndex();
@@ -159,30 +192,31 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
-        (amountInWad, amountOutWad, amountYtOut, deltaLiquidity, strike_) =
-            prepareSwapPt(amountSyMinted, block.timestamp, index);
+        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
+            prepareSwapPtIn(amountPtForFlashSwap, block.timestamp, index);
 
-        if (amountYtOut < minYtOut) {
-            revert InsufficientOutput(amountInWad, minYtOut, amountYtOut);
-        }
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        uint256 ytOut = amountYtOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        uint256 ytOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
 
         // Converts the SY received from minting it into its components PT and YT.
-        amountYtOut = mintPtYt(ytOut, address(this));
-        console2.log("got here");
-        console2.log("yt out, ", amountYtOut);
-        _credit(address(YT), to, amountYtOut);
+        amountOut = mintPtYt(ytOut, address(this));
+
+        if (amountOut < minYtOut) {
+            revert InsufficientOutput(amountInWad, minYtOut, amountOut);
+        }
+
+        _credit(address(YT), to, amountOut);
 
         uint256 debitSurplus = address(this).balance;
+
         if (debitSurplus > 0) {
             _sendETH(to, debitSurplus);
         }
 
-        emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountYtOut, deltaLiquidity);
+        emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountOut, deltaLiquidity);
     }
 
     function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to)
@@ -197,7 +231,7 @@ contract RMM is ERC20 {
         uint256 strike_;
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwapPt(amountIn, block.timestamp, index);
+            prepareSwapPtIn(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -222,7 +256,7 @@ contract RMM is ERC20 {
         uint256 strike_;
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwapSy(amountIn, block.timestamp, index);
+            prepareSwapSyIn(amountIn, block.timestamp, index);
 
         if (amountOut < minAmountOut) {
             revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
@@ -260,39 +294,6 @@ contract RMM is ERC20 {
         (uint256 debitNative) = _credit(address(SY), to, amountOut);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
-    }
-
-    /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
-    /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
-    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to)
-        external
-        payable
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
-        PYIndex index = YT.newIndex();
-        uint256 amountInWad;
-        uint256 amountOutWad;
-        uint256 strike_;
-
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwapPt(amountIn, block.timestamp, index);
-
-        if (amountOut < minAmountOut) {
-            revert InsufficientOutput(amountInWad, minAmountOut, amountOut);
-        }
-
-        _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
-
-        // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        uint256 ytOut = amountOut + delta;
-        (uint256 debitNative) = _debit(address(SY), delta);
-
-        amountOut = mintPtYt(ytOut, address(this));
-        _credit(address(YT), to, amountOut);
-
-        emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
     /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
@@ -456,7 +457,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwapPt(guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
@@ -506,7 +507,7 @@ contract RMM is ERC20 {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
-    function prepareSwapSy(uint256 amountIn, uint256 timestamp, PYIndex index)
+    function prepareSwapSyIn(uint256 amountIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
@@ -532,7 +533,7 @@ contract RMM is ERC20 {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
-    function prepareSwapPt(uint256 ptIn, uint256 timestamp, PYIndex index)
+    function prepareSwapPtIn(uint256 ptIn, uint256 timestamp, PYIndex index)
         public
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
