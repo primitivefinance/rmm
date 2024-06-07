@@ -89,7 +89,6 @@ contract RMM is ERC20 {
         PYIndex index = YT.newIndex();
         uint256 totalAsset = index.syToAsset(amountX);
 
-        strike = strike_;
         sigma = sigma_;
         maturity = PT.expiry();
         fee = fee_;
