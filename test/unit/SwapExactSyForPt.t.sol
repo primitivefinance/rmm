@@ -2,5 +2,24 @@
 pragma solidity ^0.8.13;
 
 import {SetUp} from "../SetUp.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-contract SwapExactSyForPtTest is SetUp {}
+contract SwapExactSyForPtTest is SetUp {
+    function test_swapExactSyForPt_TransfersTokens(address to) public initDefaultPool {
+        deal(address(SY), address(this), 1 ether);
+
+        uint256 preSYBalance = ERC20(address(SY)).balanceOf(address(this));
+        uint256 prePTBalance = ERC20(address(PT)).balanceOf(to);
+
+        uint256 preSYBalanceRMM = ERC20(address(SY)).balanceOf(address(rmm));
+        uint256 prePTBalanceRMM = ERC20(address(PT)).balanceOf(address(rmm));
+
+        uint256 amountIn = 1 ether;
+        (uint256 amountOut,) = rmm.swapExactSyForPt(amountIn, 0, address(to));
+
+        assertEq(ERC20(address(SY)).balanceOf(address(this)), preSYBalance - amountIn);
+        assertEq(ERC20(address(PT)).balanceOf(address(to)), prePTBalance + amountOut);
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM + amountIn);
+        assertEq(ERC20(address(PT)).balanceOf(address(rmm)), prePTBalanceRMM - amountOut);
+    }
+}
