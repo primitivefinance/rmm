@@ -37,4 +37,10 @@ contract SwapExactSyForPtTest is SetUp {
         assertEq(rmm.reserveY(), preReserveY - amountOut);
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
     }
+
+    function test_swapExactSyForPt_RevertsIfInsufficientOutput(address to) public initDefaultPool {
+        deal(address(SY), address(this), 1 ether);
+        vm.expectRevert();
+        rmm.swapExactSyForPt(1 ether, type(uint256).max, address(to));
+    }
 }
