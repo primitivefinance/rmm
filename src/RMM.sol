@@ -125,8 +125,8 @@ contract RMM is ERC20 {
 
     /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
     /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
-    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, address to)
-        public 
+    function swapExactSyForYt(uint256 amountIn, uint256 minAmountOut, uint256 epsilon, address to)
+        public
         lock
         returns (uint256 amountOut, int256 deltaLiquidity)
     {
@@ -135,8 +135,10 @@ contract RMM is ERC20 {
         uint256 amountOutWad;
         uint256 strike_;
 
+        uint256 bestAmountIn = computeSYToYT(index, amountIn, block.timestamp, amountIn, epsilon);
+
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwapPtIn(amountIn, block.timestamp, index);
+            prepareSwapPtIn(bestAmountIn, block.timestamp, index);
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
@@ -144,7 +146,6 @@ contract RMM is ERC20 {
         uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
         uint256 ytOut = amountOut + delta;
         (uint256 debitNative) = _debit(address(SY), delta);
-
 
         amountOut = mintPtYt(ytOut, address(this));
 
@@ -157,12 +158,14 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
-    function swapExactTokenForYt(address token, uint256 amountTokenIn, uint256 amountPtForFlashSwap, uint256 minSyMinted, uint256 minYtOut, address to)
-        external
-        payable
-        lock
-        returns (uint256 amountOut, int256 deltaLiquidity)
-    {
+    function swapExactTokenForYt(
+        address token,
+        uint256 amountTokenIn,
+        uint256 amountPtForFlashSwap,
+        uint256 minSyMinted,
+        uint256 minYtOut,
+        address to
+    ) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
         // initialize to msg.value
         uint256 debitNative = msg.value;
         uint256 amountSyMinted;
@@ -174,7 +177,7 @@ contract RMM is ERC20 {
 
         if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
             amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
-        } 
+        }
 
         if (token != address(0)) {
             ERC20(token).transferFrom(msg.sender, address(this), amountTokenIn);
@@ -194,7 +197,6 @@ contract RMM is ERC20 {
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
             prepareSwapPtIn(amountPtForFlashSwap, block.timestamp, index);
-
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
@@ -436,33 +438,36 @@ contract RMM is ERC20 {
         return uint256(lastPrice).divWadDown(uint256(exp));
     }
 
-    function computeTokenToYt(PYIndex index, address token, uint256 exactTokenIn, uint256 blockTime, uint256 initialGuess)
-        public
-        view
-        returns (uint256 amountSyMinted, uint256 amountYtOut)
-    {
+    function computeTokenToYT(
+        PYIndex index,
+        address token,
+        uint256 exactTokenIn,
+        uint256 blockTime,
+        uint256 initialGuess,
+        uint256 epsilon
+    ) public view returns (uint256 amountSyMinted, uint256 amountYtOut) {
         if (!SY.isValidTokenIn(token)) {
             revert InvalidTokenIn(token);
         }
         amountSyMinted = SY.previewDeposit(token, exactTokenIn);
-        amountYtOut = computeSYToYT(index, amountSyMinted, blockTime, initialGuess);
+        amountYtOut = computeSYToYT(index, amountSyMinted, blockTime, initialGuess, epsilon);
     }
 
-    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess)
+    function computeSYToYT(PYIndex index, uint256 exactSYIn, uint256 blockTime, uint256 initialGuess, uint256 epsilon)
         public
         view
-        returns (uint256)
+        returns (uint256 guess)
     {
         uint256 min = exactSYIn;
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
-            uint256 guess = (min + max) / 2;
+            guess = (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
             if (netSyToPull <= exactSYIn) {
-                if (isASmallerApproxB(netSyToPull, exactSYIn, 10_000)) {
+                if (isASmallerApproxB(netSyToPull, exactSYIn, epsilon)) {
                     return guess;
                 }
                 min = guess;
