@@ -28,6 +28,9 @@ struct InitParams {
 contract SetUp is Test {
     RMM public rmm;
     WETH public weth;
+
+    MockERC20 public wstETH; // Currently not used
+
     MockERC20 public IB;
     IStandardizedYield public SY;
     IPYieldToken public YT;
@@ -53,6 +56,19 @@ contract SetUp is Test {
     modifier initDefaultPool() {
         InitParams memory params = getDefaultParams();
         rmm.init(params.PT, params.priceX, params.amountX, params.strike, params.sigma, params.fee, params.curator);
+        _;
+    }
+
+    modifier initSYPool() {
+        rmm.init(
+            address(PT),
+            1007488755655417383,
+            1411689788256138069842 - 100 ether,
+            1009671560073979390,
+            0.025 ether,
+            0.0003 ether,
+            address(0x55)
+        );
         _;
     }
 
