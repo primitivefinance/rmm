@@ -89,9 +89,11 @@ contract RMM is ERC20 {
         {
             // curly braces scope avoids stack too deep
             address[] memory tokensIn = SY.getTokensIn();
-            for (uint256 i; i < tokensIn.length; ++i) {
+            uint256 length = tokensIn.length;
+
+            for (uint256 i; i < length; ++i) {
                 ERC20 token = ERC20(tokensIn[i]);
-                token.approve(address(SY), type(uint256).max);
+                if (address(token) != address(0)) token.approve(address(SY), type(uint256).max);
             }
         }
 
