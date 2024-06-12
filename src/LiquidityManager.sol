@@ -6,6 +6,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmErrors.sol";
 
@@ -44,7 +45,7 @@ contract LiquidityManager {
     }
 
     function computeSyToPtToAddLiquidity(
-        address payable rmm_,
+        RMM rmm,
         uint256 rX,
         uint256 rY,
         PYIndex index,
@@ -53,9 +54,11 @@ contract LiquidityManager {
         uint256 initialGuess,
         uint256 epsilon
     ) public view returns (uint256 guess) {
-        RMM rmm = RMM(rmm_);
+        console2.log("here!");
         uint256 min = 0;
+        console2.log("here2!");
         uint256 max = maxSy - 1;
+        console2.log("here3!");
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 ptOut,,) = rmm.prepareSwapSyIn(guess, blockTime, index);
@@ -65,6 +68,10 @@ contract LiquidityManager {
 
             uint256 syNumerator = (maxSy - guess) * nextReserveX;
             uint256 ptNumerator = ptOut * nextReserveY;
+
+            console2.log("syNumerator", syNumerator);
+            console2.log("ptNumerator", ptNumerator);
+            console2.log("iter", iter);
 
             if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
                 return guess;
