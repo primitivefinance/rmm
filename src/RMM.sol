@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -68,10 +67,6 @@ contract RMM is ERC20 {
         WETH = weth_;
     }
 
-    function version() public pure returns (string memory) {
-        return "0.1.1-rc0";
-    }
-
     receive() external payable {}
 
     /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
@@ -89,6 +84,16 @@ contract RMM is ERC20 {
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
+
+        // Sets approvals ahead of time for this contract to handle routing.
+        {
+            // curly braces scope avoids stack too deep
+            address[] memory tokensIn = SY.getTokensIn();
+            for (uint256 i; i < tokensIn.length; ++i) {
+                ERC20 token = ERC20(tokensIn[i]);
+                token.approve(address(SY), type(uint256).max);
+            }
+        }
 
         PYIndex index = YT.newIndex();
         uint256 totalAsset = index.syToAsset(amountX);
@@ -167,6 +172,18 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(YT), debitNative, amountOut, deltaLiquidity);
     }
 
+    struct SwapToYt {
+        address tokenIn;
+        uint256 amountTokenIn;
+        uint256 amountNativeIn;
+        uint256 amountPtIn;
+        uint256 minSyMinted;
+        uint256 realSyMinted;
+        uint256 minYtOut;
+        uint256 realYtOut;
+        address to;
+    }
+
     function swapExactTokenForYt(
         address token,
         uint256 amountTokenIn,
@@ -177,62 +194,55 @@ contract RMM is ERC20 {
         uint256 epsilon,
         address to
     ) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
-        // initialize to msg.value
-        uint256 debitNative = msg.value;
-        uint256 amountSyMinted;
-
-        // Convert the eth to SY via minting.
-        if (!SY.isValidTokenIn(token)) {
-            revert InvalidTokenIn(token);
-        }
-
-        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
-            amountSyMinted += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
-        }
-
-        if (token != address(0)) {
-            ERC20(token).transferFrom(msg.sender, address(this), amountTokenIn);
-            ERC20(token).approve(address(SY), amountTokenIn);
-            amountSyMinted += SY.deposit(address(this), token, amountTokenIn, minSyMinted);
-            debitNative += amountTokenIn;
-        }
-
-        if (amountSyMinted < minSyMinted) {
-            revert InsufficientSYMinted(amountSyMinted, minSyMinted);
-        }
+        SwapToYt memory swap;
+        swap.tokenIn = token;
+        swap.amountTokenIn = token == address(0) ? 0 : amountTokenIn;
+        swap.amountNativeIn = msg.value;
+        swap.amountPtIn = amountPtForFlashSwap;
+        swap.minSyMinted = minSyMinted;
+        swap.minYtOut = minYtOut;
+        swap.to = to;
+        swap.realSyMinted = _mintSYFromNativeAndToken(address(this), swap.tokenIn, swap.amountTokenIn, swap.minSyMinted);
 
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
 
-        amountPtForFlashSwap =
-            computeSYToYT(index, amountSyMinted, upperBound, block.timestamp, amountPtForFlashSwap, epsilon);
+        swap.amountPtIn = computeSYToYT(index, swap.realSyMinted, upperBound, block.timestamp, swap.amountPtIn, epsilon);
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
-            prepareSwapPtIn(amountPtForFlashSwap, block.timestamp, index);
+            prepareSwapPtIn(swap.amountPtIn, block.timestamp, index);
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        uint256 ytOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        swap.realYtOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
 
         // Converts the SY received from minting it into its components PT and YT.
-        amountOut = mintPtYt(ytOut, address(this));
+        amountOut = mintPtYt(swap.realYtOut, address(this));
+        swap.realYtOut = amountOut;
 
-        if (amountOut < minYtOut) {
-            revert InsufficientOutput(amountInWad, minYtOut, amountOut);
+        if (swap.realYtOut < swap.minYtOut) {
+            revert InsufficientOutput(amountInWad, swap.minYtOut, swap.realYtOut);
         }
 
-        _credit(address(YT), to, amountOut);
+        _credit(address(YT), to, swap.realYtOut);
 
         uint256 debitSurplus = address(this).balance;
-
         if (debitSurplus > 0) {
-            _sendETH(to, debitSurplus);
+            _sendETH(swap.to, debitSurplus);
         }
 
-        emit Swap(msg.sender, to, address(SY), address(YT), debitNative - debitSurplus, amountOut, deltaLiquidity);
+        emit Swap(
+            msg.sender,
+            swap.to,
+            address(SY),
+            address(YT),
+            swap.amountTokenIn + swap.amountNativeIn - debitSurplus,
+            swap.realYtOut,
+            deltaLiquidity
+        );
     }
 
     function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to)
@@ -478,17 +488,12 @@ contract RMM is ERC20 {
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
         for (uint256 iter = 0; iter < 256; ++iter) {
-            console2.log("iter", iter);
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
-            console2.log("guess", guess);
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
-            console2.log("amountOut", amountOut);
             uint256 netSyToPt = index.assetToSyUp(guess);
 
             uint256 netSyToPull = netSyToPt - amountOut;
-            console2.log(isASmallerApproxB(netSyToPull, exactSYIn, epsilon));
             if (netSyToPull <= exactSYIn) {
-                console2.log(isASmallerApproxB(netSyToPull, exactSYIn, epsilon));
                 if (isASmallerApproxB(netSyToPull, exactSYIn, epsilon)) {
                     return guess;
                 }
@@ -664,16 +669,27 @@ contract RMM is ERC20 {
         payable
         returns (uint256 amountOut)
     {
-        if (!SY.isValidTokenIn(tokenIn)) {
-            revert InvalidTokenIn(tokenIn);
+        return _mintSYFromNativeAndToken(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
+    }
+
+    function _mintSYFromNativeAndToken(address receiver, address tokenIn, uint256 amountTokenIn, uint256 minSyMinted)
+        internal
+        returns (uint256 amountSyOut)
+    {
+        if (!SY.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
+
+        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
+            // SY minted check is done in this function instead of relying on the SY contract's deposit().
+            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         }
-        if (tokenIn == address(0)) {
-            amountOut =
-                SY.deposit{value: amountTokenToDeposit}(receiver, address(0), amountTokenToDeposit, minSharesOut);
-        } else {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
-            ERC20(tokenIn).approve(address(SY), amountTokenToDeposit);
-            amountOut = SY.deposit(receiver, tokenIn, amountTokenToDeposit, minSharesOut);
+
+        if (tokenIn != address(0)) {
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenIn);
+            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, 0);
+        }
+
+        if (amountSyOut < minSyMinted) {
+            revert InsufficientSYMinted(amountSyOut, minSyMinted);
         }
     }
 
