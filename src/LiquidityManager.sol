@@ -44,6 +44,40 @@ contract LiquidityManager {
         }
     }
 
+    function computePtToSyToAddLiquidity(
+        RMM rmm,
+        uint256 rX,
+        uint256 rY,
+        PYIndex index,
+        uint256 maxPt,
+        uint256 blockTime,
+        uint256 initialGuess,
+        uint256 epsilon
+    ) public view returns (uint256 guess) {
+        uint256 min = 0;
+        uint256 max = maxPt - 1;
+        for (uint256 iter = 0; iter < 256; ++iter) {
+            guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
+            (,, uint256 syOut,,) = rmm.prepareSwapPtIn(guess, blockTime, index);
+
+            uint256 nextReserveX = rX + syOut;
+            uint256 nextReserveY = rY - guess;
+
+            uint256 syNumerator = syOut * nextReserveX;
+            uint256 ptNumerator = (maxPt - guess) * nextReserveY;
+
+            if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
+                return guess;
+            }
+
+            if (syNumerator <= ptNumerator) {
+                min = guess + 1;
+            } else {
+                max = guess - 1;
+            }
+        }
+    }
+
     function computeSyToPtToAddLiquidity(
         RMM rmm,
         uint256 rX,
@@ -54,24 +88,17 @@ contract LiquidityManager {
         uint256 initialGuess,
         uint256 epsilon
     ) public view returns (uint256 guess) {
-        console2.log("here!");
         uint256 min = 0;
-        console2.log("here2!");
         uint256 max = maxSy - 1;
-        console2.log("here3!");
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 ptOut,,) = rmm.prepareSwapSyIn(guess, blockTime, index);
 
-            uint256 nextReserveX = rX - ptOut;
-            uint256 nextReserveY = rY + guess;
+            uint256 nextReserveX = rX + guess;
+            uint256 nextReserveY = rY - ptOut;
 
             uint256 syNumerator = (maxSy - guess) * nextReserveX;
             uint256 ptNumerator = ptOut * nextReserveY;
-
-            console2.log("syNumerator", syNumerator);
-            console2.log("ptNumerator", ptNumerator);
-            console2.log("iter", iter);
 
             if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
                 return guess;

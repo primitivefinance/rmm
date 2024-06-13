@@ -133,17 +133,28 @@ contract ForkRMMTest is Test {
         _;
     }
 
-    function test_compute_add_liquidity() public basic_sy {
+    function test_compute_sy_to_pt_to_add_liquidity() public basic_sy {
         PYIndex index = YT.newIndex();
 
         uint256 rX = subject().reserveX();
         uint256 rY = subject().reserveY();
         uint256 maxSyToSwap = 1 ether;
-        console2.log("got here!");
 
         RMM rmm = RMM(subject());
 
         uint256 syToSwap = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
         console2.log("syToSwap", syToSwap);
+    }
+    function test_compute_pt_to_sy_to_add_liquidity() public basic_sy {
+        PYIndex index = YT.newIndex();
+
+        uint256 rX = subject().reserveX();
+        uint256 rY = subject().reserveY();
+        uint256 maxPtToSwap = 1 ether;
+
+        RMM rmm = RMM(subject());
+
+        uint256 ptToSwap = liquidityManager().computePtToSyToAddLiquidity(rmm, rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000);
+        console2.log("ptToSwap", ptToSwap);
     }
 }
