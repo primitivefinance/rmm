@@ -500,7 +500,7 @@ contract RMM is ERC20 {
         uint256 max = initialGuess;
         for (uint256 iter = 0; iter < 100; ++iter) {
             uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwapSy(guess, blockTime, index);
+            (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
             uint256 netPtToAccount = index.assetToSyUp(guess);
 
             uint256 netPtToPull = netPtToAccount - amountOut;
