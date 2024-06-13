@@ -6,7 +6,6 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmErrors.sol";
 
@@ -28,6 +27,10 @@ interface IRMM {
         external
         returns (uint256 deltaLiquidity);
     function prepareSwapSyIn(uint256 amountIn, uint256 timestamp, PYIndex index)
+        external
+        view
+        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_);
+    function prepareSwapPtIn(uint256 ptIn, uint256 timestamp, PYIndex index)
         external
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_);
@@ -81,24 +84,22 @@ contract LiquidityManager {
 
         // transfer all sy in
         sy.transferFrom(msg.sender, address(this), amountSy);
-        sy.approve(address(rmm), type(uint256).max);
+        sy.approve(address(rmm), amountSy);
 
         // swap syToSwap for pt
         rmm.swapExactSyForPt(syToSwap, minPtOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
-        console2.log("syBal", syBal);
-        console2.log("ptBal", ptBal);
 
         pt.approve(address(rmm), ptBal);
         liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
     }
 
-    function allocateFromPt(RMM rmm, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+    function allocateFromPt(IRMM rmm, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
-        PYIndex index = rmm.YT().newIndex();
+        PYIndex index = IPYieldToken(rmm.YT()).newIndex();
         uint256 rX = rmm.reserveX();
         uint256 rY = rmm.reserveY();
 
@@ -119,7 +120,7 @@ contract LiquidityManager {
     }
 
     function computePtToSyToAddLiquidity(
-        RMM rmm,
+        IRMM rmm,
         uint256 rX,
         uint256 rY,
         PYIndex index,

@@ -8,7 +8,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -342,9 +341,6 @@ contract RMM is ERC20 {
 
         _mint(to, lptMinted);
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), strike, index);
-        console2.log("deltaXWad", deltaXWad);
-        console2.log("deltaYWad", deltaYWad);
-        console2.log("deltaLiquidity", deltaLiquidity);
 
         (uint256 debitNativeX) = _debit(address(SY), deltaXWad);
         (uint256 debitNativeY) = _debit(address(PT), deltaYWad);
