@@ -14,7 +14,7 @@ contract SwapSyTest is SetUp {
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
-        (,, uint256 minAmountOut,,) = rmm.prepareSwapSy(amountIn, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
 
         uint256 preReserveX = rmm.reserveX();
         uint256 preReserveY = rmm.reserveY();
@@ -32,7 +32,7 @@ contract SwapSyTest is SetUp {
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
-        (,, uint256 minAmountOut,,) = rmm.prepareSwapSy(amountIn, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
 
         uint256 preRMMBalanceX = SY.balanceOf(address(rmm));
         uint256 preRMMBalanceY = PT.balanceOf(address(rmm));
@@ -54,7 +54,7 @@ contract SwapSyTest is SetUp {
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
-        (,, uint256 minAmountOut, int256 deltaLiquidity,) = rmm.prepareSwapSy(amountIn, block.timestamp, index);
+        (,, uint256 minAmountOut, int256 deltaLiquidity,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
         vm.expectEmit(true, true, true, true);
 
         emit Swap(address(this), address(this), address(SY), address(PT), amountIn, minAmountOut, deltaLiquidity);
@@ -68,7 +68,7 @@ contract SwapSyTest is SetUp {
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
-        (,, uint256 minAmountOut,,) = rmm.prepareSwapSy(amountIn, block.timestamp, index);
+        (,, uint256 minAmountOut,,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
         vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, amountIn, minAmountOut + 1, minAmountOut));
         rmm.swapExactSyForPt(amountIn, minAmountOut + 1, address(this));
     }
