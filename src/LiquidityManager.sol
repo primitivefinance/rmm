@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import { RMM } from "./RMM.sol";
+import { RMM, IPYieldToken } from "./RMM.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
@@ -12,6 +12,7 @@ import "./lib/RmmErrors.sol";
 
 contract LiquidityManager {
     using PYIndexLib for PYIndex;
+    using PYIndexLib for IPYieldToken;
     using FixedPointMathLib for uint256;
 
     function mintSY(address SY, address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
@@ -42,6 +43,26 @@ contract LiquidityManager {
         if (amountSyOut < minSyMinted) {
             revert InsufficientSYMinted(amountSyOut, minSyMinted);
         }
+    }
+
+    function allocateFromSy(RMM rmm, uint256 amountSy, uint256 blockTime, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+        ERC20 sy = ERC20(address(rmm.SY()));
+        ERC20 pt = ERC20(address(rmm.PT()));
+
+        PYIndex index = rmm.YT().newIndex();
+        uint256 rX = rmm.reserveX();
+        uint256 rY = rmm.reserveY();
+
+        uint256 syToSwap = computeSyToPtToAddLiquidity(rmm, rX, rY, index, amountSy, blockTime, initialGuess, epsilon);
+        sy.transferFrom(msg.sender, address(this), amountSy);
+        sy.approve(address(rmm), amountSy);
+
+        rmm.swapExactSyForPt(syToSwap, block.timestamp, address(this));
+        uint256 syBal = sy.balanceOf(address(this));
+        uint256 ptBal = pt.balanceOf(address(this));
+
+        pt.approve(address(rmm), ptBal);
+        liquidity = rmm.allocate(syBal, ptBal, blockTime, msg.sender);
     }
 
     function computePtToSyToAddLiquidity(
