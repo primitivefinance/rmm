@@ -45,7 +45,7 @@ contract LiquidityManager {
         }
     }
 
-    function allocateFromSy(RMM rmm, uint256 amountSy, uint256 blockTime, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+    function allocateFromSy(RMM rmm, uint256 amountSy, uint256 minPtOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
@@ -53,16 +53,44 @@ contract LiquidityManager {
         uint256 rX = rmm.reserveX();
         uint256 rY = rmm.reserveY();
 
-        uint256 syToSwap = computeSyToPtToAddLiquidity(rmm, rX, rY, index, amountSy, blockTime, initialGuess, epsilon);
+        // validate swap approximation
+        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(rmm, rX, rY, index, amountSy, block.timestamp, initialGuess, epsilon);
+
+        // transfer all sy in
         sy.transferFrom(msg.sender, address(this), amountSy);
         sy.approve(address(rmm), amountSy);
 
-        rmm.swapExactSyForPt(syToSwap, block.timestamp, address(this));
+        // swap syToSwap for pt
+        rmm.swapExactSyForPt(syToSwap, minPtOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
 
         pt.approve(address(rmm), ptBal);
-        liquidity = rmm.allocate(syBal, ptBal, blockTime, msg.sender);
+        liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
+    }
+
+    function allocateFromPt(RMM rmm, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+        ERC20 sy = ERC20(address(rmm.SY()));
+        ERC20 pt = ERC20(address(rmm.PT()));
+
+        PYIndex index = rmm.YT().newIndex();
+        uint256 rX = rmm.reserveX();
+        uint256 rY = rmm.reserveY();
+
+        // validate swap approximation
+        (uint256 ptToSwap,) = computePtToSyToAddLiquidity(rmm, rX, rY, index, amountPt, block.timestamp, initialGuess, epsilon);
+
+        // transfer all pt in
+        pt.transferFrom(msg.sender, address(this), amountPt);
+        pt.approve(address(rmm), amountPt);
+
+        // swap ptToSwap for sy
+        rmm.swapExactPtForSy(ptToSwap, minSyOut, address(this));
+        uint256 syBal = sy.balanceOf(address(this));
+        uint256 ptBal = pt.balanceOf(address(this));
+
+        sy.approve(address(rmm), syBal);
+        liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
     }
 
     function computePtToSyToAddLiquidity(
@@ -70,25 +98,22 @@ contract LiquidityManager {
         uint256 rX,
         uint256 rY,
         PYIndex index,
-        uint256 maxPt,
+        uint256 max,
         uint256 blockTime,
         uint256 initialGuess,
         uint256 epsilon
-    ) public view returns (uint256 guess) {
+    ) public view returns (uint256 guess, uint256 syOut) {
         uint256 min = 0;
-        uint256 max = maxPt - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
-            (,, uint256 syOut,,) = rmm.prepareSwapPtIn(guess, blockTime, index);
+            (,, syOut,,) = rmm.prepareSwapPtIn(guess, blockTime, index);
 
-            uint256 nextReserveX = rX + syOut;
-            uint256 nextReserveY = rY - guess;
 
-            uint256 syNumerator = syOut * nextReserveX;
-            uint256 ptNumerator = (maxPt - guess) * nextReserveY;
+            uint256 syNumerator = syOut * (rX + syOut);
+            uint256 ptNumerator = (max - guess) * (rY - guess);
 
             if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
-                return guess;
+                return (guess, syOut);
             }
 
             if (syNumerator <= ptNumerator) {
@@ -104,25 +129,21 @@ contract LiquidityManager {
         uint256 rX,
         uint256 rY,
         PYIndex index,
-        uint256 maxSy,
+        uint256 max,
         uint256 blockTime,
         uint256 initialGuess,
         uint256 epsilon
-    ) public view returns (uint256 guess) {
+    ) public view returns (uint256 guess, uint256 ptOut) {
         uint256 min = 0;
-        uint256 max = maxSy - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
-            (,, uint256 ptOut,,) = rmm.prepareSwapSyIn(guess, blockTime, index);
+            (,, ptOut,,) = rmm.prepareSwapSyIn(guess, blockTime, index);
 
-            uint256 nextReserveX = rX + guess;
-            uint256 nextReserveY = rY - ptOut;
-
-            uint256 syNumerator = (maxSy - guess) * nextReserveX;
-            uint256 ptNumerator = ptOut * nextReserveY;
+            uint256 syNumerator = (max - guess) * (rX + guess);
+            uint256 ptNumerator = ptOut * (rY - ptOut);
 
             if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
-                return guess;
+                return (guess, ptOut);
             }
 
             if (ptNumerator <= syNumerator) {

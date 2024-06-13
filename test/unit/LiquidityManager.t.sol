@@ -142,8 +142,9 @@ contract ForkRMMTest is Test {
 
         RMM rmm = RMM(subject());
 
-        uint256 syToSwap = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
+        (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
         console2.log("syToSwap", syToSwap);
+        console2.log("ptOut", ptOut);
     }
     function test_compute_pt_to_sy_to_add_liquidity() public basic_sy {
         PYIndex index = YT.newIndex();
@@ -154,7 +155,26 @@ contract ForkRMMTest is Test {
 
         RMM rmm = RMM(subject());
 
-        uint256 ptToSwap = liquidityManager().computePtToSyToAddLiquidity(rmm, rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000);
+        (uint256 ptToSwap, uint256 syOut) = liquidityManager().computePtToSyToAddLiquidity(rmm, rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000);
         console2.log("ptToSwap", ptToSwap);
+        console2.log("syOut", syOut);
+    }
+
+    function test_zap_from_sy() public basic_sy {
+        PYIndex index = YT.newIndex();
+
+        uint256 rX = subject().reserveX();
+        uint256 rY = subject().reserveY();
+        uint256 maxSyToSwap = 1 ether;
+
+        RMM rmm = RMM(subject());
+
+        (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
+        uint256 dx = maxSyToSwap - syToSwap;
+        uint256 dy = ptOut;
+
+        (,,uint256 minLiquidityDelta,) = rmm.prepareAllocate(dx, dy, index);
+        uint256 liquidity = liquidityManager().allocateFromSy(rmm, maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps);
+        console2.log("liquidity", liquidity);
     }
 }
