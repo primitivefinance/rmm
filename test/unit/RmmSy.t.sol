@@ -33,6 +33,8 @@ uint256 constant LAST_TIMESTAMP_SLOT = 11 + offset;
 uint256 constant CURATOR_SLOT = 12 + offset;
 uint256 constant LOCK_SLOT = 13 + offset;
 
+uint256 constant eps = 0.005 ether;
+
 uint256 constant impliedRateTime = 365 * 86400;
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
@@ -254,21 +256,13 @@ contract ForkRMMTest is Test {
         PT.transfer(address(0x55), PT.balanceOf(address(this)));
         YT.transfer(address(0x55), YT.balanceOf(address(this)));
         mintSY(1 ether);
-        uint256 stkBefore = subject().strike();
         PYIndex index = YT.newIndex();
         uint256 rPT = subject().reserveX();
-        uint256 rSY = subject().reserveY();
-        console2.log("SY balance before", SY.balanceOf(address(this)));
-        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        console2.log("ytOut", ytOut);
-        console2.log("rPT", rPT);
-        console2.log("rSY", rSY);
-        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, ytOut.mulDivDown(95, 100), address(this));
-        console2.log("amtOut", amtOut);
-        console2.log("SY balance after", SY.balanceOf(address(this)));
-        console2.log("YT balance after", YT.balanceOf(address(this)));
-        console2.log("stk before", stkBefore);
-        console2.log("stk after", subject().strike());
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, 500 ether, block.timestamp, 0, 10_000);
+
+        console2.log("got here");
+        (uint256 amtOut,) =
+            subject().swapExactSyForYt(1 ether, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(this));
     }
 
     function test_pt_flash_swap_adjusts_balances_correctly() public basic_sy {
@@ -286,18 +280,24 @@ contract ForkRMMTest is Test {
         // mint 1 SY for the flash swap
         mintSY(1 ether);
 
-        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
-        (uint256 amtOut,) = subject().swapExactSyForYt(ytOut, 0, address(this));
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amtOut,) = subject().swapExactSyForYt(1 ether, ytOut, 0, 500 ether, eps, address(this));
 
         // assert balance of address(this) is 0 for SY, PT, and YT
         assertEq(PT.balanceOf(address(this)), 0, "PT balance at the end of the test is not 0.");
         assertApproxEqAbs(SY.balanceOf(address(this)), 0, 10_000, "SY balance at the end of the test is not approx 0.");
-        assertEq(YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not equal to the returned ytOut.");
-        assertEq(YT.balanceOf(address(this)), amtOut, "YT balance at the end of the test is not equal to the returned amtOut.");
+        assertEq(
+            YT.balanceOf(address(this)), ytOut, "YT balance at the end of the test is not equal to the returned ytOut."
+        );
+        assertEq(
+            YT.balanceOf(address(this)),
+            amtOut,
+            "YT balance at the end of the test is not equal to the returned amtOut."
+        );
     }
 
     function test_approx_sy_pendle() public basic_sy {
-        (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
+        (MarketState memory ms,) = getPendleMarketData();
         console2.log("market sy", ms.totalSy);
         console2.log("market pt", ms.totalPt);
         vm.warp(block.timestamp + 30 days);
@@ -315,7 +315,7 @@ contract ForkRMMTest is Test {
         uint256 rSY = subject().reserveY();
         vm.warp(block.timestamp + 30 days);
         uint256 k = getRmmStrikePrice();
-        uint256 ytOut = subject().computeSYToYT(index, 1 ether, block.timestamp, 500 ether);
+        uint256 ytOut = subject().computeSYToYT(index, 1 ether, 500 ether, block.timestamp, 0, 10_000);
         console2.log("k", k);
         console2.log("ytOut", ytOut);
         console2.log("rPT", rPT);
@@ -385,7 +385,6 @@ contract ForkRMMTest is Test {
         assertEq(PT.balanceOf(address(this)), 0, "PT balance of address(this) is not 0.");
         assertEq(SY.balanceOf(address(this)), 0, "SY balance of address(this) is not 0.");
 
-
         uint256 ytIn = YT.balanceOf(address(this));
         uint256 maxSyIn = 10 ether;
         (uint256 amountOut,,) = subject().swapExactYtForSy(ytIn, maxSyIn, address(this));
@@ -405,9 +404,14 @@ contract ForkRMMTest is Test {
 
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
-        (uint256 syMinted, uint256 ytOut) = subject().computeTokenToYt(index, address(0), amountIn, block.timestamp, 500 ether);
-        subject().swapExactTokenForYt{value: amountIn}(address(0), 0, ytOut, syMinted, ytOut, address(this));
-        assertApproxEqAbs(YT.balanceOf(address(this)), ytOut, 1_000, "YT balance of address(this) is not equal to ytOut.");
+        (uint256 syMinted, uint256 ytOut) =
+            subject().computeTokenToYT(index, address(0), amountIn, 500 ether, block.timestamp, 0, 1_000);
+        subject().swapExactTokenForYt{value: amountIn}(
+            address(0), 0, ytOut, syMinted, ytOut.mulDivDown(99, 100), 500 ether, eps, address(this)
+        );
+        assertApproxEqAbs(
+            YT.balanceOf(address(this)), ytOut, 1_000, "YT balance of address(this) is not equal to ytOut."
+        );
     }
 
     function test_compute_token_to_yt() public basic_sy {
@@ -422,13 +426,24 @@ contract ForkRMMTest is Test {
 
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
-        (uint256 syMinted, uint256 ytOut) = subject().computeTokenToYt(index, address(subject().WETH()), amountIn, block.timestamp, 500 ether);
+        (uint256 syMinted, uint256 ytOut) =
+            subject().computeTokenToYT(index, address(subject().WETH()), amountIn, 500 ether, block.timestamp, 0, 1_000);
         deal(subject().WETH(), address(this), amountIn);
         IERC20(subject().WETH()).approve(address(subject()), amountIn);
-        subject().swapExactTokenForYt(address(subject().WETH()), amountIn, ytOut, syMinted, ytOut, address(this));
-        assertApproxEqAbs(YT.balanceOf(address(this)), ytOut, 1_000, "YT balance of address(this) is not equal to ytOut.");
+        subject().swapExactTokenForYt(
+            address(subject().WETH()),
+            amountIn,
+            ytOut,
+            syMinted,
+            ytOut.mulDivDown(99, 100),
+            500 ether,
+            eps,
+            address(this)
+        );
+        assertApproxEqAbs(
+            YT.balanceOf(address(this)), ytOut, 1_000, "YT balance of address(this) is not equal to ytOut."
+        );
     }
-
 
     // TODO: add functionality for handling these on the new swaps
     // function test_swapX_usingIbToken() public basic_sy {
