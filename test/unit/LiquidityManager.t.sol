@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
-import { LiquidityManager } from "../../src/LiquidityManager.sol";
+import { LiquidityManager, IRMM } from "../../src/LiquidityManager.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
 import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
@@ -74,6 +74,11 @@ contract ForkRMMTest is Test {
         IERC20(YT).approve(address(router), type(uint256).max);
         IERC20(market).approve(address(router), type(uint256).max);
         IERC20(market).approve(address(router), type(uint256).max);
+
+        IERC20(SY).approve(address(liquidityManager()), type(uint256).max);
+        IERC20(PT).approve(address(liquidityManager()), type(uint256).max);
+        IERC20(YT).approve(address(liquidityManager()), type(uint256).max);
+
     }
 
     function getPendleMarketData() public returns (MarketState memory ms, MarketPreCompute memory mp) {
@@ -140,7 +145,7 @@ contract ForkRMMTest is Test {
         uint256 rY = subject().reserveY();
         uint256 maxSyToSwap = 1 ether;
 
-        RMM rmm = RMM(subject());
+        IRMM rmm = IRMM(address(subject()));
 
         (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
         console2.log("syToSwap", syToSwap);
@@ -167,9 +172,10 @@ contract ForkRMMTest is Test {
         uint256 rY = subject().reserveY();
         uint256 maxSyToSwap = 1 ether;
 
-        RMM rmm = RMM(subject());
+        IRMM rmm = IRMM(address(subject()));
 
         (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(rmm, rX, rY, index, maxSyToSwap, block.timestamp, 0, 10_000);
+        console2.log("ptOut", ptOut);
         uint256 dx = maxSyToSwap - syToSwap;
         uint256 dy = ptOut;
 
