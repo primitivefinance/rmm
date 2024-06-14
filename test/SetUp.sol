@@ -3,13 +3,14 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {IStandardizedYield, PendleERC20SY} from "pendle/core/StandardizedYield/implementations/PendleERC20SY.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.sol";
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
+import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
+import {MockWstETH} from "./mocks/MockWstETH.sol";
+import {MockStETH} from "./mocks/MockStETH.sol";
 
 import {RMM} from "./../src/RMM.sol";
 
@@ -30,10 +31,11 @@ contract SetUp is Test {
 
     RMM public rmm;
     WETH public weth;
-    MockERC20 public IB;
-    IStandardizedYield public SY;
+    PendleWstEthSY public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
+    MockWstETH public wstETH;
+    MockStETH public stETH;
 
     // Some default constants.
 
@@ -44,9 +46,10 @@ contract SetUp is Test {
 
     function setUpContracts(uint32 expiry) public {
         weth = new WETH();
+        stETH = new MockStETH();
+        wstETH = new MockWstETH(address(stETH));
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
-        IB = new MockERC20("ibToken", "IB", 18);
-        SY = IStandardizedYield(new PendleERC20SY("SY", "SY", address(IB)));
+        SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
         (
             address creationCodeContractA,
@@ -65,7 +68,6 @@ contract SetUp is Test {
         YT = IPYieldToken(factory.getYT(address(SY), expiry));
         PT = IPPrincipalToken(factory.getPT(address(SY), expiry));
 
-        IB.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
         PT.approve(address(rmm), type(uint256).max);
         YT.approve(address(rmm), type(uint256).max);
@@ -78,9 +80,9 @@ contract SetUp is Test {
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
     function mintSY(address to, uint256 amount) public {
-        IB.mint(address(to), amount);
-        IB.approve(address(SY), type(uint256).max);
-        SY.deposit(address(to), address(IB), amount, 0);
+        stETH.mint(address(to), amount);
+        stETH.approve(address(SY), type(uint256).max);
+        SY.deposit(address(to), address(stETH), amount, 0);
     }
 
     function batchMintSY(address[] memory to, uint256[] memory amounts) public {
@@ -149,9 +151,9 @@ contract SetUp is Test {
     }
 
     modifier withSY(address to, uint256 amount) {
-        IB.mint(address(to), amount);
-        IB.approve(address(SY), type(uint256).max);
-        SY.deposit(address(to), address(IB), amount, 0);
+        stETH.mint(address(to), amount);
+        stETH.approve(address(SY), type(uint256).max);
+        SY.deposit(address(to), address(stETH), amount, 0);
         _;
     }
 
