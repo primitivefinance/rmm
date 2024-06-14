@@ -1,6 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {console} from "forge-std/console.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {PYIndexLib, IPYieldToken, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -12,24 +13,37 @@ contract SwapExactSyForYtTest is SetUp {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
 
+    struct State {
+        uint256 exactSYIn;
+        PYIndex index;
+        uint256 ytOut;
+        uint256 delta;
+        uint256 amountOut;
+        address to;
+    }
+
     function test_swapExactSyForYt_TransfersTokens() public useSYPool withSY(address(this), 10 ether) {
-        address to = address(0xbeef);
+        State memory state;
+        state.to = address(0xbeef);
+        state.exactSYIn = 1 ether;
+        state.index = YT.newIndex();
 
-        uint256 preSYBalance = ERC20(address(SY)).balanceOf(address(this));
-        uint256 preYTBalance = ERC20(address(YT)).balanceOf(to);
-        uint256 preSYBalanceRMM = ERC20(address(SY)).balanceOf(address(rmm));
+        uint256[] memory preBalances = new uint256[](3);
+        preBalances[0] = ERC20(address(SY)).balanceOf(address(this));
+        preBalances[1] = ERC20(address(YT)).balanceOf(state.to);
+        preBalances[2] = ERC20(address(SY)).balanceOf(address(rmm));
 
-        uint256 amountIn = 1 ether;
+        state.ytOut = rmm.computeSYToYT(state.index, state.exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(state.ytOut, block.timestamp, state.index);
+        state.delta = state.index.assetToSyUp(amountInWad) - amountOutWad;
+        console.log("Delta", state.delta);
+        (uint256 amtOut,) = rmm.swapExactSyForYt(
+            state.exactSYIn, state.ytOut, state.ytOut.mulDivDown(95, 100), 500 ether, 10_000, state.to
+        );
 
-        PYIndex index = YT.newIndex();
-        uint256 ytOut = rmm.computeSYToYT(index, 1 ether, 500 ether, block.timestamp, 0, 10_000);
-        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
-        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        (uint256 amtOut,) =
-            rmm.swapExactSyForYt(1 ether, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(this));
-
-        assertEq(ERC20(address(SY)).balanceOf(address(this)), preSYBalance - amountIn - delta, "bad sy minus");
-        assertEq(ERC20(address(YT)).balanceOf(to), preYTBalance + amtOut, "bad yt");
-        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM + amountIn, "bad sy plus");
+        assertEq(ERC20(address(SY)).balanceOf(address(this)), preBalances[0] - state.delta);
+        assertEq(ERC20(address(YT)).balanceOf(state.to), preBalances[1] + amtOut);
+        console.log("Diff", preBalances[2] + state.delta - ERC20(address(SY)).balanceOf(address(rmm)));
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] + state.delta, "3");
     }
 }

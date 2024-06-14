@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
@@ -16,6 +17,8 @@ contract RMM is ERC20 {
 
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
+
+    using SafeTransferLib for ERC20;
 
     int256 public constant INIT_UPPER_BOUND = 30;
     uint256 public constant IMPLIED_RATE_TIME = 365 * 86400;
@@ -219,7 +222,7 @@ contract RMM is ERC20 {
 
         uint256 debitSurplus = address(this).balance;
         if (debitSurplus > 0) {
-            _sendETH(swap.to, debitSurplus);
+            SafeTransferLib.safeTransferETH(swap.to, debitSurplus);
         }
 
         emit Swap(
@@ -388,9 +391,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
-        if (!ERC20(token).transferFrom(msg.sender, address(this), amountNative)) {
-            revert PaymentFailed(token, msg.sender, address(this), amountNative);
-        }
+        ERC20(token).safeTransferFrom(msg.sender, address(this), amountNative);
 
         paymentNative = _balanceNative(token) - balanceNative;
         if (paymentNative < amountNative) {
@@ -403,9 +404,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
-        if (!ERC20(token).transfer(to, amountNative)) {
-            revert PaymentFailed(token, address(this), to, amountNative);
-        }
+        ERC20(token).safeTransfer(to, amountNative);
 
         paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
@@ -695,7 +694,7 @@ contract RMM is ERC20 {
         }
 
         if (tokenIn != address(0)) {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenIn);
+            ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenIn);
             amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, 0);
         }
 
@@ -708,14 +707,5 @@ contract RMM is ERC20 {
         PT.transfer(address(YT), amount);
         YT.transfer(address(YT), amount);
         amountOut = YT.redeemPY(to);
-    }
-
-    /// This contract doesnt hold ETH so the only time we are transfering ETH out
-    /// is when we have extra ETH that was sent in as payment.
-    function _sendETH(address to, uint256 amount) internal {
-        (bool success,) = to.call{value: amount}("");
-        if (!success) {
-            revert PaymentFailed(address(0), address(this), to, amount);
-        }
     }
 }
