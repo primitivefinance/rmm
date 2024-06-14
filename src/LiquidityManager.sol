@@ -71,7 +71,8 @@ contract LiquidityManager {
         }
     }
 
-    function allocateFromSy(IRMM rmm, uint256 amountSy, uint256 minPtOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+    function allocateFromSy(address rmm_, uint256 amountSy, uint256 minPtOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+        IRMM rmm = IRMM(rmm_);
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
@@ -80,7 +81,7 @@ contract LiquidityManager {
         uint256 rY = rmm.reserveY();
 
         // validate swap approximation
-        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(rmm, rX, rY, index, amountSy, block.timestamp, initialGuess, epsilon);
+        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(rmm_, rX, rY, index, amountSy, block.timestamp, initialGuess, epsilon);
 
         // transfer all sy in
         sy.transferFrom(msg.sender, address(this), amountSy);
@@ -95,7 +96,8 @@ contract LiquidityManager {
         liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
     }
 
-    function allocateFromPt(IRMM rmm, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+    function allocateFromPt(address rmm_, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
+        IRMM rmm = IRMM(rmm_);
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
@@ -104,7 +106,7 @@ contract LiquidityManager {
         uint256 rY = rmm.reserveY();
 
         // validate swap approximation
-        (uint256 ptToSwap,) = computePtToSyToAddLiquidity(rmm, rX, rY, index, amountPt, block.timestamp, initialGuess, epsilon);
+        (uint256 ptToSwap,) = computePtToSyToAddLiquidity(rmm_, rX, rY, index, amountPt, block.timestamp, initialGuess, epsilon);
 
         // transfer all pt in
         pt.transferFrom(msg.sender, address(this), amountPt);
@@ -120,7 +122,7 @@ contract LiquidityManager {
     }
 
     function computePtToSyToAddLiquidity(
-        IRMM rmm,
+        address rmm_,
         uint256 rX,
         uint256 rY,
         PYIndex index,
@@ -129,6 +131,7 @@ contract LiquidityManager {
         uint256 initialGuess,
         uint256 epsilon
     ) public view returns (uint256, uint256) {
+        IRMM rmm = IRMM(rmm_);
         uint256 min = 0;
         uint256 max = maxPt - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
@@ -152,7 +155,7 @@ contract LiquidityManager {
     }
 
     function computeSyToPtToAddLiquidity(
-        IRMM rmm,
+        address rmm_,
         uint256 rX,
         uint256 rY,
         PYIndex index,
@@ -161,6 +164,7 @@ contract LiquidityManager {
         uint256 initialGuess,
         uint256 epsilon
     ) public view returns (uint256 guess, uint256 ptOut) {
+        IRMM rmm = IRMM(rmm_);
         uint256 min = 0;
         uint256 max = maxSy - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
