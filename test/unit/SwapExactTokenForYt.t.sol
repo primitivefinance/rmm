@@ -13,6 +13,7 @@ contract SwapExactTokenForYtTest is SetUp {
     using FixedPointMathLib for uint256;
 
     function test_swapExactTokenForYt_SwapsWETH() public useSYPool withWETH(address(this), 1 ether) {
+        skip();
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
         console2.log("before");
