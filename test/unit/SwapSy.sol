@@ -7,7 +7,7 @@ import {Swap} from "../../src/lib/RmmEvents.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 contract SwapSyTest is SetUp {
-    function test_swapSy_AdjustsPool() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_swapSy_AdjustsPool() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -25,7 +25,7 @@ contract SwapSyTest is SetUp {
         assertEq(rmm.reserveY(), preReserveY - amountOut);
     }
 
-    function test_swapSy_TransfersTokens() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_swapSy_TransfersTokens() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -47,7 +47,7 @@ contract SwapSyTest is SetUp {
         assertEq(preRMMBalanceY - amountOut, PT.balanceOf(address(rmm)));
     }
 
-    function test_swapSy_EmitsSwap() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_swapSy_EmitsSwap() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -61,7 +61,7 @@ contract SwapSyTest is SetUp {
         rmm.swapExactSyForPt(amountIn, 0, address(this));
     }
 
-    function test_swapSy_RevertsWhenInsufficientOutput() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_swapSy_RevertsWhenInsufficientOutput() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));

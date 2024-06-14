@@ -26,18 +26,81 @@ struct InitParams {
 }
 
 contract SetUp is Test {
+    // All the contracts that are needed for the tests.
+
     RMM public rmm;
     WETH public weth;
-
-    MockERC20 public wstETH; // Currently not used
-
     MockERC20 public IB;
     IStandardizedYield public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
 
+    // Some default constants.
+
     uint32 public DEFAULT_EXPIRY = 1_717_214_400;
     uint256 public DEFAULT_AMOUNT = 1_000 ether;
+
+    // Main setup functions.
+
+    function setUpContracts(uint32 expiry) public {
+        weth = new WETH();
+        rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
+        IB = new MockERC20("ibToken", "IB", 18);
+        SY = IStandardizedYield(new PendleERC20SY("SY", "SY", address(IB)));
+
+        (
+            address creationCodeContractA,
+            uint256 creationCodeSizeA,
+            address creationCodeContractB,
+            uint256 creationCodeSizeB
+        ) = BaseSplitCodeFactory.setCreationCode(type(PendleYieldTokenV2).creationCode);
+
+        PendleYieldContractFactoryV2 factory = new PendleYieldContractFactoryV2(
+            creationCodeContractA, creationCodeSizeA, creationCodeContractB, creationCodeSizeB
+        );
+
+        factory.initialize(1, 2e17, 0, address(this));
+        factory.createYieldContract(address(SY), expiry, true);
+
+        YT = IPYieldToken(factory.getYT(address(SY), expiry));
+        PT = IPPrincipalToken(factory.getPT(address(SY), expiry));
+
+        IB.approve(address(rmm), type(uint256).max);
+        SY.approve(address(rmm), type(uint256).max);
+        PT.approve(address(rmm), type(uint256).max);
+        YT.approve(address(rmm), type(uint256).max);
+    }
+
+    function setUp() public virtual {
+        setUpContracts(DEFAULT_EXPIRY);
+    }
+
+    // Here are some utility functions, you can use them to set specific states inside of a test.
+
+    function mintSY(address to, uint256 amount) public {
+        IB.mint(address(to), amount);
+        IB.approve(address(SY), type(uint256).max);
+        SY.deposit(address(to), address(IB), amount, 0);
+    }
+
+    function batchMintSY(address[] memory to, uint256[] memory amounts) public {
+        require(to.length == amounts.length, "INVALID_LENGTH");
+        for (uint256 i; i < to.length; i++) {
+            mintSY(to[i], amounts[i]);
+        }
+    }
+
+    function mintPY(address to, uint256 amount) public {
+        SY.transfer(address(YT), amount);
+        YT.mintPY(to, to);
+    }
+
+    function batchMintPY(address[] memory to, uint256[] memory amounts) public {
+        require(to.length == amounts.length, "INVALID_LENGTH");
+        for (uint256 i; i < to.length; i++) {
+            mintPY(to[i], amounts[i]);
+        }
+    }
 
     function getDefaultParams() internal view returns (InitParams memory) {
         return InitParams({
@@ -53,17 +116,25 @@ contract SetUp is Test {
         });
     }
 
-    modifier initDefaultPool() {
+    // Here are some modifiers, you can use them as hooks to set up the environment before running a test.
+
+    modifier useDefaultPool() {
+        uint256 amount = 1_000 ether;
+        mintSY(address(this), amount);
+        mintPY(address(this), amount / 2);
         InitParams memory params = getDefaultParams();
         rmm.init(params.PT, params.priceX, params.amountX, params.strike, params.sigma, params.fee, params.curator);
         _;
     }
 
-    modifier initSYPool() {
+    modifier useSYPool() {
+        uint256 amount = 1_000_000 ether;
+        mintSY(address(this), amount);
+        mintPY(address(this), amount / 2);
         rmm.init(
             address(PT),
             1007488755655417383,
-            1411689788256138069842 - 100 ether,
+            1311689788256138069842,
             1009671560073979390,
             0.025 ether,
             0.0003 ether,
@@ -72,49 +143,20 @@ contract SetUp is Test {
         _;
     }
 
-    modifier initPool(InitParams memory params) {
-        rmm.init(params.PT, params.priceX, params.amountX, params.strike, params.sigma, params.fee, params.curator);
+    modifier withSY(address to, uint256 amount) {
+        IB.mint(address(to), amount);
+        IB.approve(address(SY), type(uint256).max);
+        SY.deposit(address(to), address(IB), amount, 0);
         _;
     }
 
-    modifier dealSY(address to, uint256 amount) {
-        deal(address(SY), to, amount);
+    modifier withPY(address to, uint256 amount) {
+        SY.transfer(address(YT), amount);
+        YT.mintPY(to, to);
         _;
     }
 
-    function setUp() public virtual {
-        weth = new WETH();
-        rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
-        IB = new MockERC20("ibToken", "IB", 18);
-        SY = IStandardizedYield(new PendleERC20SY("SY", "SY", address(weth)));
-
-        (
-            address creationCodeContractA,
-            uint256 creationCodeSizeA,
-            address creationCodeContractB,
-            uint256 creationCodeSizeB
-        ) = BaseSplitCodeFactory.setCreationCode(type(PendleYieldTokenV2).creationCode);
-
-        PendleYieldContractFactoryV2 factory = new PendleYieldContractFactoryV2(
-            creationCodeContractA, creationCodeSizeA, creationCodeContractB, creationCodeSizeB
-        );
-
-        factory.initialize(1, 2e17, 0, address(this));
-        factory.createYieldContract(address(SY), DEFAULT_EXPIRY, true);
-
-        YT = IPYieldToken(factory.getYT(address(SY), DEFAULT_EXPIRY));
-        PT = IPPrincipalToken(factory.getPT(address(SY), DEFAULT_EXPIRY));
-
-        deal(address(weth), address(this), 1_000_000 ether);
-        weth.approve(address(SY), type(uint256).max);
-        SY.deposit(address(this), address(weth), DEFAULT_AMOUNT, 1);
-
-        SY.transfer(address(YT), DEFAULT_AMOUNT - 1 ether);
-        YT.mintPY(address(this), address(this));
-
-        weth.approve(address(rmm), type(uint256).max);
-        SY.approve(address(rmm), type(uint256).max);
-        PT.approve(address(rmm), type(uint256).max);
-        YT.approve(address(rmm), type(uint256).max);
+    function skip() public {
+        vm.skip(true);
     }
 }

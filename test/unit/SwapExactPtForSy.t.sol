@@ -6,7 +6,7 @@ import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 import {SetUp} from "../SetUp.sol";
 
 contract SwapExactPtForSyTest is SetUp {
-    function test_swapExactPtForSy_TransfersTokens(address to) public initDefaultPool {
+    function test_swapExactPtForSy_TransfersTokens(address to) public useDefaultPool {
         uint256 preSYBalance = ERC20(address(SY)).balanceOf(to);
         uint256 prePTBalance = ERC20(address(PT)).balanceOf(address(this));
 
@@ -22,7 +22,7 @@ contract SwapExactPtForSyTest is SetUp {
         assertEq(ERC20(address(PT)).balanceOf(address(rmm)), prePTBalanceRMM + amountIn);
     }
 
-    function test_swapExactPtForSy_AdjustsReserves() public initDefaultPool {
+    function test_swapExactPtForSy_AdjustsReserves() public useDefaultPool {
         uint256 preReserveX = rmm.reserveX();
         uint256 preReserveY = rmm.reserveY();
         uint256 preLiquidity = rmm.totalLiquidity();
@@ -37,7 +37,7 @@ contract SwapExactPtForSyTest is SetUp {
         assertEq(rmm.strike(), preStrike);
     }
 
-    function test_swapExactPtForSy_RevertsIfInsufficientOutput() public initDefaultPool {
+    function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {
         vm.expectRevert();
         rmm.swapExactPtForSy(1 ether, type(uint256).max, address(this));
     }

@@ -7,7 +7,7 @@ import {Deallocate} from "../../src/lib/RmmEvents.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 contract DeallocateTest is SetUp {
-    function test_deallocate_BurnsLiquidity() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_deallocate_BurnsLiquidity() public useDefaultPool {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
 
@@ -21,7 +21,7 @@ contract DeallocateTest is SetUp {
         assertEq(rmm.totalLiquidity(), preTotalLiquidity - deltaLiquidity / 2);
     }
 
-    function test_deallocate_AdjustsPool() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_deallocate_AdjustsPool() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
 
@@ -39,7 +39,7 @@ contract DeallocateTest is SetUp {
         assertEq(rmm.lastTimestamp(), block.timestamp);
     }
 
-    function test_deallocate_TransfersTokens() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_deallocate_TransfersTokens() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         (uint256 deltaLiquidity) = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -59,7 +59,7 @@ contract DeallocateTest is SetUp {
         assertEq(PT.balanceOf(address(rmm)), rmmPreBalancePT - deltaYWad);
     }
 
-    function test_deallocate_EmitsDeallocate() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_deallocate_EmitsDeallocate() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         (uint256 deltaLiquidity) = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -72,11 +72,7 @@ contract DeallocateTest is SetUp {
         rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
     }
 
-    function test_deallocate_RevertsIfInsufficientSYOutput()
-        public
-        initDefaultPool
-        dealSY(address(this), 1_000 ether)
-    {
+    function test_deallocate_RevertsIfInsufficientSYOutput() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         (uint256 deltaLiquidity) = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
@@ -89,11 +85,7 @@ contract DeallocateTest is SetUp {
         rmm.deallocate(deltaLiquidity / 2, deltaXWad + 1, 0, address(this));
     }
 
-    function test_deallocate_RevertsIfInsufficientPTOutput()
-        public
-        initDefaultPool
-        dealSY(address(this), 1_000 ether)
-    {
+    function test_deallocate_RevertsIfInsufficientPTOutput() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
         (uint256 deltaLiquidity) = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));

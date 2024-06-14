@@ -6,7 +6,11 @@ import {Init} from "../../src/lib/RmmEvents.sol";
 import {AlreadyInitialized, InvalidStrike} from "../../src/lib/RmmErrors.sol";
 
 contract InitTest is SetUp {
-    function test_init_StoresInitParams() public {
+    function test_init_StoresInitParams()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         rmm.init(
@@ -28,7 +32,11 @@ contract InitTest is SetUp {
         assertEq(rmm.initTimestamp(), block.timestamp);
     }
 
-    function test_init_StoresTokens() public {
+    function test_init_StoresTokens()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         rmm.init(
@@ -46,7 +54,11 @@ contract InitTest is SetUp {
         assertEq(address(rmm.SY()), address(SY));
     }
 
-    function test_init_MintsLiquidity() public {
+    function test_init_MintsLiquidity()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         (uint256 totalLiquidity,) = rmm.prepareInit(
@@ -68,7 +80,7 @@ contract InitTest is SetUp {
         assertEq(rmm.balanceOf(address(0)), rmm.BURNT_LIQUIDITY());
     }
 
-    function test_init_AdjustsPool() public {
+    function test_init_AdjustsPool() public withSY(address(this), 2000000 ether) withPY(address(this), 1000000 ether) {
         InitParams memory initParams = getDefaultParams();
 
         (, uint256 amountY) = rmm.prepareInit(
@@ -90,7 +102,11 @@ contract InitTest is SetUp {
         assertEq(rmm.reserveY(), amountY);
     }
 
-    function test_init_TransfersTokens() public {
+    function test_init_TransfersTokens()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         (, uint256 amountY) = rmm.prepareInit(
@@ -118,7 +134,11 @@ contract InitTest is SetUp {
         assertEq(PT.balanceOf(address(rmm)), rmmPreBalancePT + amountY);
     }
 
-    function test_init_EmitsInitEvent() public {
+    function test_init_EmitsInitEvent()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(
@@ -152,7 +172,12 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_RevertsIfAlreadyInitialized() public initDefaultPool {
+    function test_init_RevertsIfAlreadyInitialized()
+        public
+        useDefaultPool
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         vm.expectRevert(AlreadyInitialized.selector);
@@ -168,7 +193,11 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_RevertsIfInvalidStrike() public {
+    function test_init_RevertsIfInvalidStrike()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         InitParams memory initParams = getDefaultParams();
 
         vm.expectRevert(abi.encodeWithSelector(InvalidStrike.selector));
@@ -184,7 +213,11 @@ contract InitTest is SetUp {
         );
     }
 
-    function test_init_RevertsWhenLocked() public {
+    function test_init_RevertsWhenLocked()
+        public
+        withSY(address(this), 2000000 ether)
+        withPY(address(this), 1000000 ether)
+    {
         vm.skip(true);
     }
 }

@@ -9,7 +9,7 @@ import {SetUp} from "../SetUp.sol";
 contract SwapExactYtForSyTest is SetUp {
     using PYIndexLib for IPYieldToken;
 
-    function test_swapExactYtForSy_TransfersTokens() public initSYPool {
+    function test_swapExactYtForSy_TransfersTokens() public useSYPool {
         address to = address(0xbeef);
         deal(address(YT), address(this), 10 ether);
         uint256 preSYBalance = ERC20(address(SY)).balanceOf(address(this));

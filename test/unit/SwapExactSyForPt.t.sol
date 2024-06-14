@@ -5,7 +5,7 @@ import {SetUp} from "../SetUp.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract SwapExactSyForPtTest is SetUp {
-    function test_swapExactSyForPt_TransfersTokens(address to) public initDefaultPool {
+    function test_swapExactSyForPt_TransfersTokens(address to) public useDefaultPool {
         deal(address(SY), address(this), 1 ether);
 
         uint256 preSYBalance = ERC20(address(SY)).balanceOf(address(this));
@@ -23,7 +23,7 @@ contract SwapExactSyForPtTest is SetUp {
         assertEq(ERC20(address(PT)).balanceOf(address(rmm)), prePTBalanceRMM - amountOut);
     }
 
-    function test_swapExactSyForPt_Adjusts(address to) public initDefaultPool {
+    function test_swapExactSyForPt_Adjusts(address to) public useDefaultPool {
         deal(address(SY), address(this), 1 ether);
 
         uint256 preReserveX = rmm.reserveX();
@@ -38,7 +38,7 @@ contract SwapExactSyForPtTest is SetUp {
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
     }
 
-    function test_swapExactSyForPt_RevertsIfInsufficientOutput(address to) public initDefaultPool {
+    function test_swapExactSyForPt_RevertsIfInsufficientOutput(address to) public useDefaultPool {
         deal(address(SY), address(this), 1 ether);
         vm.expectRevert();
         rmm.swapExactSyForPt(1 ether, type(uint256).max, address(to));
