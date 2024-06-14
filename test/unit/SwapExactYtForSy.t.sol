@@ -9,11 +9,11 @@ import {SetUp} from "../SetUp.sol";
 contract SwapExactYtForSyTest is SetUp {
     using PYIndexLib for IPYieldToken;
 
-    function test_swapExactYtForSy_TransfersTokens() public useSYPool {
+    function test_swapExactYtForSy_TransfersTokens() public useSYPool withPY(address(this), 10 ether) {
         address to = address(0xbeef);
-        deal(address(YT), address(this), 10 ether);
-        uint256 preSYBalance = ERC20(address(SY)).balanceOf(address(this));
-        uint256 preYTBalance = ERC20(address(YT)).balanceOf(to);
+
+        uint256 preYTBalance = ERC20(address(YT)).balanceOf(address(this));
+        uint256 preSYBalance = ERC20(address(SY)).balanceOf(to);
 
         uint256 preSYBalanceRMM = ERC20(address(SY)).balanceOf(address(rmm));
         uint256 preYTBalanceRMM = ERC20(address(YT)).balanceOf(address(rmm));
@@ -24,13 +24,11 @@ contract SwapExactYtForSyTest is SetUp {
             */
 
         uint256 amountIn = 1 ether;
-        (uint256 amountOut,,) = rmm.swapExactYtForSy(amountIn, 1000 ether, address(to));
+        (uint256 amountOut, uint256 exactAmountIn,) = rmm.swapExactYtForSy(amountIn, 1000 ether, address(to));
 
-        /*
         assertEq(ERC20(address(YT)).balanceOf(address(this)), preYTBalance - amountIn);
         assertEq(ERC20(address(SY)).balanceOf(to), preSYBalance + amountOut);
-        assertEq(ERC20(address(YT)).balanceOf(address(rmm)), preYTBalanceRMM + amountIn);
-        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM - amountOut);
-        */
+        assertEq(ERC20(address(YT)).balanceOf(address(rmm)), preYTBalanceRMM + amountIn); // fails
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM - amountOut); // fails
     }
 }
