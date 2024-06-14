@@ -68,6 +68,7 @@ contract SetUp is Test {
         YT = IPYieldToken(factory.getYT(address(SY), expiry));
         PT = IPPrincipalToken(factory.getPT(address(SY), expiry));
 
+        weth.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
         PT.approve(address(rmm), type(uint256).max);
         YT.approve(address(rmm), type(uint256).max);
@@ -160,6 +161,12 @@ contract SetUp is Test {
     modifier withPY(address to, uint256 amount) {
         SY.transfer(address(YT), amount);
         YT.mintPY(to, to);
+        _;
+    }
+
+    modifier withWETH(address to, uint256 amount) {
+        weth.deposit{value: amount}();
+        weth.transfer(to, amount);
         _;
     }
 
