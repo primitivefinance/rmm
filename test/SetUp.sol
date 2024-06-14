@@ -118,6 +118,11 @@ contract SetUp is Test {
 
     // Here are some modifiers, you can use them as hooks to set up the environment before running a test.
 
+    modifier useContrats(uint32 expiry) {
+        setUpContracts(expiry);
+        _;
+    }
+
     modifier useDefaultPool() {
         uint256 amount = 1_000 ether;
         mintSY(address(this), amount);
