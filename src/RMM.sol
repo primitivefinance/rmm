@@ -6,6 +6,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -690,12 +691,12 @@ contract RMM is ERC20 {
 
         if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
             // SY minted check is done in this function instead of relying on the SY contract's deposit().
-            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
+            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
         }
 
         if (tokenIn != address(0)) {
             ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenIn);
-            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, 0);
+            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, minSyMinted);
         }
 
         if (amountSyOut < minSyMinted) {
