@@ -35,7 +35,7 @@ contract SwapExactSyForYtTest is SetUp {
 
         state.ytOut = rmm.computeSYToYT(state.index, state.exactSYIn, 500 ether, block.timestamp, 0, 10_000);
         (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(state.ytOut, block.timestamp, state.index);
-        state.delta = state.index.assetToSyUp(amountInWad) - amountOutWad;
+        state.delta = amountInWad - amountOutWad;
         console.log("Delta", state.delta);
         (uint256 amtOut,) = rmm.swapExactSyForYt(
             state.exactSYIn, state.ytOut, state.ytOut.mulDivDown(95, 100), 500 ether, 10_000, state.to
@@ -44,6 +44,6 @@ contract SwapExactSyForYtTest is SetUp {
         assertEq(ERC20(address(SY)).balanceOf(address(this)), preBalances[0] - state.delta);
         assertEq(ERC20(address(YT)).balanceOf(state.to), preBalances[1] + amtOut);
         console.log("Diff", preBalances[2] + state.delta - ERC20(address(SY)).balanceOf(address(rmm)));
-        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] + state.delta, "3");
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] - amountOutWad, "3");
     }
 }
