@@ -5,6 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {console} from "forge-std/Test.sol";
 import {PYIndexLib, IPYieldToken} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {SetUp} from "../SetUp.sol";
+import "forge-std/console2.sol";
 
 contract SwapExactYtForSyTest is SetUp {
     using PYIndexLib for IPYieldToken;
@@ -18,17 +19,14 @@ contract SwapExactYtForSyTest is SetUp {
         uint256 preSYBalanceRMM = ERC20(address(SY)).balanceOf(address(rmm));
         uint256 preYTBalanceRMM = ERC20(address(YT)).balanceOf(address(rmm));
 
-        /*
         (uint256 amountInWad, uint256 amountOutWad, uint256 amountIn, int256 deltaLiquidity, uint256 strike_) =
             rmm.prepareSwapSyForExactPt(1 ether, block.timestamp, YT.newIndex());
-            */
 
-        uint256 amountIn = 1 ether;
-        (uint256 amountOut, uint256 exactAmountIn,) = rmm.swapExactYtForSy(amountIn, 1000 ether, address(to));
 
-        assertEq(ERC20(address(YT)).balanceOf(address(this)), preYTBalance - amountIn);
+        (uint256 amountOut, uint256 exactAmountIn,) = rmm.swapExactYtForSy(1 ether, 1000 ether, address(to));
+
+        assertEq(ERC20(address(YT)).balanceOf(address(this)), preYTBalance - 1 ether);
         assertEq(ERC20(address(SY)).balanceOf(to), preSYBalance + amountOut);
-        assertEq(ERC20(address(YT)).balanceOf(address(rmm)), preYTBalanceRMM + amountIn); // fails
-        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM - amountOut); // fails
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preSYBalanceRMM + amountInWad);
     }
 }
