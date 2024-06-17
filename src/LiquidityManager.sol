@@ -119,6 +119,8 @@ contract LiquidityManager {
 
         sy.approve(address(rmm), syBal);
         liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
+        console2.log(pt.balanceOf(address(this)), "pt bal after allocate");
+        console2.log(sy.balanceOf(address(this)), "sy bal after allocate");
     }
 
     struct ComputeArgs {
@@ -139,8 +141,8 @@ contract LiquidityManager {
             guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
             (,, syOut,,) = RMM(payable(args.rmm)).prepareSwapPtIn(guess, args.blockTime, args.index);
 
-            uint256 syNumerator = syOut * (args.rX + syOut);
-            uint256 ptNumerator = (args.maxIn - guess) * (args.rY - guess);
+            uint256 syNumerator = syOut * (args.rX - syOut);
+            uint256 ptNumerator = (args.maxIn - guess) * (args.rY + guess);
 
             if (isAApproxB(syNumerator, ptNumerator, args.epsilon)) {
                 return (guess, syOut);

@@ -226,12 +226,13 @@ contract ForkRMMTest is Test {
         (uint256 ptToSwap, uint256 syOut) = liquidityManager().computePtToSyToAddLiquidity(
             LiquidityManager.ComputeArgs(address(subject()), rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000)
         );
-        uint256 dx = syOut;
+
         uint256 dy = maxPtToSwap - ptToSwap;
+        uint256 dx = syOut;
 
         (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
-        liquidityManager().allocateFromSy(
-            LiquidityManager.AllocateArgs(address(subject()), maxPtToSwap, syOut, minLiquidityDelta, ptToSwap, eps)
+        liquidityManager().allocateFromPt(
+            LiquidityManager.AllocateArgs(address(subject()), maxPtToSwap, syOut, minLiquidityDelta.mulDivDown(95, 100), ptToSwap, eps)
         );
         assertEq(subject().reserveY(), rY + maxPtToSwap, "unexpected rY balance after zap");
         assertEq(subject().reserveX(), rX, "unexpected rX balance after zap");
