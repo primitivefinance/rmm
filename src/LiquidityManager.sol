@@ -1,40 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import { RMM, IPYieldToken } from "./RMM.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {RMM, IPYieldToken} from "./RMM.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "./lib/RmmErrors.sol";
-
-interface IRMM {
-    function SY() external view returns (address);
-    function PT() external view returns (address);
-    function YT() external view returns (address);
-    function reserveX() external view returns (uint256);
-    function reserveY() external view returns (uint256);
-    function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index) external view returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted);
-    function swapExactPtForSy(uint256 amountIn, uint256 minAmountOut, address to)
-        external
-        payable
-        returns (uint256 amountOut, int256 deltaLiquidity);
-    function swapExactSyForPt(uint256 amountIn, uint256 minAmountOut, address to)
-        external
-        returns (uint256 amountOut, int256 deltaLiquidity);
-    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
-        external
-        returns (uint256 deltaLiquidity);
-    function prepareSwapSyIn(uint256 amountIn, uint256 timestamp, PYIndex index)
-        external
-        view
-        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_);
-    function prepareSwapPtIn(uint256 ptIn, uint256 timestamp, PYIndex index)
-        external
-        view
-        returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_);
-}
 
 contract LiquidityManager {
     using PYIndexLib for PYIndex;
@@ -49,10 +22,13 @@ contract LiquidityManager {
         return _mintSYFromNativeAndToken(SY, receiver, tokenIn, amountTokenToDeposit, minSharesOut);
     }
 
-    function _mintSYFromNativeAndToken(address SY, address receiver, address tokenIn, uint256 amountTokenIn, uint256 minSyMinted)
-        internal
-        returns (uint256 amountSyOut)
-    {
+    function _mintSYFromNativeAndToken(
+        address SY,
+        address receiver,
+        address tokenIn,
+        uint256 amountTokenIn,
+        uint256 minSyMinted
+    ) internal returns (uint256 amountSyOut) {
         IStandardizedYield sy = IStandardizedYield(SY);
         if (!sy.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
@@ -71,8 +47,18 @@ contract LiquidityManager {
         }
     }
 
-    function allocateFromSy(address rmm_, uint256 amountSy, uint256 minPtOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
-        IRMM rmm = IRMM(rmm_);
+    struct AllocateFromSyArgs {
+        address rmm;
+        uint256 amountSy;
+        uint256 minPtOut;
+        uint256 minLiquidityDelta;
+        uint256 initialGuess;
+        uint256 epsilon;
+    }
+
+    function allocateFromSy(AllocateFromSyArgs calldata args) external returns (uint256 liquidity) {
+        RMM rmm = RMM(payable(args.rmm));
+
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
@@ -81,23 +67,43 @@ contract LiquidityManager {
         uint256 rY = rmm.reserveY();
 
         // validate swap approximation
-        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(rmm_, rX, rY, index, amountSy, block.timestamp, initialGuess, epsilon);
+        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(
+            SyToPtArgs({
+                rmm: args.rmm,
+                rX: rX,
+                rY: rY,
+                index: index,
+                maxSy: args.amountSy,
+                blockTime: block.timestamp,
+                initialGuess: args.initialGuess,
+                epsilon: args.epsilon
+            })
+        );
 
         // transfer all sy in
-        sy.transferFrom(msg.sender, address(this), amountSy);
-        sy.approve(address(rmm), amountSy);
+        sy.transferFrom(msg.sender, address(this), args.amountSy);
+        sy.approve(address(args.rmm), args.amountSy);
 
         // swap syToSwap for pt
-        rmm.swapExactSyForPt(syToSwap, minPtOut, address(this));
+        rmm.swapExactSyForPt(syToSwap, args.minPtOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
 
-        pt.approve(address(rmm), ptBal);
-        liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
+        pt.approve(address(args.rmm), ptBal);
+        liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
     }
 
-    function allocateFromPt(address rmm_, uint256 amountPt, uint256 minSyOut, uint256 minLiquidityDelta, uint256 initialGuess, uint256 epsilon) external returns (uint256 liquidity) {
-        IRMM rmm = IRMM(rmm_);
+    struct AllocateFromPtArgs {
+        address rmm;
+        uint256 amountPt;
+        uint256 minSyOut;
+        uint256 minLiquidityDelta;
+        uint256 initialGuess;
+        uint256 epsilon;
+    }
+
+    function allocateFromPt(AllocateFromPtArgs calldata args) external returns (uint256 liquidity) {
+        RMM rmm = RMM(payable(args.rmm));
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
 
@@ -106,43 +112,45 @@ contract LiquidityManager {
         uint256 rY = rmm.reserveY();
 
         // validate swap approximation
-        (uint256 ptToSwap,) = computePtToSyToAddLiquidity(rmm_, rX, rY, index, amountPt, block.timestamp, initialGuess, epsilon);
+        (uint256 ptToSwap,) = computePtToSyToAddLiquidity(
+            PtToSyArgs(args.rmm, rX, rY, index, args.amountPt, block.timestamp, args.initialGuess, args.epsilon)
+        );
 
         // transfer all pt in
-        pt.transferFrom(msg.sender, address(this), amountPt);
-        pt.approve(address(rmm), amountPt);
+        pt.transferFrom(msg.sender, address(this), args.amountPt);
+        pt.approve(address(rmm), args.amountPt);
 
         // swap ptToSwap for sy
-        rmm.swapExactPtForSy(ptToSwap, minSyOut, address(this));
+        rmm.swapExactPtForSy(ptToSwap, args.minSyOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
 
         sy.approve(address(rmm), syBal);
-        liquidity = rmm.allocate(syBal, ptBal, minLiquidityDelta, msg.sender);
+        liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
     }
 
-    function computePtToSyToAddLiquidity(
-        address rmm_,
-        uint256 rX,
-        uint256 rY,
-        PYIndex index,
-        uint256 maxPt,
-        uint256 blockTime,
-        uint256 initialGuess,
-        uint256 epsilon
-    ) public view returns (uint256, uint256) {
-        IRMM rmm = IRMM(rmm_);
+    struct PtToSyArgs {
+        address rmm;
+        uint256 rX;
+        uint256 rY;
+        PYIndex index;
+        uint256 maxPt;
+        uint256 blockTime;
+        uint256 initialGuess;
+        uint256 epsilon;
+    }
+
+    function computePtToSyToAddLiquidity(PtToSyArgs memory args) public view returns (uint256, uint256) {
         uint256 min = 0;
-        uint256 max = maxPt - 1;
+        uint256 max = args.maxPt - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
-            uint256 guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
-            (,, uint256 syOut,,) = rmm.prepareSwapPtIn(guess, blockTime, index);
+            uint256 guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
+            (,, uint256 syOut,,) = RMM(payable(args.rmm)).prepareSwapPtIn(guess, args.blockTime, args.index);
 
+            uint256 syNumerator = syOut * (args.rX + syOut);
+            uint256 ptNumerator = (args.maxPt - guess) * (args.rY - guess);
 
-            uint256 syNumerator = syOut * (rX + syOut);
-            uint256 ptNumerator = (maxPt - guess) * (rY - guess);
-
-            if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
+            if (isAApproxB(syNumerator, ptNumerator, args.epsilon)) {
                 return (guess, syOut);
             }
 
@@ -154,27 +162,29 @@ contract LiquidityManager {
         }
     }
 
-    function computeSyToPtToAddLiquidity(
-        address rmm_,
-        uint256 rX,
-        uint256 rY,
-        PYIndex index,
-        uint256 maxSy,
-        uint256 blockTime,
-        uint256 initialGuess,
-        uint256 epsilon
-    ) public view returns (uint256 guess, uint256 ptOut) {
-        IRMM rmm = IRMM(rmm_);
+    struct SyToPtArgs {
+        address rmm;
+        uint256 rX;
+        uint256 rY;
+        PYIndex index;
+        uint256 maxSy;
+        uint256 blockTime;
+        uint256 initialGuess;
+        uint256 epsilon;
+    }
+
+    function computeSyToPtToAddLiquidity(SyToPtArgs memory args) public view returns (uint256 guess, uint256 ptOut) {
+        RMM rmm = RMM(payable(args.rmm));
         uint256 min = 0;
-        uint256 max = maxSy - 1;
+        uint256 max = args.maxSy - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
-            guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
-            (,, ptOut,,) = rmm.prepareSwapSyIn(guess, blockTime, index);
+            guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
+            (,, ptOut,,) = rmm.prepareSwapSyIn(guess, args.blockTime, args.index);
 
-            uint256 syNumerator = (maxSy - guess) * (rX + guess);
-            uint256 ptNumerator = ptOut * (rY - ptOut);
+            uint256 syNumerator = (args.maxSy - guess) * (args.rX + guess);
+            uint256 ptNumerator = ptOut * (args.rY - ptOut);
 
-            if (isAApproxB(syNumerator, ptNumerator, epsilon)) {
+            if (isAApproxB(syNumerator, ptNumerator, args.epsilon)) {
                 return (guess, ptOut);
             }
 
@@ -190,4 +200,3 @@ contract LiquidityManager {
         return b.mulWadDown(1 ether - eps) <= a && a <= b.mulWadDown(1 ether + eps);
     }
 }
-
