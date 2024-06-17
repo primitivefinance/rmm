@@ -6,7 +6,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
