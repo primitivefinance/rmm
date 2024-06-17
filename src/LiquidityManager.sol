@@ -5,7 +5,6 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
-import "forge-std/console2.sol";
 
 import {RMM, IPYieldToken} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
@@ -119,8 +118,6 @@ contract LiquidityManager {
 
         sy.approve(address(rmm), syBal);
         liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
-        console2.log(pt.balanceOf(address(this)), "pt bal after allocate");
-        console2.log(sy.balanceOf(address(this)), "sy bal after allocate");
     }
 
     struct ComputeArgs {
