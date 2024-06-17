@@ -19,31 +19,21 @@ contract LiquidityManager {
         payable
         returns (uint256 amountOut)
     {
-        return _mintSYFromNativeAndToken(SY, receiver, tokenIn, amountTokenToDeposit, minSharesOut);
-    }
-
-    function _mintSYFromNativeAndToken(
-        address SY,
-        address receiver,
-        address tokenIn,
-        uint256 amountTokenIn,
-        uint256 minSyMinted
-    ) internal returns (uint256 amountSyOut) {
         IStandardizedYield sy = IStandardizedYield(SY);
         if (!sy.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
         if (msg.value > 0 && sy.isValidTokenIn(address(0))) {
             // SY minted check is done in this function instead of relying on the SY contract's deposit().
-            amountSyOut += sy.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
+            amountOut += sy.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         }
 
         if (tokenIn != address(0)) {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenIn);
-            amountSyOut += sy.deposit(receiver, tokenIn, amountTokenIn, 0);
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            amountOut += sy.deposit(receiver, tokenIn, amountTokenToDeposit, 0);
         }
 
-        if (amountSyOut < minSyMinted) {
-            revert InsufficientSYMinted(amountSyOut, minSyMinted);
+        if (amountOut < minSharesOut) {
+            revert InsufficientSYMinted(amountOut, minSharesOut);
         }
     }
 
