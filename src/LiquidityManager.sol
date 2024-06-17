@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import {RMM, IPYieldToken} from "./RMM.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
 
+import {RMM, IPYieldToken} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
 
 contract LiquidityManager {
     using PYIndexLib for PYIndex;
     using PYIndexLib for IPYieldToken;
     using FixedPointMathLib for uint256;
+    using SafeTransferLib for ERC20;
 
     function mintSY(address SY, address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
         public
@@ -28,7 +29,7 @@ contract LiquidityManager {
         }
 
         if (tokenIn != address(0)) {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenToDeposit);
+            ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenToDeposit);
             amountOut += sy.deposit(receiver, tokenIn, amountTokenToDeposit, 0);
         }
 
@@ -71,7 +72,7 @@ contract LiquidityManager {
         );
 
         // transfer all sy in
-        sy.transferFrom(msg.sender, address(this), args.amountIn);
+        sy.safeTransferFrom(msg.sender, address(this), args.amountIn);
         sy.approve(address(args.rmm), args.amountIn);
 
         // swap syToSwap for pt
@@ -107,7 +108,7 @@ contract LiquidityManager {
         );
 
         // transfer all pt in
-        pt.transferFrom(msg.sender, address(this), args.amountIn);
+        pt.safeTransferFrom(msg.sender, address(this), args.amountIn);
         pt.approve(address(rmm), args.amountIn);
 
         // swap ptToSwap for sy
