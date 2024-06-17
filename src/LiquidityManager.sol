@@ -7,7 +7,7 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import "./lib/RmmErrors.sol";
+import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
 
 contract LiquidityManager {
     using PYIndexLib for PYIndex;
