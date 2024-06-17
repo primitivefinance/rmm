@@ -16,6 +16,7 @@ import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
@@ -186,6 +187,7 @@ contract ForkRMMTest is Test {
     function test_zap_from_sy() public basic_sy {
         PYIndex index = YT.newIndex();
 
+        // initial balances
         uint256 rX = subject().reserveX();
         uint256 rY = subject().reserveY();
         uint256 maxSyToSwap = 1 ether;
@@ -202,15 +204,16 @@ contract ForkRMMTest is Test {
                 epsilon: 10_000
             })
         );
-        console2.log("ptOut", ptOut);
         uint256 dx = maxSyToSwap - syToSwap;
         uint256 dy = ptOut;
 
         (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
-        uint256 liquidity = liquidityManager().allocateFromSy(
+        liquidityManager().allocateFromSy(
             LiquidityManager.AllocateArgs(address(subject()), maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps)
         );
-        console2.log("liquidity", liquidity);
+
+        assertEq(subject().reserveX(), rX + maxSyToSwap, "unexpected rX balance after zap");
+        assertEq(subject().reserveY(), rY, "unexpected rY balance after zap");
     }
 
     function test_zap_from_pt() public basic_sy {
@@ -223,15 +226,14 @@ contract ForkRMMTest is Test {
         (uint256 ptToSwap, uint256 syOut) = liquidityManager().computePtToSyToAddLiquidity(
             LiquidityManager.ComputeArgs(address(subject()), rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000)
         );
-        uint256 dx = maxPtToSwap - ptToSwap;
-        uint256 dy = syOut;
+        uint256 dx = syOut;
+        uint256 dy = maxPtToSwap - ptToSwap;
 
         (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
-        uint256 liquidity = liquidityManager().allocateFromSy(
+        liquidityManager().allocateFromSy(
             LiquidityManager.AllocateArgs(address(subject()), maxPtToSwap, syOut, minLiquidityDelta, ptToSwap, eps)
         );
-        console2.log("liquidity", liquidity);
-        console2.log("ptToSwap", ptToSwap);
-        console2.log("syOut", syOut);
+        assertEq(subject().reserveY(), rY + maxPtToSwap, "unexpected rY balance after zap");
+        assertEq(subject().reserveX(), rX, "unexpected rX balance after zap");
     }
 }

@@ -5,6 +5,7 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
+import "forge-std/console2.sol";
 
 import {RMM, IPYieldToken} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
@@ -131,12 +132,12 @@ contract LiquidityManager {
         uint256 epsilon;
     }
 
-    function computePtToSyToAddLiquidity(ComputeArgs memory args) public view returns (uint256, uint256) {
+    function computePtToSyToAddLiquidity(ComputeArgs memory args) public view returns (uint256 guess, uint256 syOut) {
         uint256 min = 0;
         uint256 max = args.maxIn - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
-            uint256 guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
-            (,, uint256 syOut,,) = RMM(payable(args.rmm)).prepareSwapPtIn(guess, args.blockTime, args.index);
+            guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
+            (,, syOut,,) = RMM(payable(args.rmm)).prepareSwapPtIn(guess, args.blockTime, args.index);
 
             uint256 syNumerator = syOut * (args.rX + syOut);
             uint256 ptNumerator = (args.maxIn - guess) * (args.rY - guess);
