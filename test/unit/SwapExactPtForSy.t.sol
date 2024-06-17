@@ -6,7 +6,9 @@ import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 import {SetUp} from "../SetUp.sol";
 
 contract SwapExactPtForSyTest is SetUp {
-    function test_swapExactPtForSy_TransfersTokens(address to) public useDefaultPool {
+    function test_swapExactPtForSy_TransfersTokens() public useDefaultPool {
+        address to = address(0xbeef);
+
         uint256 preSYBalance = ERC20(address(SY)).balanceOf(to);
         uint256 prePTBalance = ERC20(address(PT)).balanceOf(address(this));
 
