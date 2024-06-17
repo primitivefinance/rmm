@@ -145,12 +145,12 @@ contract ForkRMMTest is Test {
         uint256 maxSyToSwap = 1 ether;
 
         (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(
-            LiquidityManager.SyToPtArgs({
+            LiquidityManager.ComputeArgs({
                 rmm: address(subject()),
                 rX: rX,
                 rY: rY,
                 index: index,
-                maxSy: maxSyToSwap,
+                maxIn: maxSyToSwap,
                 blockTime: block.timestamp,
                 initialGuess: 0,
                 epsilon: 10_000
@@ -168,7 +168,16 @@ contract ForkRMMTest is Test {
         uint256 maxPtToSwap = 1 ether;
 
         (uint256 ptToSwap, uint256 syOut) = liquidityManager().computePtToSyToAddLiquidity(
-            LiquidityManager.PtToSyArgs(address(subject()), rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000)
+            LiquidityManager.ComputeArgs({
+                rmm: address(subject()),
+                rX: rX,
+                rY: rY,
+                index: index,
+                maxIn: maxPtToSwap,
+                blockTime: block.timestamp,
+                initialGuess: 0,
+                epsilon: 10_000
+            })
         );
         console2.log("ptToSwap", ptToSwap);
         console2.log("syOut", syOut);
@@ -182,12 +191,12 @@ contract ForkRMMTest is Test {
         uint256 maxSyToSwap = 1 ether;
 
         (uint256 syToSwap, uint256 ptOut) = liquidityManager().computeSyToPtToAddLiquidity(
-            LiquidityManager.SyToPtArgs({
+            LiquidityManager.ComputeArgs({
                 rmm: address(subject()),
                 rX: rX,
                 rY: rY,
                 index: index,
-                maxSy: maxSyToSwap,
+                maxIn: maxSyToSwap,
                 blockTime: block.timestamp,
                 initialGuess: 0,
                 epsilon: 10_000
@@ -199,9 +208,7 @@ contract ForkRMMTest is Test {
 
         (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
         uint256 liquidity = liquidityManager().allocateFromSy(
-            LiquidityManager.AllocateFromSyArgs(
-                address(subject()), maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps
-            )
+            LiquidityManager.AllocateArgs(address(subject()), maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps)
         );
         console2.log("liquidity", liquidity);
     }
@@ -214,16 +221,14 @@ contract ForkRMMTest is Test {
         uint256 maxPtToSwap = 1 ether;
 
         (uint256 ptToSwap, uint256 syOut) = liquidityManager().computePtToSyToAddLiquidity(
-            LiquidityManager.PtToSyArgs(address(subject()), rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000)
+            LiquidityManager.ComputeArgs(address(subject()), rX, rY, index, maxPtToSwap, block.timestamp, 0, 10_000)
         );
         uint256 dx = maxPtToSwap - ptToSwap;
         uint256 dy = syOut;
 
         (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
         uint256 liquidity = liquidityManager().allocateFromSy(
-            LiquidityManager.AllocateFromSyArgs(
-                address(subject()), maxPtToSwap, syOut, minLiquidityDelta, ptToSwap, eps
-            )
+            LiquidityManager.AllocateArgs(address(subject()), maxPtToSwap, syOut, minLiquidityDelta, ptToSwap, eps)
         );
         console2.log("liquidity", liquidity);
         console2.log("ptToSwap", ptToSwap);

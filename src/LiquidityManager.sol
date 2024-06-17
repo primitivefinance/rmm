@@ -47,16 +47,16 @@ contract LiquidityManager {
         }
     }
 
-    struct AllocateFromSyArgs {
+    struct AllocateArgs {
         address rmm;
-        uint256 amountSy;
-        uint256 minPtOut;
+        uint256 amountIn;
+        uint256 minOut;
         uint256 minLiquidityDelta;
         uint256 initialGuess;
         uint256 epsilon;
     }
 
-    function allocateFromSy(AllocateFromSyArgs calldata args) external returns (uint256 liquidity) {
+    function allocateFromSy(AllocateArgs calldata args) external returns (uint256 liquidity) {
         RMM rmm = RMM(payable(args.rmm));
 
         ERC20 sy = ERC20(address(rmm.SY()));
@@ -68,12 +68,12 @@ contract LiquidityManager {
 
         // validate swap approximation
         (uint256 syToSwap,) = computeSyToPtToAddLiquidity(
-            SyToPtArgs({
+            ComputeArgs({
                 rmm: args.rmm,
                 rX: rX,
                 rY: rY,
                 index: index,
-                maxSy: args.amountSy,
+                maxIn: args.amountIn,
                 blockTime: block.timestamp,
                 initialGuess: args.initialGuess,
                 epsilon: args.epsilon
@@ -81,11 +81,11 @@ contract LiquidityManager {
         );
 
         // transfer all sy in
-        sy.transferFrom(msg.sender, address(this), args.amountSy);
-        sy.approve(address(args.rmm), args.amountSy);
+        sy.transferFrom(msg.sender, address(this), args.amountIn);
+        sy.approve(address(args.rmm), args.amountIn);
 
         // swap syToSwap for pt
-        rmm.swapExactSyForPt(syToSwap, args.minPtOut, address(this));
+        rmm.swapExactSyForPt(syToSwap, args.minOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
 
@@ -93,16 +93,7 @@ contract LiquidityManager {
         liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
     }
 
-    struct AllocateFromPtArgs {
-        address rmm;
-        uint256 amountPt;
-        uint256 minSyOut;
-        uint256 minLiquidityDelta;
-        uint256 initialGuess;
-        uint256 epsilon;
-    }
-
-    function allocateFromPt(AllocateFromPtArgs calldata args) external returns (uint256 liquidity) {
+    function allocateFromPt(AllocateArgs calldata args) external returns (uint256 liquidity) {
         RMM rmm = RMM(payable(args.rmm));
         ERC20 sy = ERC20(address(rmm.SY()));
         ERC20 pt = ERC20(address(rmm.PT()));
@@ -113,15 +104,24 @@ contract LiquidityManager {
 
         // validate swap approximation
         (uint256 ptToSwap,) = computePtToSyToAddLiquidity(
-            PtToSyArgs(args.rmm, rX, rY, index, args.amountPt, block.timestamp, args.initialGuess, args.epsilon)
+            ComputeArgs({
+                rmm: args.rmm,
+                rX: rX,
+                rY: rY,
+                index: index,
+                maxIn: args.amountIn,
+                blockTime: block.timestamp,
+                initialGuess: args.initialGuess,
+                epsilon: args.epsilon
+            })
         );
 
         // transfer all pt in
-        pt.transferFrom(msg.sender, address(this), args.amountPt);
-        pt.approve(address(rmm), args.amountPt);
+        pt.transferFrom(msg.sender, address(this), args.amountIn);
+        pt.approve(address(rmm), args.amountIn);
 
         // swap ptToSwap for sy
-        rmm.swapExactPtForSy(ptToSwap, args.minSyOut, address(this));
+        rmm.swapExactPtForSy(ptToSwap, args.minOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
         uint256 ptBal = pt.balanceOf(address(this));
 
@@ -129,26 +129,26 @@ contract LiquidityManager {
         liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
     }
 
-    struct PtToSyArgs {
+    struct ComputeArgs {
         address rmm;
         uint256 rX;
         uint256 rY;
         PYIndex index;
-        uint256 maxPt;
+        uint256 maxIn;
         uint256 blockTime;
         uint256 initialGuess;
         uint256 epsilon;
     }
 
-    function computePtToSyToAddLiquidity(PtToSyArgs memory args) public view returns (uint256, uint256) {
+    function computePtToSyToAddLiquidity(ComputeArgs memory args) public view returns (uint256, uint256) {
         uint256 min = 0;
-        uint256 max = args.maxPt - 1;
+        uint256 max = args.maxIn - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
             uint256 guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
             (,, uint256 syOut,,) = RMM(payable(args.rmm)).prepareSwapPtIn(guess, args.blockTime, args.index);
 
             uint256 syNumerator = syOut * (args.rX + syOut);
-            uint256 ptNumerator = (args.maxPt - guess) * (args.rY - guess);
+            uint256 ptNumerator = (args.maxIn - guess) * (args.rY - guess);
 
             if (isAApproxB(syNumerator, ptNumerator, args.epsilon)) {
                 return (guess, syOut);
@@ -162,26 +162,15 @@ contract LiquidityManager {
         }
     }
 
-    struct SyToPtArgs {
-        address rmm;
-        uint256 rX;
-        uint256 rY;
-        PYIndex index;
-        uint256 maxSy;
-        uint256 blockTime;
-        uint256 initialGuess;
-        uint256 epsilon;
-    }
-
-    function computeSyToPtToAddLiquidity(SyToPtArgs memory args) public view returns (uint256 guess, uint256 ptOut) {
+    function computeSyToPtToAddLiquidity(ComputeArgs memory args) public view returns (uint256 guess, uint256 ptOut) {
         RMM rmm = RMM(payable(args.rmm));
         uint256 min = 0;
-        uint256 max = args.maxSy - 1;
+        uint256 max = args.maxIn - 1;
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = args.initialGuess > 0 && iter == 0 ? args.initialGuess : (min + max) / 2;
             (,, ptOut,,) = rmm.prepareSwapSyIn(guess, args.blockTime, args.index);
 
-            uint256 syNumerator = (args.maxSy - guess) * (args.rX + guess);
+            uint256 syNumerator = (args.maxIn - guess) * (args.rX + guess);
             uint256 ptNumerator = ptOut * (args.rY - ptOut);
 
             if (isAApproxB(syNumerator, ptNumerator, args.epsilon)) {
