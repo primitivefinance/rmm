@@ -51,6 +51,12 @@ contract SetUp is Test {
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
+        vm.label(address(SY), "SY");
+        vm.label(address(YT), "YT");
+        vm.label(address(PT), "PT");
+        vm.label(address(wstETH), "wstETH");
+        vm.label(address(stETH), "stETH");
+
         (
             address creationCodeContractA,
             uint256 creationCodeSizeA,
@@ -81,7 +87,7 @@ contract SetUp is Test {
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
     function mintSY(address to, uint256 amount) public {
-        stETH.mint(address(to), amount);
+        stETH.mint(address(this), amount);
         stETH.approve(address(SY), type(uint256).max);
         SY.deposit(address(to), address(stETH), amount, 0);
     }
