@@ -1,7 +1,6 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {console} from "forge-std/console.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {PYIndexLib, IPYieldToken, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -36,14 +35,12 @@ contract SwapExactSyForYtTest is SetUp {
         state.ytOut = rmm.computeSYToYT(state.index, state.exactSYIn, 500 ether, block.timestamp, 0, 10_000);
         (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(state.ytOut, block.timestamp, state.index);
         state.delta = amountInWad - amountOutWad;
-        console.log("Delta", state.delta);
         (uint256 amtOut,) = rmm.swapExactSyForYt(
             state.exactSYIn, state.ytOut, state.ytOut.mulDivDown(95, 100), 500 ether, 10_000, state.to
         );
 
         assertEq(ERC20(address(SY)).balanceOf(address(this)), preBalances[0] - state.delta);
         assertEq(ERC20(address(YT)).balanceOf(state.to), preBalances[1] + amtOut);
-        console.log("Diff", preBalances[2] + state.delta - ERC20(address(SY)).balanceOf(address(rmm)));
-        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] - amountOutWad, "3");
+        assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] - amountOutWad);
     }
 }
