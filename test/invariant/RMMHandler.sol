@@ -112,7 +112,7 @@ contract RMMHandler is CommonBase, StdUtils {
 
     function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall("deallocate") {
         vm.startPrank(currentActor);
-        vn.stopPrank();
+        vm.stopPrank();
 
         // (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
 
