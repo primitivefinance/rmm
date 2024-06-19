@@ -9,17 +9,33 @@ contract RMMInvariantsTest is SetUp {
 
     function setUp() public virtual override {
         super.setUp();
-        handler = new RMMHandler(rmm);
+        handler = new RMMHandler(rmm, PT, SY, YT);
 
-        bytes4[] memory selectors = new bytes4[](0);
+        mintSY(address(handler), 100 ether);
+        mintSY(address(this), 50 ether);
+        mintPY(address(handler), 50 ether);
+
+        handler.init();
+
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = RMMHandler.allocate.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+
         targetContract(address(handler));
     }
 
-    /*
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.fail-on-revert = true
+    function invariant_works() public view {
+        assertNotEq(address(rmm.PT()), address(0));
+    }
+
     function invariant_ReserveX() public {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
-    */
+
+    function invariant_ReserveY() public {
+        assertEq(rmm.reserveY(), handler.ghost_reserveY());
+    }
 }
