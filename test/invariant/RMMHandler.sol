@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {CommonBase} from "forge-std/Base.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
-import {console} from "forge-std/console.sol";
+import {StdCheats} from "forge-std/StdCheats.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
@@ -12,7 +12,7 @@ import {RMM} from "../../src/RMM.sol";
 import {PYIndex} from "./../../src/RMM.sol";
 import {AddressSet, LibAddressSet} from "../helpers/AddressSet.sol";
 
-contract RMMHandler is CommonBase, StdUtils {
+contract RMMHandler is CommonBase, StdUtils, StdCheats {
     using LibAddressSet for AddressSet;
 
     RMM public rmm;
@@ -39,7 +39,9 @@ contract RMMHandler is CommonBase, StdUtils {
 
     modifier useActor(uint256 actorIndexSeed) {
         currentActor = actors.rand(actorIndexSeed);
+        vm.startPrank(currentActor);
         _;
+        vm.stopPrank();
     }
 
     modifier countCall(bytes4 key) {
@@ -59,6 +61,11 @@ contract RMMHandler is CommonBase, StdUtils {
 
     function give(address token, address to, uint256 amount) public {
         ERC20(token).transfer(to, amount);
+    }
+
+    function mintPY(uint256 amount, address to) internal returns (uint256 amountPY) {
+        SY.transfer(address(YT), amount);
+        amountPY = YT.mintPY(to, to);
     }
 
     function init() public {
@@ -90,14 +97,21 @@ contract RMMHandler is CommonBase, StdUtils {
 
     // Target functions
 
-    function allocate() public createActor countCall(this.allocate.selector) {
-        give(address(PT), currentActor, 1 ether);
-        give(address(SY), currentActor, 1 ether);
+    function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
+        deltaX = bound(deltaX, 0.1 ether, 0.5 ether);
+        deltaY = bound(deltaY, 0.1 ether, 0.5 ether);
+
+        // deal(currentActor, deltaX + deltaY);
+        give(address(SY), currentActor, deltaX);
+        give(address(PT), currentActor, deltaY);
 
         vm.startPrank(currentActor);
 
-        PT.approve(address(rmm), type(uint256).max);
-        SY.approve(address(rmm), type(uint256).max);
+        // rmm.mintSY{value: deltaX + deltaY}(currentActor, address(0), deltaX + deltaY, 0);
+        // mintPY(deltaY, currentActor);
+
+        SY.approve(address(rmm), deltaX);
+        PT.approve(address(rmm), deltaY);
 
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
@@ -111,18 +125,12 @@ contract RMMHandler is CommonBase, StdUtils {
     }
 
     function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
-        vm.startPrank(currentActor);
-        vm.stopPrank();
+        uint256 deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
+        (uint256 deltaXWad, uint256 deltaYWad,) = rmm.prepareDeallocate(deltaLiquidity);
+        rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
 
-        // (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned) = rmm.prepareDeallocate(deltaLiquidity / 2);
-
-        // uint256 preTotalLiquidity = rmm.totalLiquidity();
-        // rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
-
-        /*
-        ghost_totalLiquidity -= deltaLiquidity;
         ghost_reserveX -= deltaXWad;
         ghost_reserveY -= deltaYWad;
-        */
+        ghost_totalLiquidity -= deltaLiquidity;
     }
 }
