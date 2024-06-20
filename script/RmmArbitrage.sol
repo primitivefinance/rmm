@@ -180,9 +180,11 @@ contract RmmArbitrage {
         pure
         returns (int256)
     {
+        int256 sqrtTau = int256(FixedPointMathLib.sqrt(uint256(params.tau)) * 1e9);
+
         int256 firstExp = -(params.sigma.wadMul(params.sigma).wadMul(params.tau).wadDiv(I_TWO));
         int256 secondExp =
-            params.sqrtTwo.wadMul(params.sigma).wadMul(int256(FixedPointMathLib.sqrt(uint256(params.tau)))).wadMul(params.ierfcResult);
+            params.sqrtTwo.wadMul(params.sigma).wadMul(sqrtTau).wadMul(params.ierfcResult);
 
         int256 first = FixedPointMathLib.expWad(firstExp + secondExp);
         int256 second = params.K.wadMul(
@@ -199,8 +201,9 @@ contract RmmArbitrage {
         pure
         returns (int256)
     {
+        int256 sqrtTau = int256(FixedPointMathLib.sqrt(uint256(params.tau)) * 1e9);
         int256 a = I_HALF.wadMul(params.K).wadMul(-I_ONE + params.gamma);
-        int256 b = params.sigma.wadMul(int256(FixedPointMathLib.sqrt(uint256(params.tau)))).wadDiv(params.sqrtTwo);
+        int256 b = params.sigma.wadMul(sqrtTau).wadDiv(params.sqrtTwo);
         return a.wadMul(Gaussian.erfc(b - params.ierfcResult));
     }
 
@@ -264,9 +267,10 @@ contract RmmArbitrage {
         pure
         returns (int256)
     {
+        int256 sqrtTau = int256(FixedPointMathLib.sqrt(uint256(params.tau)) * 1e9);
         int256 firstExp = -(params.sigma.wadMul(params.sigma).wadMul(params.tau).wadDiv(I_TWO));
         int256 secondExp =
-            params.sqrtTwo.wadMul(params.sigma).wadMul(int256(FixedPointMathLib.sqrt(uint256(params.tau)) * 1e9)).wadMul(params.ierfcResult);
+            params.sqrtTwo.wadMul(params.sigma).wadMul(sqrtTau).wadMul(params.ierfcResult);
         int256 first = FixedPointMathLib.expWad(firstExp + secondExp);
         int256 second = params.S.wadMul(
             params.K.wadMul(params.L)
@@ -286,8 +290,9 @@ contract RmmArbitrage {
         pure
         returns (int256)
     {
+        int256 sqrtTau = int256(FixedPointMathLib.sqrt(uint256(params.tau)) * 1e9);
         int256 first = params.S.wadMul(-I_ONE + params.gamma);
-        int256 erfcFirst = params.sigma.wadDiv(params.sqrtTwo);
+        int256 erfcFirst = params.sigma.wadMul(sqrtTau).wadDiv(params.sqrtTwo);
         int256 num = first.wadMul(Gaussian.erfc(erfcFirst - params.ierfcResult));
         int256 den = I_TWO.wadMul(params.K);
         return num.wadDiv(den);
@@ -311,7 +316,6 @@ contract RmmArbitrage {
         int256 S,
         RmmParams memory params
     ) internal pure returns (int256 dy) {
-        int256 gamma = I_ONE - int256(params.fee);
         int256 mean = int256(params.K);
         int256 width = int256(params.sigma);
 
@@ -327,8 +331,8 @@ contract RmmArbitrage {
         int256 S,
         RmmParams memory params
     ) internal pure returns (int256 dx) {
-        int256 gamma = I_ONE - int256(params.fee);
-        int256 width = int256(params.sigma);
+        int256 sqrtTau = int256(FixedPointMathLib.sqrt(params.tau) * 1e9);
+        int256 width = int256(params.sigma).wadMul(sqrtTau);
 
         int256 lnSDivMean = computeLnSDivK(uint256(S), params.K);
         int256 a = Gaussian.cdf(lnSDivMean.wadDiv(width) + width.wadDiv(I_TWO));
@@ -343,7 +347,7 @@ contract RmmArbitrage {
         RmmParams memory params
     ) internal pure returns (uint256 v) {
         uint256 upper = vUpper;
-        uint256 lower = 1;
+        uint256 lower = 1_000;
         int256 lowerBoundOutput = diffLower(S, int256(lower), params);
         if (lowerBoundOutput < 0) {
             return 0;

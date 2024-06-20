@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
+import "forge-std/console2.sol";
 
 /// @dev Thrown when the lower bound is greater than the upper bound.
 error BisectionLib_InvalidBounds(uint256 lower, uint256 upper);
@@ -37,6 +38,10 @@ function bisection(
     // The root is between the bounds if the product of the two values is negative.
     int256 lowerOutput = fx(args, lower);
     int256 upperOutput = fx(args, upper);
+    console2.log("lowerOutput: ", lowerOutput);
+    console2.log("lower: ", lower);
+    console2.log("upperOutput: ", upperOutput);
+    console2.log("upper: ", upper);
     if (lowerOutput * upperOutput > 0) {
         revert BisectionLib_RootOutsideBounds(lowerOutput, upperOutput);
     }
