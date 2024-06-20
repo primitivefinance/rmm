@@ -1,10 +1,16 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "../SetUp.sol";
+import {console} from "forge-std/console.sol";
+import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
+import {abs} from "./../../src/lib/RmmLib.sol";
+import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import {SetUp} from "../SetUp.sol";
 import {RMMHandler} from "./RMMHandler.sol";
 
 contract RMMInvariantsTest is SetUp {
+    using PYIndexLib for IPYieldToken;
+
     RMMHandler handler;
 
     function setUp() public virtual override {
@@ -17,8 +23,9 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](1);
+        bytes4[] memory selectors = new bytes4[](2);
         selectors[0] = RMMHandler.allocate.selector;
+        selectors[1] = RMMHandler.deallocate.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
@@ -28,11 +35,13 @@ contract RMMInvariantsTest is SetUp {
     function afterInvariant() public view {
         console.log("Calls: ", handler.totalCalls());
         console.log("Allocate: ", handler.calls(RMMHandler.allocate.selector));
+        console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
     }
 
-    /// forge-config: default.invariant.runs = 256
-    function invariant_works() public view {
-        assertNotEq(address(rmm.PT()), address(0));
+    function invariant_TradingFunction() public {
+        IPYieldToken YT = handler.YT();
+        PYIndex index = YT.newIndex();
+        assertTrue(abs(rmm.tradingFunction(index)) <= 100, "Invariant out of valid range");
     }
 
     function invariant_ReserveX() public view {
