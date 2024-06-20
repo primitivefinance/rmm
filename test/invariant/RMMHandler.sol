@@ -25,7 +25,7 @@ contract RMMHandler is CommonBase, StdUtils {
     uint256 public ghost_totalLiquidity;
     uint256 public ghost_totalSupply;
 
-    mapping(bytes32 => uint256) public calls;
+    mapping(bytes4 => uint256) public calls;
     uint256 public totalCalls;
 
     AddressSet internal actors;
@@ -42,7 +42,7 @@ contract RMMHandler is CommonBase, StdUtils {
         _;
     }
 
-    modifier countCall(bytes32 key) {
+    modifier countCall(bytes4 key) {
         calls[key]++;
         totalCalls++;
         _;
@@ -50,7 +50,7 @@ contract RMMHandler is CommonBase, StdUtils {
 
     constructor(RMM rmm_, IPPrincipalToken PT_, PendleWstEthSY SY_, IPYieldToken YT_) {
         rmm = rmm_;
-        PT = PT_; // Not sure if passing around the PT here is the best way to do this...
+        PT = PT_;
         SY = SY_;
         YT = YT_;
     }
@@ -90,9 +90,9 @@ contract RMMHandler is CommonBase, StdUtils {
 
     // Target functions
 
-    function allocate() public createActor countCall("allocate") {
-        give(address(PT), currentActor, 0.1 ether);
-        give(address(SY), currentActor, 0.1 ether);
+    function allocate() public createActor countCall(this.allocate.selector) {
+        give(address(PT), currentActor, 1 ether);
+        give(address(SY), currentActor, 1 ether);
 
         vm.startPrank(currentActor);
 
@@ -110,7 +110,7 @@ contract RMMHandler is CommonBase, StdUtils {
         ghost_reserveY += deltaYWad;
     }
 
-    function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall("deallocate") {
+    function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
         vm.startPrank(currentActor);
         vm.stopPrank();
 
