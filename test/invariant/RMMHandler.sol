@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {CommonBase} from "forge-std/Base.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
+import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
@@ -11,9 +12,12 @@ import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {RMM} from "../../src/RMM.sol";
 import {PYIndex} from "./../../src/RMM.sol";
 import {AddressSet, LibAddressSet} from "../helpers/AddressSet.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 contract RMMHandler is CommonBase, StdUtils, StdCheats {
     using LibAddressSet for AddressSet;
+    using PYIndexLib for IPYieldToken;
+    using FixedPointMathLib for uint256;
 
     RMM public rmm;
     PendleWstEthSY public SY;
@@ -101,9 +105,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         deltaX = bound(deltaX, 0.1 ether, 0.5 ether);
         deltaY = bound(deltaY, 0.1 ether, 0.5 ether);
 
-        // deal(currentActor, deltaX + deltaY);
-        give(address(SY), currentActor, deltaX);
-        give(address(PT), currentActor, deltaY);
+        deal(address(SY), currentActor, deltaX);
+        deal(address(PT), currentActor, deltaY);
 
         vm.startPrank(currentActor);
 
@@ -115,7 +118,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
-        uint256 deltaLiquidity = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        uint256 deltaLiquidity = rmm.allocate(deltaXWad, deltaYWad, 0, address(currentActor));
 
         vm.stopPrank();
 
@@ -127,10 +130,31 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
         uint256 deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
         (uint256 deltaXWad, uint256 deltaYWad,) = rmm.prepareDeallocate(deltaLiquidity);
-        rmm.deallocate(deltaLiquidity / 2, 0, 0, address(this));
+        rmm.deallocate(deltaLiquidity, 0, 0, address(this));
 
         ghost_reserveX -= deltaXWad;
         ghost_reserveY -= deltaYWad;
         ghost_totalLiquidity -= deltaLiquidity;
     }
+
+    function swapExactSyForYt() public createActor countCall(this.swapExactSyForYt.selector) {
+        uint256 exactSYIn = 1 ether;
+        deal(address(SY), address(currentActor), exactSYIn);
+
+        vm.startPrank(currentActor);
+        SY.approve(address(rmm), exactSYIn);
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amtOut,) =
+            rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
+        vm.stopPrank();
+    }
+
+    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {}
+
+    function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {}
+
+    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {}
+
+    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {}
 }
