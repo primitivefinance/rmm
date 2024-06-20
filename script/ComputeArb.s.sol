@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {RMM, PoolPreCompute} from "../src/RMM.sol";
+import {ERC20, RMM, PoolPreCompute} from "../src/RMM.sol";
 import {LiquidityManager} from "../src/LiquidityManager.sol";
 import {Factory} from "../src/Factory.sol";
 
@@ -47,6 +47,8 @@ using SignedWadMathLib for int256;
 
     RMM rmm = RMM(payable(0xE3fFcA31BBA27392aF23B8018bd59c399f843093));
 
+    address sender;
+
     string public constant ENV_PRIVATE_KEY = "PRIVATE_KEY";
 
     function setUp() public {
@@ -59,6 +61,18 @@ using SignedWadMathLib for int256;
         mktState = market.readState(address(router));
         timeToExpiry = mktState.expiry - block.timestamp;
     }
+
+    function mintSY(uint256 amount) public {
+        console2.log("balance wsteth", IERC20(wstETH).balanceOf(sender));
+        IERC20(wstETH).approve(address(SY), type(uint256).max);
+        SY.deposit(sender, address(wstETH), amount, 1);
+    }
+
+    function mintPtYt(uint256 amount) public {
+        SY.transfer(address(YT), amount);
+        YT.mintPY(sender, sender);
+    }
+
 
     function getPtExchangeRate(PYIndex index) public view returns (int256) {
         (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
@@ -74,72 +88,9 @@ using SignedWadMathLib for int256;
         mp = ms.getMarketPreCompute(index, block.timestamp);
     }
 
-    function getDy() public view returns (uint256) {
-        return rmm.reserveY() - 50 ether;
-    }
-
-    function getDy(uint256 targetPrice, RmmParams memory params) public pure returns (int256) {
-        uint256 sqrtTau = FixedPointMathLib.sqrt(params.tau) * 1e9;
-        int256 gamma = int256(1 ether - params.fee);
-
-        int256 logP = log(int256(targetPrice.divWadDown(params.K)));
-        int256 innerP = logP.wadDiv(int256(params.sigma)) - int256(params.sigma.mulWadDown(sqrtTau).divWadDown(2 ether));
-        int256 cdfP = Gaussian.cdf(innerP);
-        int256 delta = int256(params.L.mulWadDown(params.K)) * cdfP;
-
-        int256 dy = (delta - int256(params.rY)).wadDiv(gamma - 1 ether).wadMul(cdfP).wadDiv(int256(params.rY).wadDiv(int256(params.K.mulWadDown(params.L))) + 1 ether);
-        return dy;
-    }
-
-    function getDx(uint256 targetPrice, RmmParams memory params) public pure returns (int256) {
-        uint256 sqrtTau = FixedPointMathLib.sqrt(params.tau) * 1e9;
-        int256 gamma = int256(1 ether - params.fee);
-
-        int256 logP = log(int256(targetPrice.divWadDown(params.K)));
-        console2.log("logP: ", logP);
-        int256 innerP = logP.wadDiv(int256(params.sigma)) + int256(params.sigma.mulWadDown(sqrtTau).divWadDown(2 ether));
-        console2.log("innerP: ", innerP);
-        int256 cdfP = Gaussian.cdf(innerP);
-        console2.log("cdfP: ", cdfP);
-        int256 delta = int256(params.L).wadMul(1 ether - cdfP);
-        // console2.log("delta: ", delta);
-        // int256 dx = (delta - int256(params.rX)).wadDiv((gamma - 1 ether).wadMul(1 ether - cdfP).wadDiv(int256(params.rX).wadDiv(int256(params.L)) + 1 ether));
-        // console2.log("dx: ", dx);
-        return delta;
-    }
-
-    //  pub async fn get_dx(&self) -> Result<I256> {
-    //     let ArbInputs {
-    //         i_wad,
-    //         target_price_wad,
-    //         strike,
-    //         sigma,
-    //         tau: _,
-    //         gamma,
-    //         rx,
-    //         ry: _,
-    //         liq,
-    //     } = self.get_arb_inputs().await?;
-
-    //     let log_p = self
-    //         .0
-    //         .atomic_arbitrage
-    //         .log(target_price_wad * i_wad / strike)
-    //         .call()
-    //         .await?;
-    //     let inner_p = log_p * i_wad / sigma + (sigma / 2);
-    //     let cdf_p = self.0.atomic_arbitrage.cdf(inner_p).call().await?;
-    //     let delta = liq * (i_wad - cdf_p) / i_wad;
-    //     let dx = (delta - rx) * i_wad * i_wad
-    //         / (((gamma - i_wad) * (i_wad - cdf_p)) / (rx * i_wad / liq) + i_wad);
-    //     info!("dx: {:?}", dx / i_wad);
-    //     Ok(dx / i_wad)
-    // }
-
-
-
     function run() public {
         uint256 pk = vm.envUint(ENV_PRIVATE_KEY);
+        sender = vm.addr(pk);
 
         PYIndex mainnetIndex = YT.newIndex();
 
@@ -148,13 +99,18 @@ using SignedWadMathLib for int256;
 
         vm.selectFork(testnetFork);
         PYIndex index = YT.newIndex();
+        vm.startBroadcast(pk);
+
+        IERC20(wstETH).approve(address(rmm), type(uint256).max);
+        IERC20(SY).approve(address(rmm), type(uint256).max);
+        IERC20(PT).approve(address(rmm), type(uint256).max);
+        IERC20(YT).approve(address(rmm), type(uint256).max);
 
         uint256 L = rmm.totalLiquidity();
 
         PoolPreCompute memory comp = rmm.preparePoolPreCompute(index, block.timestamp);
 
         uint256 rmmPrice = computeSpotPrice(comp.reserveInAsset, L, comp.strike_, rmm.sigma(), comp.tau_);
-        // pendleRate = rmmPrice - 0.02 ether;
 
         console2.log("rmmPrice: ", rmmPrice);
         console2.log("pendleRate: ", pendleRate);
@@ -165,15 +121,20 @@ using SignedWadMathLib for int256;
             console2.log("dy: ", dy);
             uint256 amt = computeOptimalArbRaisePrice(address(rmm), pendleRate, uint256(dy), index);
             console2.log("Amount to lower: ", amt);
+            mintSY(amt);
+            mintPtYt(rmm.SY().balanceOf(address(this)));
+            (uint256 amtOut, ) = rmm.swapExactPtForSy(amt, 0, address(this));
+            console2.log("amtOut: ", amtOut);
         } else {
             console2.log("lower!");
             int256 dx = getDxGivenS(address(rmm), pendleRate, index);
             console2.log("dx: ", dx);
-            uint256 amt = computeOptimalArbLowerPrice(address(rmm), pendleRate, uint256(dx), index);
-            console2.log("Amount to raise: ", amt);
+            uint256 amt = index.assetToSy(computeOptimalArbLowerPrice(address(rmm), pendleRate, uint256(dx), index));
+            mintSY(amt);
+            (uint256 amtOut, ) = rmm.swapExactSyForPt(amt, 0, address(this));
+            console2.log("amtOut: ", amtOut);
         }
 
-        vm.startBroadcast(pk);
         vm.stopBroadcast();
     }
 }
