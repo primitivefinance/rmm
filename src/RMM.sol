@@ -688,18 +688,11 @@ contract RMM is ERC20 {
     {
         if (!SY.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
-        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
-            // SY minted check is done in this function instead of relying on the SY contract's deposit().
-            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
-        }
-
-        if (tokenIn != address(0)) {
+        if (tokenIn == address(0)) {
+            amountSyOut = SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+        } else {
             ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenIn);
-            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, minSyMinted);
-        }
-
-        if (amountSyOut < minSyMinted) {
-            revert InsufficientSYMinted(amountSyOut, minSyMinted);
+            amountSyOut = SY.deposit(receiver, tokenIn, amountTokenIn, minSyMinted);
         }
     }
 
