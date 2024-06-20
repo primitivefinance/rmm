@@ -30,10 +30,8 @@ contract RmmArbitrage {
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
 
-    function fetchPoolParams(address rmm_) public returns (RmmParams memory) {
+    function fetchPoolParams(address rmm_, PYIndex index) public view returns (RmmParams memory) {
         RMM rmm = RMM(payable(rmm_));
-        IPYieldToken YT = rmm.YT();
-        PYIndex index = YT.newIndex();
         PoolPreCompute memory comp = rmm.preparePoolPreCompute(index, block.timestamp);
 
         return RmmParams({
@@ -50,27 +48,30 @@ contract RmmArbitrage {
     function calculateDiffLower(
         address rmm,
         uint256 S,
-        uint256 v
-    ) public returns (int256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 v,
+        PYIndex index
+    ) public view returns (int256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         return diffLower(int256(S), int256(v), params);
     }
 
     function calculateDiffRaise(
         address rmm,
         uint256 S,
-        uint256 v
-    ) public returns (int256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 v,
+        PYIndex index
+    ) public view returns (int256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         return diffRaise(int256(S), int256(v), params);
     }
 
     function computeOptimalArbLowerPrice(
         address rmm,
         uint256 S,
-        uint256 vUpper
-    ) public returns (uint256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 vUpper,
+        PYIndex index
+    ) public view returns (uint256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         return computeOptimalLower(
             int256(S), vUpper, params
         );
@@ -79,9 +80,10 @@ contract RmmArbitrage {
     function computeOptimalArbRaisePrice(
         address rmm,
         uint256 S,
-        uint256 vUpper
-    ) public returns (uint256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 vUpper,
+        PYIndex index
+    ) public view returns (uint256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         return computeOptimalRaise(
             int256(S), vUpper, params
         );
@@ -89,18 +91,20 @@ contract RmmArbitrage {
 
     function getDyGivenS(
         address rmm,
-        uint256 S
-    ) public returns (int256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 S,
+        PYIndex index
+    ) public view returns (int256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         int256 dy = computeDy(int256(S), params);
         return dy;
     }
 
     function getDxGivenS(
         address rmm,
-        uint256 S
-    ) public returns (int256) {
-        RmmParams memory params = fetchPoolParams(rmm);
+        uint256 S,
+        PYIndex index
+    ) public view returns (int256) {
+        RmmParams memory params = fetchPoolParams(rmm, index);
         return computeDx(int256(S), params);
     }
 
