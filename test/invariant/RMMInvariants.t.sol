@@ -39,7 +39,7 @@ contract RMMInvariantsTest is SetUp {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
-    function invariant_ReserveY() public {
+    function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
     }
 }
