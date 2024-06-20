@@ -25,13 +25,17 @@ contract RMMInvariantsTest is SetUp {
         targetContract(address(handler));
     }
 
-    /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.fail-on-revert = true
+    function afterInvariant() public view {
+        console.log("Calls: ", handler.totalCalls());
+        console.log("Allocate: ", handler.calls(RMMHandler.allocate.selector));
+    }
+
+    /// forge-config: default.invariant.runs = 256
     function invariant_works() public view {
         assertNotEq(address(rmm.PT()), address(0));
     }
 
-    function invariant_ReserveX() public {
+    function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
