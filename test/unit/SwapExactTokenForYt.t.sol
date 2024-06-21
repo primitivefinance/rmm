@@ -15,14 +15,27 @@ contract SwapExactTokenForYtTest is SetUp {
     function test_swapExactTokenForYt_SwapsWETH() public useSYPool withWETH(address(this), 1 ether) {
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
-        console2.log("before");
         (uint256 syMinted, uint256 ytOut) =
             rmm.computeTokenToYT(index, address(weth), amountIn, 500 ether, block.timestamp, 0, 1_000);
-        console2.log("after");
-        console.log("syMinted", syMinted);
         rmm.swapExactTokenForYt(
             address(weth), amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 500 ether, 0.005 ether, address(this)
         );
+    }
+
+    function test_swapExactTokenForYt_SwapsETH() public useSYPool {
+        uint256 preETHBalance = address(this).balance;
+        uint256 preYTBalance = YT.balanceOf(address(this));
+
+        uint256 amountIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        (uint256 syMinted, uint256 ytOut) =
+            rmm.computeTokenToYT(index, address(0), amountIn, 500 ether, block.timestamp, 0, 1_000);
+        (uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
+            address(0), amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 500 ether, 0.005 ether, address(this)
+        );
+
+        assertEq(address(this).balance, preETHBalance - amountIn);
+        assertEq(YT.balanceOf(address(this)), preYTBalance + amountOut);
     }
 
     function test_swapExactTokenForYt_RevertsIfInvalidTokenIn() public useDefaultPool {
