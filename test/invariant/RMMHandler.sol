@@ -82,7 +82,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         */
 
         uint256 priceX = 1 ether;
-        uint256 amountX = 1 ether;
+        uint256 amountX = 50 ether;
         uint256 strike = 1 ether;
         uint256 sigma = 0.015 ether;
         uint256 fee = 0.00016 ether;
@@ -138,16 +138,30 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         uint256 exactSYIn = 1 ether;
         deal(address(SY), address(currentActor), exactSYIn);
 
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 10 ether, block.timestamp, 0, 10_000);
+
         vm.startPrank(currentActor);
         SY.approve(address(rmm), exactSYIn);
-        PYIndex index = YT.newIndex();
-        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
-        (uint256 amtOut,) =
-            rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
         vm.stopPrank();
     }
 
-    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {}
+    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {
+        uint256 amountIn = 1 ether;
+        address weth = rmm.WETH();
+        deal(weth, currentActor, amountIn);
+
+        PYIndex index = YT.newIndex();
+        (uint256 syMinted, uint256 ytOut) =
+            rmm.computeTokenToYT(index, weth, amountIn, 10 ether, block.timestamp, 0, 1_000);
+
+        vm.startPrank(currentActor);
+        rmm.swapExactTokenForYt(
+            weth, amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 10 ether, 0.005 ether, address(currentActor)
+        );
+        vm.stopPrank();
+    }
 
     function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {}
 
