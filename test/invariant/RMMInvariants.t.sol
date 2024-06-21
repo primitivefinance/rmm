@@ -23,11 +23,12 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](4);
+        bytes4[] memory selectors = new bytes4[](5);
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
         selectors[3] = RMMHandler.swapExactTokenForYt.selector;
+        selectors[4] = RMMHandler.swapExactPtForSy.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
@@ -40,6 +41,7 @@ contract RMMInvariantsTest is SetUp {
         console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
         console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
         console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
+        console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
     }
 
     function invariant_TradingFunction() public {
