@@ -124,6 +124,8 @@ contract LiquidityManager {
             })
         );
 
+        sy.approve(address(args.rmm), syMinted);
+
         // swap syToSwap for pt
         rmm.swapExactSyForPt(syToSwap, args.minOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
@@ -225,6 +227,17 @@ contract LiquidityManager {
                 max = guess - 1;
             }
         }
+    }
+
+    function computeTokenToPtToAddLiquidity(ComputeArgs memory args, address token, uint256 tokenIn) public view returns (uint256 guess, uint256 ptOut, uint256 syMinted) {
+        RMM rmm = RMM(payable(args.rmm));
+        IStandardizedYield SY = IStandardizedYield(address(rmm.SY()));
+        if (!SY.isValidTokenIn(token)) {
+            revert InvalidTokenIn(token);
+        }
+        syMinted = SY.previewDeposit(token, tokenIn);
+        args.maxIn = syMinted;
+        (guess, ptOut) = computeSyToPtToAddLiquidity(args);
     }
 
     function isAApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
