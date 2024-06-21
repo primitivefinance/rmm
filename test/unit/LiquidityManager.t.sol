@@ -238,7 +238,7 @@ contract ForkRMMTest is Test {
         assertEq(subject().reserveX(), rX, "unexpected rX balance after zap");
     }
 
-    function test_zap_from_weth() public basic_sy {
+    function test_zap_from_eth() public basic_sy {
         PYIndex index = YT.newIndex();
         uint256 amountIn = 1 ether;
         uint256 initialGuess = 0;
