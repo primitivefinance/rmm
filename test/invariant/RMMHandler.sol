@@ -171,7 +171,19 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         vm.stopPrank();
     }
 
-    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {}
+    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {
+        deal(address(SY), currentActor, 1 ether);
+        vm.startPrank(currentActor);
+        SY.approve(address(rmm), 1 ether);
+        rmm.swapExactSyForPt(1 ether, 0, address(currentActor));
+        vm.stopPrank();
+    }
 
-    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {}
+    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {
+        deal(address(YT), currentActor, 1 ether);
+        vm.startPrank(currentActor);
+        YT.approve(address(rmm), 1 ether);
+        rmm.swapExactYtForSy(1 ether, 0, address(currentActor));
+        vm.stopPrank();
+    }
 }

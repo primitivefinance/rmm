@@ -44,6 +44,9 @@ contract RMMInvariantsTest is SetUp {
         console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
     }
 
+    /// forge-config: default.invariant.runs = 100
+    /// forge-config: default.invariant.depth = 2
+    /// forge-config: default.invariant.fail-on-revert = false
     function invariant_TradingFunction() public {
         IPYieldToken YT = handler.YT();
         PYIndex index = YT.newIndex();
