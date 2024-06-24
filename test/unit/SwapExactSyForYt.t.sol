@@ -43,4 +43,21 @@ contract SwapExactSyForYtTest is SetUp {
         assertEq(ERC20(address(YT)).balanceOf(state.to), preBalances[1] + amtOut);
         assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] - amountOutWad);
     }
+
+    function test_swapExactSyForYt_AdjustsReserves() public useSYPool withSY(address(this), 10 ether) {
+        uint256 preReserveX = rmm.reserveX();
+        uint256 preReserveY = rmm.reserveY();
+        uint256 preTotalLiquidity = rmm.totalLiquidity();
+
+        PYIndex index = YT.newIndex();
+        uint256 exactSYIn = 1 ether;
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(this));
+
+        assertEq(rmm.reserveX(), preReserveX - amountOutWad);
+        assertEq(rmm.reserveY(), preReserveY + amountInWad);
+        assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
+    }
 }
