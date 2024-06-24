@@ -43,13 +43,13 @@ contract RMM is ERC20 {
     uint256 public lastImpliedPrice;
 
     address public curator;
-    uint256 public lock_ = 1;
+    uint256 private _lock = 1;
 
     modifier lock() {
-        if (lock_ != 1) revert Reentrancy();
-        lock_ = 0;
+        if (_lock != 1) revert Reentrancy();
+        _lock = 0;
         _;
-        lock_ = 1;
+        _lock = 1;
     }
 
     /// @dev Applies updates to the trading function and validates the adjustment.
