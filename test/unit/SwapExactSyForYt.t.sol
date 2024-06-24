@@ -5,6 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {PYIndexLib, IPYieldToken, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SetUp} from "../SetUp.sol";
+import {ExcessInput} from "../../src/lib/RmmErrors.sol";
 
 contract SwapExactSyForYtTest is SetUp {
     using PYIndexLib for IPYieldToken;
@@ -59,5 +60,15 @@ contract SwapExactSyForYtTest is SetUp {
         assertEq(rmm.reserveX(), preReserveX - amountOutWad);
         assertEq(rmm.reserveY(), preReserveY + amountInWad);
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
+    }
+
+    function test_swapExactSyForYt_RevertsWhenExcessInput() public useSYPool withSY(address(this), 10 ether) {
+        uint256 exactSYIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        vm.expectRevert();
+        rmm.swapExactSyForYt(exactSYIn - 1 ether, ytOut, amountOutWad, 500 ether, 10_000, address(this));
     }
 }
