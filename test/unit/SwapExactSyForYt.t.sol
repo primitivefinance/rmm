@@ -6,6 +6,7 @@ import {PYIndexLib, IPYieldToken, PYIndex} from "pendle/core/StandardizedYield/P
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SetUp} from "../SetUp.sol";
 import {ExcessInput} from "../../src/lib/RmmErrors.sol";
+import {Swap} from "../../src/lib/RmmEvents.sol";
 
 contract SwapExactSyForYtTest is SetUp {
     using PYIndexLib for IPYieldToken;
@@ -60,6 +61,19 @@ contract SwapExactSyForYtTest is SetUp {
         assertEq(rmm.reserveX(), preReserveX - amountOutWad);
         assertEq(rmm.reserveY(), preReserveY + amountInWad);
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
+    }
+
+    function test_swapExactSyForYt_EmitsEvent() public useSYPool withSY(address(this), 10 ether) {
+        PYIndex index = YT.newIndex();
+        uint256 exactSYIn = 1 ether;
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        vm.expectEmit(true, true, true, true);
+        emit Swap(address(this), address(0xbeef), address(SY), address(YT), delta, amountOut, deltaLiquidity);
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(0xbeef));
     }
 
     function test_swapExactSyForYt_RevertsWhenExcessInput() public useSYPool withSY(address(this), 10 ether) {
