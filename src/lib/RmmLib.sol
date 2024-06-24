@@ -3,16 +3,10 @@ pragma solidity ^0.8.13;
 
 import {Gaussian} from "solstat/Gaussian.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 using FixedPointMathLib for uint256;
 using FixedPointMathLib for int256;
-
-interface Token {
-    function decimals() external view returns (uint8);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-}
 
 struct PoolPreCompute {
     uint256 reserveInAsset;
@@ -411,7 +405,7 @@ function abs(int256 x) pure returns (int256) {
 
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
 function scalar(address token) view returns (uint256) {
-    uint256 decimals = Token(token).decimals();
+    uint256 decimals = ERC20(token).decimals();
     uint256 difference = 18 - decimals;
     return FixedPointMathLib.WAD * 10 ** difference;
 }

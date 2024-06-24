@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {Gaussian} from "solstat/Gaussian.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
@@ -20,30 +18,32 @@ contract RMM is ERC20 {
     using PYIndexLib for IPYieldToken;
     using PYIndexLib for PYIndex;
 
+    using SafeTransferLib for ERC20;
+
     int256 public constant INIT_UPPER_BOUND = 30;
     uint256 public constant IMPLIED_RATE_TIME = 365 * 86400;
     uint256 public constant BURNT_LIQUIDITY = 1000;
     address public immutable WETH;
 
-    IPPrincipalToken public PT; // slot 6
-    IStandardizedYield public SY; // slot 7
-    IPYieldToken public YT; // slot 8
+    IPPrincipalToken public PT;
+    IStandardizedYield public SY;
+    IPYieldToken public YT;
 
-    uint256 public reserveX; // slot 9
-    uint256 public reserveY; // slot 10
-    uint256 public totalLiquidity; // slot 11
+    uint256 public reserveX;
+    uint256 public reserveY;
+    uint256 public totalLiquidity;
 
-    uint256 public strike; // slot 12
-    uint256 public sigma; // slot 13
-    uint256 public fee; // slot 14
-    uint256 public maturity; // slot 15
+    uint256 public strike;
+    uint256 public sigma;
+    uint256 public fee;
+    uint256 public maturity;
 
-    uint256 public initTimestamp; // slot 16
-    uint256 public lastTimestamp; // slot 17
-    uint256 public lastImpliedPrice; // slot 18
+    uint256 public initTimestamp;
+    uint256 public lastTimestamp;
+    uint256 public lastImpliedPrice;
 
-    address public curator; // slot 19
-    uint256 public lock_ = 1; // slot 20
+    address public curator;
+    uint256 public lock_ = 1;
 
     modifier lock() {
         if (lock_ != 1) revert Reentrancy();
@@ -100,7 +100,6 @@ contract RMM is ERC20 {
         PYIndex index = YT.newIndex();
         uint256 totalAsset = index.syToAsset(amountX);
 
-        strike = strike_;
         sigma = sigma_;
         maturity = PT.expiry();
         fee = fee_;
@@ -117,17 +116,7 @@ contract RMM is ERC20 {
         _debit(address(PT), reserveY);
 
         emit Init(
-            msg.sender,
-            address(SY),
-            address(PT_),
-            amountX,
-            amountY,
-            totalLiquidity_,
-            strike_,
-            sigma_,
-            fee_,
-            maturity,
-            curator_
+            msg.sender, address(SY), PT_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity, curator_
         );
     }
 
@@ -233,7 +222,7 @@ contract RMM is ERC20 {
 
         uint256 debitSurplus = address(this).balance;
         if (debitSurplus > 0) {
-            _sendETH(swap.to, debitSurplus);
+            SafeTransferLib.safeTransferETH(swap.to, debitSurplus);
         }
 
         emit Swap(
@@ -402,9 +391,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amountWad, scalar(token));
 
-        if (!Token(token).transferFrom(msg.sender, address(this), amountNative)) {
-            revert PaymentFailed(token, msg.sender, address(this), amountNative);
-        }
+        ERC20(token).safeTransferFrom(msg.sender, address(this), amountNative);
 
         paymentNative = _balanceNative(token) - balanceNative;
         if (paymentNative < amountNative) {
@@ -417,9 +404,7 @@ contract RMM is ERC20 {
         uint256 balanceNative = _balanceNative(token);
         uint256 amountNative = downscaleDown(amount, scalar(token));
 
-        if (!Token(token).transfer(to, amountNative)) {
-            revert PaymentFailed(token, address(this), to, amountNative);
-        }
+        ERC20(token).safeTransfer(to, amountNative);
 
         paymentNative = balanceNative - _balanceNative(token);
         if (paymentNative < amountNative) {
@@ -429,8 +414,7 @@ contract RMM is ERC20 {
 
     /// @dev Retrieves the balance of a token in this contract, reverting if the call fails or returns unexpected data.
     function _balanceNative(address token) internal view returns (uint256) {
-        (bool success, bytes memory data) =
-            token.staticcall(abi.encodeWithSelector(Token.balanceOf.selector, address(this)));
+        (bool success, bytes memory data) = token.staticcall(abi.encodeWithSelector(0x70a08231, address(this)));
         if (!success || data.length != 32) revert BalanceError();
         return abi.decode(data, (uint256));
     }
@@ -497,6 +481,30 @@ contract RMM is ERC20 {
             uint256 netSyToPull = netSyToPt - amountOut;
             if (netSyToPull <= exactSYIn) {
                 if (isASmallerApproxB(netSyToPull, exactSYIn, epsilon)) {
+                    return guess;
+                }
+                min = guess;
+            } else {
+                max = guess - 1;
+            }
+        }
+    }
+
+    function computeYTToPT(PYIndex index, uint256 exactYTIn, uint256 blockTime, uint256 initialGuess)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 min = exactYTIn;
+        uint256 max = initialGuess;
+        for (uint256 iter = 0; iter < 100; ++iter) {
+            uint256 guess = (min + max) / 2;
+            (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
+            uint256 netPtToAccount = index.assetToSyUp(guess);
+
+            uint256 netPtToPull = netPtToAccount - amountOut;
+            if (netPtToPull <= exactYTIn) {
+                if (isASmallerApproxB(netPtToPull, exactYTIn, 10_000)) {
                     return guess;
                 }
                 min = guess;
@@ -680,18 +688,11 @@ contract RMM is ERC20 {
     {
         if (!SY.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
-        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
-            // SY minted check is done in this function instead of relying on the SY contract's deposit().
-            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
-        }
-
-        if (tokenIn != address(0)) {
-            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenIn);
-            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, 0);
-        }
-
-        if (amountSyOut < minSyMinted) {
-            revert InsufficientSYMinted(amountSyOut, minSyMinted);
+        if (tokenIn == address(0)) {
+            amountSyOut = SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+        } else {
+            ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenIn);
+            amountSyOut = SY.deposit(receiver, tokenIn, amountTokenIn, minSyMinted);
         }
     }
 
@@ -699,14 +700,5 @@ contract RMM is ERC20 {
         PT.transfer(address(YT), amount);
         YT.transfer(address(YT), amount);
         amountOut = YT.redeemPY(to);
-    }
-
-    /// This contract doesnt hold ETH so the only time we are transfering ETH out
-    /// is when we have extra ETH that was sent in as payment.
-    function _sendETH(address to, uint256 amount) internal {
-        (bool success,) = to.call{value: amount}("");
-        if (!success) {
-            revert PaymentFailed(address(0), address(this), to, amount);
-        }
     }
 }

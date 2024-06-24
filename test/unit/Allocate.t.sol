@@ -2,12 +2,12 @@
 pragma solidity ^0.8.13;
 
 import {PYIndex} from "./../../src/RMM.sol";
-import {SetUp, RMM} from "./SetUp.sol";
+import {SetUp, RMM} from "../SetUp.sol";
 import {Allocate} from "../../src/lib/RmmEvents.sol";
 import {InsufficientLiquidityOut} from "../../src/lib/RmmErrors.sol";
 
 contract AllocateTest is SetUp {
-    function test_allocate_MintsLiquidity() public initDefaultPool dealSY(address(this), 1_000 ether) {
+    function test_allocate_MintsLiquidity() public useDefaultPool {
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
 
@@ -16,7 +16,7 @@ contract AllocateTest is SetUp {
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + deltaLiquidity);
     }
 
-    function test_allocate_MintsLP() public initDefaultPool {
+    function test_allocate_MintsLP() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         uint256 preBalance = rmm.balanceOf(address(this));
@@ -28,7 +28,7 @@ contract AllocateTest is SetUp {
         assertEq(rmm.totalSupply(), preTotalSupply + lpMinted);
     }
 
-    function test_allocate_AdjustsPool() public initDefaultPool {
+    function test_allocate_AdjustsPool() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         uint256 preReserveX = rmm.reserveX();
@@ -43,7 +43,7 @@ contract AllocateTest is SetUp {
         assertEq(rmm.lastTimestamp(), block.timestamp);
     }
 
-    function test_allocate_TransfersTokens() public initDefaultPool {
+    function test_allocate_TransfersTokens() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         uint256 thisPreBalanceSY = SY.balanceOf(address(this));
@@ -61,7 +61,7 @@ contract AllocateTest is SetUp {
         assertEq(PT.balanceOf(address(rmm)), rmmPreBalancePT + deltaYWad);
     }
 
-    function test_allocate_EmitsAllocate() public initDefaultPool {
+    function test_allocate_EmitsAllocate() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
@@ -73,7 +73,7 @@ contract AllocateTest is SetUp {
         rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
     }
 
-    function test_allocate_RevertsIfInsufficientLiquidityOut() public initDefaultPool {
+    function test_allocate_RevertsIfInsufficientLiquidityOut() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =

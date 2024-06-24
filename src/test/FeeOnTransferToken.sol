@@ -166,7 +166,7 @@ contract FeeOnTransferToken {
                         INTERNAL MINT/BURN LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function _mint(address to, uint256 amount) internal virtual {
+    function mint(address to, uint256 amount) public virtual {
         totalSupply += amount;
 
         // Cannot overflow because the sum of all user
@@ -178,7 +178,7 @@ contract FeeOnTransferToken {
         emit Transfer(address(0), to, amount);
     }
 
-    function _burn(address from, uint256 amount) internal virtual {
+    function burn(address from, uint256 amount) public virtual {
         balanceOf[from] -= amount;
 
         // Cannot underflow because a user's balance
