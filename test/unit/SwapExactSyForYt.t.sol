@@ -71,4 +71,14 @@ contract SwapExactSyForYtTest is SetUp {
         vm.expectRevert();
         rmm.swapExactSyForYt(exactSYIn - 1 ether, ytOut, amountOutWad, 500 ether, 10_000, address(this));
     }
+
+    function test_swapExactSyForYt_RevertsWhenInsufficientOutput() public useSYPool withSY(address(this), 10 ether) {
+        uint256 exactSYIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        vm.expectRevert();
+        rmm.swapExactSyForYt(exactSYIn, ytOut, amountOutWad + 1 ether, 500 ether, 10_000, address(this));
+    }
 }
