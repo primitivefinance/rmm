@@ -342,8 +342,8 @@ contract RMM is ERC20 {
         _mint(to, lptMinted);
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), strike, index);
 
-        (uint256 debitNativeX) = _debit(address(SY), deltaXWad);
-        (uint256 debitNativeY) = _debit(address(PT), deltaYWad);
+        (uint256 debitNativeX) = _debit(address(SY), index.assetToSyUp(deltaX));
+        (uint256 debitNativeY) = _debit(address(PT), deltaY);
 
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
