@@ -143,8 +143,14 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         vm.startPrank(currentActor);
         SY.approve(address(rmm), exactSYIn);
+        (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
         rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
         vm.stopPrank();
+
+        ghost_reserveX -= amountOutWad;
+        ghost_reserveY += amountInWad;
+        ghost_totalLiquidity += uint256(deltaLiquidity);
     }
 
     function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {
