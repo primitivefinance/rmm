@@ -118,11 +118,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         vm.startPrank(currentActor);
 
-        console2.log("SY balance", ERC20(address(SY)).balanceOf(address(currentActor)));
-        console2.log("PT balance", ERC20(address(PT)).balanceOf(address(currentActor)));
-        console2.log("SY allowance", ERC20(address(SY)).allowance(address(currentActor), address(rmm)));
-        console2.log("PT allowance", ERC20(address(PT)).allowance(address(currentActor), address(rmm)));
-        console2.log("here 1");
 
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(deltaX, deltaY, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
@@ -130,11 +125,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         SY.approve(address(rmm), deltaX);
         PT.approve(address(rmm), deltaY);
-        console2.log("address this", address(this));
-        console2.log("SY allowance", ERC20(address(SY)).allowance(address(currentActor), address(rmm)));
-        console2.log("PT allowance", ERC20(address(PT)).allowance(address(currentActor), address(rmm)));
         uint256 deltaLiquidity = rmm.allocate(deltaX, deltaY, 0, address(currentActor));
-        console2.log("here 3");
 
         vm.stopPrank();
 
