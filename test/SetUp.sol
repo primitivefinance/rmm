@@ -11,6 +11,7 @@ import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleY
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
 import {MockWstETH} from "./mocks/MockWstETH.sol";
 import {MockStETH} from "./mocks/MockStETH.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {RMM} from "./../src/RMM.sol";
 
@@ -26,6 +27,9 @@ struct InitParams {
     address curator;
 }
 
+address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
+address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
 contract SetUp is Test {
     // All the contracts that are needed for the tests.
 
@@ -34,8 +38,6 @@ contract SetUp is Test {
     PendleWstEthSY public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
-    MockWstETH public wstETH;
-    MockStETH public stETH;
 
     // Some default constants.
 
@@ -45,17 +47,19 @@ contract SetUp is Test {
     // Main setup functions.
 
     function setUpContracts(uint32 expiry) public {
+        vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
         weth = new WETH();
-        stETH = new MockStETH();
-        wstETH = new MockWstETH(address(stETH));
+        deal(wstETH, address(this), 1_000_000 ether);
+
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
+        MockERC20(wstETH).approve(address(rmm), type(uint256).max);
+        MockERC20(wstETH).approve(address(SY), type(uint256).max);
 
         vm.label(address(SY), "SY");
         vm.label(address(YT), "YT");
         vm.label(address(PT), "PT");
         vm.label(address(wstETH), "wstETH");
-        vm.label(address(stETH), "stETH");
 
         (
             address creationCodeContractA,
@@ -87,9 +91,7 @@ contract SetUp is Test {
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
     function mintSY(address to, uint256 amount) public {
-        stETH.mint(address(this), amount);
-        stETH.approve(address(SY), type(uint256).max);
-        SY.deposit(address(to), address(stETH), amount, 0);
+        SY.deposit(address(to), address(wstETH), amount, 0);
     }
 
     function batchMintSY(address[] memory to, uint256[] memory amounts) public {
@@ -113,10 +115,10 @@ contract SetUp is Test {
 
     function getDefaultParams() internal view returns (InitParams memory) {
         return InitParams({
-            priceX: 1 ether,
+            priceX: 1.15 ether,
             totalAsset: 1 ether,
-            strike: 1 ether,
-            sigma: 0.015 ether,
+            strike: 1.15 ether,
+            sigma: 0.02 ether,
             maturity: PT.expiry(),
             PT: address(PT),
             amountX: 1 ether,
@@ -158,9 +160,7 @@ contract SetUp is Test {
     }
 
     modifier withSY(address to, uint256 amount) {
-        stETH.mint(address(to), amount);
-        stETH.approve(address(SY), type(uint256).max);
-        SY.deposit(address(to), address(stETH), amount, 0);
+        SY.deposit(address(to), address(wstETH), amount, 0);
         _;
     }
 

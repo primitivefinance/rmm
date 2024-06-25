@@ -11,6 +11,8 @@ import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
 import "./lib/RmmEvents.sol";
 
+import "forge-std/console2.sol";
+
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
@@ -304,11 +306,20 @@ contract RMM is ERC20 {
             revert ExcessInput(ytIn, maxSyIn, amountIn);
         }
 
+        console2.log("here 1?");
         _adjust(toInt(amountInWad), -toInt(amountOutWad), deltaLiquidity, strike_, index);
         (uint256 creditNative) = _debit(address(YT), ytIn);
+        console2.log("here 2?");
         uint256 amountSy = redeemPy(ytIn, address(this));
+        console2.log("here 3?");
+        console2.log("ytIn", ytIn);
+        console2.log("amountSyIn", amountSy);
+        console2.log("amountInWad", amountInWad);
+        console2.log("amountSy gt amountInWad", amountSy > amountInWad);
         amountOut = amountSy - amountInWad;
+        console2.log("amountOut", amountOut);
         (uint256 debitNative) = _credit(address(SY), to, amountOut);
+        console2.log("here 4?");
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }

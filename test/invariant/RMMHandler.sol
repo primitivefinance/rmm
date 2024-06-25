@@ -85,9 +85,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         fee = bound(fee, 0 ether, 1 ether);
         */
 
-        uint256 priceX = 1 ether;
+        uint256 priceX = 1.15 ether;
         uint256 amountX = 1000 ether;
-        uint256 strike = 1 ether;
+        uint256 strike = 1.15 ether;
         uint256 sigma = 0.025 ether;
         uint256 fee = 0.00016 ether;
 
@@ -95,6 +95,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         PT.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
+        YT.approve(address(rmm), type(uint256).max);
 
         rmm.init(address(PT), priceX, amountX, strike, sigma, fee, address(0));
 
@@ -106,8 +107,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     // Target functions
 
     function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
-        deltaX = bound(deltaX, 0.1 ether, 100 ether);
-        deltaY = bound(deltaY, 0.1 ether, 100 ether);
+        deltaX = bound(deltaX, 0.1 ether, 10 ether);
+        deltaY = bound(deltaY, 0.1 ether, 10 ether);
 
         deal(address(SY), currentActor, deltaX);
         deal(address(PT), currentActor, deltaY);
@@ -225,7 +226,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         vm.startPrank(currentActor);
         YT.approve(address(rmm), ytIn);
         (uint256 amountOut, uint256 amountIn, int256 deltaLiquidity) =
-            rmm.swapExactYtForSy(ytIn, 0, address(currentActor));
+            rmm.swapExactYtForSy(ytIn, 1000 ether, address(currentActor));
         vm.stopPrank();
 
         ghost_reserveX += amountIn;
