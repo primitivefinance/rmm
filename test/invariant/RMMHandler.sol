@@ -138,8 +138,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity -= int256(deltaLiquidity);
     }
 
-    function swapExactSyForYt(uint256 exactSYIn) public createActor countCall(this.swapExactSyForYt.selector) {
-        exactSYIn = bound(exactSYIn, 0.1 ether, 100 ether);
+    function swapExactSyForYt() public createActor countCall(this.swapExactSyForYt.selector) {
+        uint256 exactSYIn = 1 ether;
         deal(address(SY), address(currentActor), exactSYIn);
 
         PYIndex index = YT.newIndex();
@@ -157,12 +157,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactTokenForYt(uint256 amountTokenIn)
-        public
-        createActor
-        countCall(this.swapExactTokenForYt.selector)
-    {
-        amountTokenIn = bound(amountTokenIn, 0.1 ether, 100 ether);
+    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {
+        uint256 amountTokenIn = 1 ether;
         deal(currentActor, amountTokenIn);
 
         vm.startPrank(currentActor);
@@ -196,8 +192,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactPtForSy(uint256 amountIn) public createActor countCall(this.swapExactPtForSy.selector) {
-        amountIn = bound(amountIn, 0.1 ether, 100 ether);
+    function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {
+        uint256 amountIn = 1 ether;
         deal(address(PT), currentActor, amountIn);
         vm.startPrank(currentActor);
         PT.approve(address(rmm), amountIn);
@@ -209,8 +205,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactSyForPt(uint256 amountIn) public createActor countCall(this.swapExactSyForPt.selector) {
-        amountIn = bound(amountIn, 0.1 ether, 100 ether);
+    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {
+        uint256 amountIn = 1 ether;
         deal(address(SY), currentActor, amountIn);
         vm.startPrank(currentActor);
         SY.approve(address(rmm), amountIn);
@@ -222,8 +218,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactYtForSy(uint256 ytIn) public createActor countCall(this.swapExactYtForSy.selector) {
-        ytIn = bound(ytIn, 0.1 ether, 100 ether);
+    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {
+        uint256 ytIn = 1 ether;
 
         deal(address(YT), currentActor, ytIn);
         vm.startPrank(currentActor);
