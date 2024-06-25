@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {RMM} from "../src/RMM.sol";
+import {LiquidityManager} from "../src/LiquidityManager.sol";
 import {Factory} from "../src/Factory.sol";
 
 address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -20,7 +21,9 @@ contract DeployFactory is Script {
         address sender = vm.addr(pk);
         console2.log("Deploying RMM from", sender);
         Factory factory = new Factory(WETH_ADDRESS);
+        LiquidityManager liquidityManager = new LiquidityManager();
         console2.log("Factory deployed at", address(factory));
+        console2.log("LiquidityManager deployed at", address(liquidityManager));
 
         vm.stopBroadcast();
     }

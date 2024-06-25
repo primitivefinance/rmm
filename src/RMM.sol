@@ -603,7 +603,7 @@ contract RMM is ERC20 {
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)
     {
-        deltaXWad = upscale(index.syToAsset(deltaX), scalar(address(SY)));
+        deltaXWad = upscale(deltaX, scalar(address(SY)));
         deltaYWad = upscale(deltaY, scalar(address(PT)));
 
         PoolPreCompute memory comp =
