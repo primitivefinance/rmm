@@ -15,11 +15,11 @@ contract RMMInvariantsTest is SetUp {
 
     function setUp() public virtual override {
         super.setUp();
-        handler = new RMMHandler(rmm, PT, SY, YT);
+        handler = new RMMHandler(rmm, PT, SY, YT, weth);
 
-        mintSY(address(handler), 100 ether);
-        mintSY(address(this), 100 ether);
-        mintPY(address(handler), 100 ether);
+        mintSY(address(handler), 1000 ether);
+        mintSY(address(this), 2000 ether);
+        mintPY(address(handler), 2000 ether);
 
         handler.init();
 
@@ -27,8 +27,10 @@ contract RMMInvariantsTest is SetUp {
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
-        selectors[3] = RMMHandler.swapExactTokenForYt.selector;
-        selectors[4] = RMMHandler.swapExactPtForSy.selector;
+        selectors[3] = RMMHandler.swapExactPtForSy.selector;
+        selectors[4] = RMMHandler.swapExactSyForPt.selector;
+
+        // selectors[3] = RMMHandler.swapExactTokenForYt.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
@@ -42,27 +44,28 @@ contract RMMInvariantsTest is SetUp {
         console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
         console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
         console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
+        console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
     }
 
-    /// forge-config: default.invariant.runs = 100
-    /// forge-config: default.invariant.depth = 2
-    /// forge-config: default.invariant.fail-on-revert = false
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
         IPYieldToken YT = handler.YT();
         PYIndex index = YT.newIndex();
         assertTrue(abs(rmm.tradingFunction(index)) <= 100, "Invariant out of valid range");
     }
 
-    /// forge-config: default.invariant.runs = 100
-    /// forge-config: default.invariant.depth = 2
-    /// forge-config: default.invariant.fail-on-revert = false
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
-    /// forge-config: default.invariant.runs = 100
-    /// forge-config: default.invariant.depth = 2
-    /// forge-config: default.invariant.fail-on-revert = false
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
     }
