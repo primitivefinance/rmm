@@ -171,8 +171,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactPtForSy(amountIn, 0, address(currentActor));
         vm.stopPrank();
 
-        ghost_reserveX -= amountIn;
-        ghost_reserveY += amountOut;
+        ghost_reserveX -= amountOut;
+        ghost_reserveY += amountIn;
         ghost_totalLiquidity += uint256(deltaLiquidity);
     }
 
