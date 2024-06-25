@@ -115,13 +115,10 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         deal(address(SY), currentActor, deltaX);
         deal(address(PT), currentActor, deltaY);
 
-
         vm.startPrank(currentActor);
-
 
         (uint256 deltaXWad, uint256 deltaYWad,,) =
             rmm.prepareAllocate(deltaX, deltaY, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
-
 
         SY.approve(address(rmm), deltaX);
         PT.approve(address(rmm), deltaY);
