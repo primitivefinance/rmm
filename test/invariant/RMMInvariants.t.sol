@@ -23,12 +23,13 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](5);
+        bytes4[] memory selectors = new bytes4[](6);
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
         selectors[3] = RMMHandler.swapExactPtForSy.selector;
         selectors[4] = RMMHandler.swapExactSyForPt.selector;
+        selectors[5] = RMMHandler.swapExactYtForSy.selector;
 
         // selectors[3] = RMMHandler.swapExactTokenForYt.selector;
 
@@ -45,6 +46,7 @@ contract RMMInvariantsTest is SetUp {
         console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
         console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
         console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
+        console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
     }
 
     /// forge-config: default.invariant.runs = 10
