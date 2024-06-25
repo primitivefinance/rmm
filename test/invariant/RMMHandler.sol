@@ -138,8 +138,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity -= int256(deltaLiquidity);
     }
 
-    function swapExactSyForYt() public createActor countCall(this.swapExactSyForYt.selector) {
-        uint256 exactSYIn = 1 ether;
+    function swapExactSyForYt(uint256 exactSYIn) public createActor countCall(this.swapExactSyForYt.selector) {
+        exactSYIn = bound(exactSYIn, 0.1 ether, 100 ether);
         deal(address(SY), address(currentActor), exactSYIn);
 
         PYIndex index = YT.newIndex();
