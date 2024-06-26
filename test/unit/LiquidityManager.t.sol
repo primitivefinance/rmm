@@ -237,4 +237,43 @@ contract ForkRMMTest is Test {
         assertEq(subject().reserveY(), rY + maxPtToSwap, "unexpected rY balance after zap");
         assertEq(subject().reserveX(), rX, "unexpected rX balance after zap");
     }
+
+    function test_zap_from_eth() public basic_sy {
+        PYIndex index = YT.newIndex();
+        uint256 amountIn = 1 ether;
+        uint256 initialGuess = 0;
+        uint256 epsilon = 10_000;
+
+        LiquidityManager.ComputeArgs memory args = LiquidityManager.ComputeArgs({
+            rmm: address(subject()),
+            rX: subject().reserveX(),
+            rY: subject().reserveY(),
+            index: YT.newIndex(),
+            maxIn: amountIn,
+            blockTime: block.timestamp,
+            initialGuess: initialGuess,
+            epsilon: epsilon
+        });
+
+        (uint256 syToSwap, uint256 ptOut, uint256 syMinted) = liquidityManager().computeTokenToPtToAddLiquidity(args, address(0), amountIn);
+
+        uint256 dx = syMinted - syToSwap;
+        uint256 dy = ptOut;
+
+        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
+
+        LiquidityManager.TokenAllocateArgs memory tokenAllocateArgs = LiquidityManager.TokenAllocateArgs({
+            rmm: address(subject()),
+            tokenIn: address(0),
+            amountTokenIn: 0,
+            amountNativeIn: amountIn,
+            minOut: ptOut.mulDivDown(95, 100),
+            syMinted: syMinted,
+            minLiquidityDelta: minLiquidityDelta,
+            initialGuess: initialGuess,
+            epsilon: epsilon
+        });
+
+        liquidityManager().allocateFromToken{value: amountIn}(tokenAllocateArgs);
+    }
 }

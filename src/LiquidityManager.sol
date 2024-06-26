@@ -15,28 +15,28 @@ contract LiquidityManager {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
-    function mintSY(address SY, address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
-        public
-        payable
-        returns (uint256 amountOut)
+    function _mintSYFromNativeAndToken(RMM rmm, address receiver, address tokenIn, uint256 amountTokenIn, uint256 minSyMinted)
+        internal
+        returns (uint256 amountSyOut)
     {
-        IStandardizedYield sy = IStandardizedYield(SY);
-        if (!sy.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
+        IStandardizedYield SY = IStandardizedYield(address(rmm.SY()));
+        if (!SY.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
-        if (msg.value > 0 && sy.isValidTokenIn(address(0))) {
+        if (msg.value > 0 && SY.isValidTokenIn(address(0))) {
             // SY minted check is done in this function instead of relying on the SY contract's deposit().
-            amountOut += sy.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
+            amountSyOut += SY.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         }
 
         if (tokenIn != address(0)) {
-            ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenToDeposit);
-            amountOut += sy.deposit(receiver, tokenIn, amountTokenToDeposit, 0);
+            ERC20(tokenIn).transferFrom(msg.sender, address(this), amountTokenIn);
+            amountSyOut += SY.deposit(receiver, tokenIn, amountTokenIn, 0);
         }
 
-        if (amountOut < minSharesOut) {
-            revert InsufficientSYMinted(amountOut, minSharesOut);
+        if (amountSyOut < minSyMinted) {
+            revert InsufficientSYMinted(amountSyOut, minSyMinted);
         }
     }
+
 
     struct AllocateArgs {
         address rmm;
@@ -83,6 +83,59 @@ contract LiquidityManager {
         pt.approve(address(args.rmm), ptBal);
         liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
     }
+
+    struct TokenAllocateArgs {
+        address rmm;
+        address tokenIn;
+        uint256 amountTokenIn;
+        uint256 amountNativeIn;
+        uint256 minOut;
+        uint256 syMinted;
+        uint256 minLiquidityDelta;
+        uint256 initialGuess;
+        uint256 epsilon;
+    }
+
+    function allocateFromToken(
+        TokenAllocateArgs calldata args
+    ) external payable returns (uint256 liquidity) {
+        RMM rmm = RMM(payable(args.rmm));
+
+        uint256 syMinted = _mintSYFromNativeAndToken(rmm, address(this), args.tokenIn, args.amountTokenIn, args.minOut);
+
+        ERC20 sy = ERC20(address(rmm.SY()));
+        ERC20 pt = ERC20(address(rmm.PT()));
+
+        PYIndex index = IPYieldToken(rmm.YT()).newIndex();
+        uint256 rX = rmm.reserveX();
+        uint256 rY = rmm.reserveY();
+
+        // validate swap approximation
+        (uint256 syToSwap,) = computeSyToPtToAddLiquidity(
+            ComputeArgs({
+                rmm: args.rmm,
+                rX: rX,
+                rY: rY,
+                index: index,
+                maxIn: syMinted,
+                blockTime: block.timestamp,
+                initialGuess: args.initialGuess,
+                epsilon: args.epsilon
+            })
+        );
+
+        sy.approve(address(args.rmm), syMinted);
+
+        // swap syToSwap for pt
+        rmm.swapExactSyForPt(syToSwap, args.minOut, address(this));
+        uint256 syBal = sy.balanceOf(address(this));
+        uint256 ptBal = pt.balanceOf(address(this));
+
+        pt.approve(address(args.rmm), ptBal);
+        liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
+    }
+
+
 
     function allocateFromPt(AllocateArgs calldata args) external returns (uint256 liquidity) {
         RMM rmm = RMM(payable(args.rmm));
@@ -174,6 +227,17 @@ contract LiquidityManager {
                 max = guess - 1;
             }
         }
+    }
+
+    function computeTokenToPtToAddLiquidity(ComputeArgs memory args, address token, uint256 tokenIn) public view returns (uint256 guess, uint256 ptOut, uint256 syMinted) {
+        RMM rmm = RMM(payable(args.rmm));
+        IStandardizedYield SY = IStandardizedYield(address(rmm.SY()));
+        if (!SY.isValidTokenIn(token)) {
+            revert InvalidTokenIn(token);
+        }
+        syMinted = SY.previewDeposit(token, tokenIn);
+        args.maxIn = syMinted;
+        (guess, ptOut) = computeSyToPtToAddLiquidity(args);
     }
 
     function isAApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
