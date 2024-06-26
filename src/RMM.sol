@@ -56,12 +56,11 @@ contract RMM is ERC20 {
 
     /// @dev Applies updates to the trading function and validates the adjustment.
     modifier evolve(PYIndex index) {
-        int256 initial = tradingFunction(index);
         _;
         int256 terminal = tradingFunction(index);
 
         if (abs(terminal) > 10) {
-            revert OutOfRange(initial, terminal);
+            revert OutOfRange(terminal);
         }
     }
 
@@ -315,7 +314,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
     }
 
-    /// todo: should allocates be executed on the stale curve? I dont think the curve should be updated in allocates.
+    /// @notice uint256 deltaX is expected in SY units, uint256 deltaY is expected in PT units -- these are later converted into asset units for the math
     function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
         external
         lock
@@ -365,6 +364,17 @@ contract RMM is ERC20 {
         (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
 
         emit Deallocate(msg.sender, to, creditNativeX, creditNativeY, deltaLiquidity);
+    }
+
+    /// @notice this is used in place of _adjust when executing an allocate or deallocate.
+    /// @dev Apply reserve and liquidity updates then validate trading function with evolve modifier
+    function _updateReserves(int256 deltaX, int256 deltaY, int256 deltaLiquidity, PYIndex index)
+        internal
+        evolve(index)
+    {
+        reserveX = sum(reserveX, deltaX);
+        reserveY = sum(reserveY, deltaY);
+        totalLiquidity = sum(totalLiquidity, deltaLiquidity);
     }
 
     // state updates
@@ -600,12 +610,13 @@ contract RMM is ERC20 {
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
 
+    /// @notice uint256 deltaX is expected in SY units, uint256 deltaY is expected in PT units
     function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
         public
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)
     {
-        deltaXWad = upscale(index.syToAsset(deltaX), scalar(address(SY)));
+        deltaXWad = upscale(deltaX, scalar(address(SY)));
         deltaYWad = upscale(deltaY, scalar(address(PT)));
 
         PoolPreCompute memory comp =

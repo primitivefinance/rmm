@@ -11,6 +11,8 @@ import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockWstETH} from "./mocks/MockWstETH.sol";
+import {MockStETH} from "./mocks/MockStETH.sol";
 
 import {RMM} from "./../src/RMM.sol";
 
@@ -26,19 +28,20 @@ struct InitParams {
     address curator;
 }
 
-address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
-address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+// address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
+// address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
 contract SetUp is Test {
     using PYIndexLib for IPYieldToken;
 
     // All the contracts that are needed for the tests.
-
     RMM public rmm;
     WETH public weth;
     PendleWstEthSY public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
+    MockWstETH public wstETH;
+    MockStETH public stETH;
 
     // Some default constants.
 
@@ -48,18 +51,17 @@ contract SetUp is Test {
     // Main setup functions.
 
     function setUpContracts(uint32 expiry) public {
-        vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
-        weth = WETH(payable(WETH_ADDRESS));
-
+        weth = new WETH();
+        stETH = new MockStETH();
+        wstETH = new MockWstETH(address(stETH));
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
-        MockERC20(wstETH).approve(address(rmm), type(uint256).max);
-        MockERC20(wstETH).approve(address(SY), type(uint256).max);
 
         vm.label(address(SY), "SY");
         vm.label(address(YT), "YT");
         vm.label(address(PT), "PT");
         vm.label(address(wstETH), "wstETH");
+        vm.label(address(stETH), "stETH");
 
         (
             address creationCodeContractA,
