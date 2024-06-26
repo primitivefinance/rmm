@@ -97,9 +97,9 @@ contract InitTest is SetUp {
             initParams.curator
         );
 
-        assertEq(rmm.lastTimestamp(), block.timestamp);
-        assertEq(rmm.reserveX(), initParams.amountX);
-        assertEq(rmm.reserveY(), amountY);
+        assertEq(rmm.lastTimestamp(), block.timestamp, "lastTimestamp");
+        assertEq(rmm.reserveX(), initParams.amountX, "reserveX");
+        assertEq(rmm.reserveY(), amountY, "reserveY");
     }
 
     function test_init_TransfersTokens()

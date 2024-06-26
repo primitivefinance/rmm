@@ -82,7 +82,7 @@ contract RMM is ERC20 {
         address curator_
     ) external lock {
         if (strike != 0) revert AlreadyInitialized();
-        if (strike_ < 1e18) revert InvalidStrike();
+        if (strike_ <= 1e18) revert InvalidStrike();
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
