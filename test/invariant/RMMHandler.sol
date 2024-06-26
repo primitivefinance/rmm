@@ -93,7 +93,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         uint256 sigma = 0.025 ether;
         uint256 fee = 0.00016 ether;
 
-        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, PT.expiry());
+        PYIndex index = PYIndex.wrap(rmm.YT().pyIndexCurrent());
+
+        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, PT.expiry(), index);
 
         PT.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);

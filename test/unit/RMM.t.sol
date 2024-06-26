@@ -130,7 +130,7 @@ contract RMMTest is Test {
             PT_: address(PT),
             priceX: price,
             amountX: amountX, // using the equivalent amount of tokens
-            strike_: 1 ether, //uint256(pendleRateAnchor),
+            strike_: 1.05 ether, //uint256(pendleRateAnchor),
             sigma_: 0.015 ether,
             fee_: 0.00016 ether,
             curator_: address(0x55)
@@ -324,7 +324,7 @@ contract RMMTest is Test {
     InitParams basicParams = InitParams({
         priceX: 1 ether,
         amountX: 1 ether,
-        strike: 1 ether,
+        strike: 1.05 ether,
         sigma: 0.015 ether,
         fee: 0,
         maturity: 1_717_214_400,

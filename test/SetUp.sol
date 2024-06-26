@@ -18,12 +18,11 @@ import {RMM} from "./../src/RMM.sol";
 
 struct InitParams {
     uint256 priceX;
-    uint256 totalAsset;
+    uint256 amountX;
     uint256 strike;
     uint256 sigma;
     uint256 maturity;
     address PT;
-    uint256 amountX;
     uint256 fee;
     address curator;
 }
@@ -119,12 +118,11 @@ contract SetUp is Test {
     function getDefaultParams() internal view returns (InitParams memory) {
         return InitParams({
             priceX: 1.15 ether,
-            totalAsset: 1 ether,
+            amountX: 100 ether,
             strike: 1.15 ether,
             sigma: 0.02 ether,
             maturity: PT.expiry(),
             PT: address(PT),
-            amountX: 100 ether,
             fee: 0.00016 ether,
             curator: address(0x55)
         });
