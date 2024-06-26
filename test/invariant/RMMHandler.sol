@@ -110,23 +110,22 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
     function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
         deltaX = bound(deltaX, 0.1 ether, 10 ether);
-        deltaY = bound(deltaY, 0.1 ether, 10 ether);
 
         deal(address(SY), currentActor, deltaX);
         deal(address(PT), currentActor, deltaY);
 
         vm.startPrank(currentActor);
 
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(deltaX, deltaY, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, deltaX, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
 
         SY.approve(address(rmm), deltaX);
         PT.approve(address(rmm), deltaY);
-        uint256 deltaLiquidity = rmm.allocate(deltaX, deltaY, 0, address(currentActor));
+        uint256 realDeltaLiquidity = rmm.allocate(true, deltaX, deltaLiquidity, address(currentActor));
 
         vm.stopPrank();
 
-        ghost_totalLiquidity += int256(deltaLiquidity);
+        ghost_totalLiquidity += int256(realDeltaLiquidity);
         ghost_reserveX += deltaXWad;
         ghost_reserveY += deltaYWad;
     }

@@ -8,9 +8,9 @@ import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 
 contract SwapSyTest is SetUp {
     function test_swapSy_AdjustsPool() public useDefaultPool withSY(address(this), 1_000 ether) {
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
@@ -26,9 +26,9 @@ contract SwapSyTest is SetUp {
     }
 
     function test_swapSy_TransfersTokens() public useDefaultPool withSY(address(this), 1_000 ether) {
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
@@ -48,23 +48,23 @@ contract SwapSyTest is SetUp {
     }
 
     function test_swapSy_EmitsSwap() public useDefaultPool withSY(address(this), 1_000 ether) {
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
-        (,, uint256 minAmountOut, int256 deltaLiquidity,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
+        (,, uint256 minAmountOut, int256 deltaLiquiditySwap,) = rmm.prepareSwapSyIn(amountIn, block.timestamp, index);
         vm.expectEmit(true, true, true, true);
 
-        emit Swap(address(this), address(this), address(SY), address(PT), amountIn, minAmountOut, deltaLiquidity);
+        emit Swap(address(this), address(this), address(SY), address(PT), amountIn, minAmountOut, deltaLiquiditySwap);
         rmm.swapExactSyForPt(amountIn, 0, address(this));
     }
 
     function test_swapSy_RevertsWhenInsufficientOutput() public useDefaultPool withSY(address(this), 1_000 ether) {
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(1 ether, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
         uint256 amountIn = 1 ether;
