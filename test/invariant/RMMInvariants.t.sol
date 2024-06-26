@@ -40,12 +40,12 @@ contract RMMInvariantsTest is SetUp {
     function afterInvariant() public view {
         console.log("Calls: ", handler.totalCalls());
         console.log("Allocate: ", handler.calls(RMMHandler.allocate.selector));
-        console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
-        console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
-        console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
-        console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
-        console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
-        console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
+        // console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
+        // console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
+        // console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
+        // console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
+        // console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
+        // console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
     }
 
     /// forge-config: default.invariant.runs = 10
