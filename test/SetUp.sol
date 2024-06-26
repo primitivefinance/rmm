@@ -1,6 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {Test} from "forge-std/Test.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
@@ -9,8 +10,6 @@ import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.s
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
-import {MockWstETH} from "./mocks/MockWstETH.sol";
-import {MockStETH} from "./mocks/MockStETH.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {RMM} from "./../src/RMM.sol";
@@ -31,6 +30,8 @@ address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wst
 address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
 contract SetUp is Test {
+    using PYIndexLib for IPYieldToken;
+
     // All the contracts that are needed for the tests.
 
     RMM public rmm;
@@ -48,8 +49,7 @@ contract SetUp is Test {
 
     function setUpContracts(uint32 expiry) public {
         vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
-        weth = new WETH();
-        deal(wstETH, address(this), 1_000_000 ether);
+        weth = WETH(payable(WETH_ADDRESS));
 
         rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
@@ -91,7 +91,8 @@ contract SetUp is Test {
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
     function mintSY(address to, uint256 amount) public {
-        SY.deposit(address(to), address(wstETH), amount, 0);
+        // SY.deposit(address(to), address(wstETH), amount, 0);
+        deal(address(SY), address(to), amount);
     }
 
     function batchMintSY(address[] memory to, uint256[] memory amounts) public {
@@ -121,7 +122,7 @@ contract SetUp is Test {
             sigma: 0.02 ether,
             maturity: PT.expiry(),
             PT: address(PT),
-            amountX: 1 ether,
+            amountX: 100 ether,
             fee: 0.00016 ether,
             curator: address(0x55)
         });
@@ -135,7 +136,7 @@ contract SetUp is Test {
     }
 
     modifier useDefaultPool() {
-        uint256 amount = 1_000 ether;
+        uint256 amount = 10000 ether;
         mintSY(address(this), amount);
         mintPY(address(this), amount / 2);
         InitParams memory params = getDefaultParams();
@@ -160,7 +161,8 @@ contract SetUp is Test {
     }
 
     modifier withSY(address to, uint256 amount) {
-        SY.deposit(address(to), address(wstETH), amount, 0);
+        // SY.deposit(address(to), address(wstETH), amount, 0);
+        deal(address(SY), address(to), amount);
         _;
     }
 
@@ -178,5 +180,9 @@ contract SetUp is Test {
 
     function skip() public {
         vm.skip(true);
+    }
+
+    function newIndex() public returns (PYIndex) {
+        return YT.newIndex();
     }
 }
