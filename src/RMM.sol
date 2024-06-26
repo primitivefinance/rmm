@@ -100,8 +100,6 @@ contract RMM is ERC20 {
         }
 
         PYIndex index = YT.newIndex();
-        uint256 totalAsset = index.syToAsset(amountX);
-
         sigma = sigma_;
         maturity = PT.expiry();
         fee = fee_;
@@ -109,7 +107,7 @@ contract RMM is ERC20 {
         initTimestamp = block.timestamp;
         curator = curator_;
 
-        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, totalAsset, strike_, sigma_, maturity);
+        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, amountX, strike_, sigma_, maturity, index);
 
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
@@ -528,11 +526,15 @@ contract RMM is ERC20 {
     }
 
     //prepare calls
-    function prepareInit(uint256 priceX, uint256 totalAsset, uint256 strike_, uint256 sigma_, uint256 maturity_)
-        public
-        view
-        returns (uint256 totalLiquidity_, uint256 amountY)
-    {
+    function prepareInit(
+        uint256 priceX,
+        uint256 amountX,
+        uint256 strike_,
+        uint256 sigma_,
+        uint256 maturity_,
+        PYIndex index
+    ) public view returns (uint256 totalLiquidity_, uint256 amountY) {
+        uint256 totalAsset = index.syToAsset(amountX);
         uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
         PoolPreCompute memory comp = PoolPreCompute({reserveInAsset: totalAsset, strike_: strike_, tau_: tau_});
         uint256 initialLiquidity =
