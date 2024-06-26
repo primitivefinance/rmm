@@ -10,6 +10,7 @@ import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
 import "./lib/RmmEvents.sol";
+import "./lib/LiquidityLib.sol";
 
 import "forge-std/console2.sol";
 
@@ -315,27 +316,27 @@ contract RMM is ERC20 {
     }
 
     /// @notice uint256 deltaX is expected in SY units, uint256 deltaY is expected in PT units -- these are later converted into asset units for the math
-    function allocate(uint256 deltaX, uint256 deltaY, uint256 minLiquidityOut, address to)
+    function allocate(bool inTermsOfX, uint256 amount, uint256 minLiquidityOut, address to)
         external
         lock
-        returns (uint256 deltaLiquidity)
+        returns (uint256)
     {
-        uint256 deltaXWad;
-        uint256 deltaYWad;
-        uint256 lptMinted;
         PYIndex index = YT.newIndex();
-        (deltaXWad, deltaYWad, deltaLiquidity, lptMinted) = prepareAllocate(deltaX, deltaY, index);
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted) =
+            prepareAllocate(inTermsOfX, amount, index);
         if (deltaLiquidity < minLiquidityOut) {
-            revert InsufficientLiquidityOut(deltaX, deltaY, minLiquidityOut, deltaLiquidity);
+            revert InsufficientLiquidityOut(inTermsOfX, amount, minLiquidityOut, deltaLiquidity);
         }
 
         _mint(to, lptMinted);
-        _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), strike, index);
+        _updateReserves(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), index);
 
-        (uint256 debitNativeX) = _debit(address(SY), index.assetToSyUp(deltaX));
-        (uint256 debitNativeY) = _debit(address(PT), deltaY);
+        (uint256 debitNativeX) = _debit(address(SY), deltaXWad);
+        (uint256 debitNativeY) = _debit(address(PT), deltaYWad);
 
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
+
+        return deltaLiquidity;
     }
 
     /// @dev Burns `deltaLiquidity` * `totalSupply` / `totalLiquidity` rounded up
@@ -611,29 +612,20 @@ contract RMM is ERC20 {
     }
 
     /// @notice uint256 deltaX is expected in SY units, uint256 deltaY is expected in PT units
-    function prepareAllocate(uint256 deltaX, uint256 deltaY, PYIndex index)
+    function prepareAllocate(bool inTermsOfX, uint256 amount, PYIndex index)
         public
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)
     {
-        deltaXWad = upscale(deltaX, scalar(address(SY)));
-        deltaYWad = upscale(deltaY, scalar(address(PT)));
-
-        PoolPreCompute memory comp =
-            PoolPreCompute({reserveInAsset: index.syToAsset(reserveX + deltaXWad), strike_: strike, tau_: lastTau()});
-        uint256 nextLiquidity = solveL(
-            comp,
-            computeLGivenX(
-                comp.reserveInAsset + deltaXWad, approxSpotPrice(comp.reserveInAsset), strike, sigma, lastTau()
-            ),
-            reserveY + deltaYWad,
-            sigma
-        );
-        if (nextLiquidity < totalLiquidity) {
-            revert InvalidAllocate(deltaX, deltaY, totalLiquidity, nextLiquidity);
+        if (inTermsOfX) {
+            deltaXWad = upscale(amount, scalar(address(SY)));
+            (deltaYWad, deltaLiquidity) = computeAllocationGivenDeltaX(deltaXWad, reserveX, reserveY, totalLiquidity);
+        } else {
+            deltaYWad = upscale(amount, scalar(address(PT)));
+            (deltaXWad, deltaLiquidity) = computeAllocationGivenDeltaY(deltaYWad, reserveX, reserveY, totalLiquidity);
         }
-        deltaLiquidity = nextLiquidity - totalLiquidity;
-        lptMinted = deltaLiquidity.mulDivDown(totalSupply, nextLiquidity);
+
+        lptMinted = deltaLiquidity.mulDivDown(totalSupply, totalLiquidity + deltaLiquidity);
     }
 
     function prepareDeallocate(uint256 deltaLiquidity)

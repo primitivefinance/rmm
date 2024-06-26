@@ -10,7 +10,7 @@ error BalanceError();
 /// @dev Thrown when a payment to this contract is insufficient.
 error InsufficientPayment(address token, uint256 actual, uint256 expected);
 /// @dev Thrown when a mint does not output enough liquidity.
-error InsufficientLiquidityOut(uint256 deltaX, uint256 deltaY, uint256 minLiquidity, uint256 liquidity);
+error InsufficientLiquidityOut(bool inTermsOfX, uint256 amount, uint256 minLiquidity, uint256 liquidity);
 /// @dev Thrown when a swap does not output enough tokens.
 error InsufficientOutput(uint256 amountIn, uint256 minAmountOut, uint256 amountOut);
 /// @dev Thrown when a swap does not mint sufficient SY tokens given the minimum amount.
