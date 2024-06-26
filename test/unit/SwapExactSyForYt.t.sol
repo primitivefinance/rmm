@@ -71,7 +71,7 @@ contract SwapExactSyForYtTest is SetUp {
             rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
 
         uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit();
         emit Swap(address(this), address(0xbeef), address(SY), address(YT), delta, amountOut, deltaLiquidity);
         rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(0xbeef));
     }
@@ -80,7 +80,7 @@ contract SwapExactSyForYtTest is SetUp {
         uint256 exactSYIn = 1 ether;
         PYIndex index = YT.newIndex();
         uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
-        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+        (, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
 
         vm.expectRevert();
         rmm.swapExactSyForYt(exactSYIn - 1 ether, ytOut, amountOutWad, 500 ether, 10_000, address(this));
@@ -90,7 +90,7 @@ contract SwapExactSyForYtTest is SetUp {
         uint256 exactSYIn = 1 ether;
         PYIndex index = YT.newIndex();
         uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
-        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+        (, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
 
         vm.expectRevert();
         rmm.swapExactSyForYt(exactSYIn, ytOut, amountOutWad + 1 ether, 500 ether, 10_000, address(this));

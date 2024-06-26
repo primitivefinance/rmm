@@ -153,7 +153,7 @@ contract InitTest is SetUp {
             initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, initParams.maturity, index
         );
 
-        vm.expectEmit(true, true, true, true);
+        vm.expectEmit();
 
         emit Init(
             address(this),
