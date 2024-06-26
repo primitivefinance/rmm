@@ -5,6 +5,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {PYIndexLib, IPYieldToken, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SetUp} from "../SetUp.sol";
+import {ExcessInput} from "../../src/lib/RmmErrors.sol";
+import {Swap} from "../../src/lib/RmmEvents.sol";
 
 contract SwapExactSyForYtTest is SetUp {
     using PYIndexLib for IPYieldToken;
@@ -42,5 +44,55 @@ contract SwapExactSyForYtTest is SetUp {
         assertEq(ERC20(address(SY)).balanceOf(address(this)), preBalances[0] - state.delta);
         assertEq(ERC20(address(YT)).balanceOf(state.to), preBalances[1] + amtOut);
         assertEq(ERC20(address(SY)).balanceOf(address(rmm)), preBalances[2] - amountOutWad);
+    }
+
+    function test_swapExactSyForYt_AdjustsReserves() public useSYPool withSY(address(this), 10 ether) {
+        uint256 preReserveX = rmm.reserveX();
+        uint256 preReserveY = rmm.reserveY();
+        uint256 preTotalLiquidity = rmm.totalLiquidity();
+
+        PYIndex index = YT.newIndex();
+        uint256 exactSYIn = 1 ether;
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(this));
+
+        assertEq(rmm.reserveX(), preReserveX - amountOutWad);
+        assertEq(rmm.reserveY(), preReserveY + amountInWad);
+        assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
+    }
+
+    function test_swapExactSyForYt_EmitsEvent() public useSYPool withSY(address(this), 10 ether) {
+        PYIndex index = YT.newIndex();
+        uint256 exactSYIn = 1 ether;
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+        vm.expectEmit(true, true, true, true);
+        emit Swap(address(this), address(0xbeef), address(SY), address(YT), delta, amountOut, deltaLiquidity);
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(0xbeef));
+    }
+
+    function test_swapExactSyForYt_RevertsWhenExcessInput() public useSYPool withSY(address(this), 10 ether) {
+        uint256 exactSYIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        vm.expectRevert();
+        rmm.swapExactSyForYt(exactSYIn - 1 ether, ytOut, amountOutWad, 500 ether, 10_000, address(this));
+    }
+
+    function test_swapExactSyForYt_RevertsWhenInsufficientOutput() public useSYPool withSY(address(this), 10 ether) {
+        uint256 exactSYIn = 1 ether;
+        PYIndex index = YT.newIndex();
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        (uint256 amountInWad, uint256 amountOutWad,,,) = rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+
+        vm.expectRevert();
+        rmm.swapExactSyForYt(exactSYIn, ytOut, amountOutWad + 1 ether, 500 ether, 10_000, address(this));
     }
 }

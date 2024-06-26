@@ -22,7 +22,6 @@ contract SwapExactYtForSyTest is SetUp {
         (uint256 amountInWad, uint256 amountOutWad, uint256 amountIn, int256 deltaLiquidity, uint256 strike_) =
             rmm.prepareSwapSyForExactPt(1 ether, block.timestamp, YT.newIndex());
 
-
         (uint256 amountOut, uint256 exactAmountIn,) = rmm.swapExactYtForSy(1 ether, 1000 ether, address(to));
 
         assertEq(ERC20(address(YT)).balanceOf(address(this)), preYTBalance - 1 ether);

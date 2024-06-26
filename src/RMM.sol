@@ -11,6 +11,8 @@ import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
 import "./lib/RmmEvents.sol";
 
+import "forge-std/console2.sol";
+
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
@@ -43,13 +45,13 @@ contract RMM is ERC20 {
     uint256 public lastImpliedPrice;
 
     address public curator;
-    uint256 public lock_ = 1;
+    uint256 private _lock = 1;
 
     modifier lock() {
-        if (lock_ != 1) revert Reentrancy();
-        lock_ = 0;
+        if (_lock != 1) revert Reentrancy();
+        _lock = 0;
         _;
-        lock_ = 1;
+        _lock = 1;
     }
 
     /// @dev Applies updates to the trading function and validates the adjustment.
@@ -331,8 +333,8 @@ contract RMM is ERC20 {
         _mint(to, lptMinted);
         _adjust(toInt(deltaXWad), toInt(deltaYWad), toInt(deltaLiquidity), strike, index);
 
-        (uint256 debitNativeX) = _debit(address(SY), deltaXWad);
-        (uint256 debitNativeY) = _debit(address(PT), deltaYWad);
+        (uint256 debitNativeX) = _debit(address(SY), index.assetToSyUp(deltaX));
+        (uint256 debitNativeY) = _debit(address(PT), deltaY);
 
         emit Allocate(msg.sender, to, debitNativeX, debitNativeY, deltaLiquidity);
     }
