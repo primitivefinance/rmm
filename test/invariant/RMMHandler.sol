@@ -105,13 +105,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_reserveX += amountX;
         ghost_reserveY += amountY;
         ghost_totalLiquidity += int256(totalLiquidity);
-
-        console2.log("ghost_reserveX", ghost_reserveX);
-        console2.log("rmm.reserveX()", rmm.reserveX());
-        console2.log("ghost_reserveY", ghost_reserveY);
-        console2.log("rmm.reserveY()", rmm.reserveY());
-        console2.log("ghost_totalLiquidity", ghost_totalLiquidity);
-        console2.log("rmm.totalLiquidity()", rmm.totalLiquidity());
     }
 
     // Target functions
@@ -226,8 +219,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactSyForPt(amountIn, 0, address(currentActor));
         vm.stopPrank();
 
-        ghost_reserveX -= amountOut;
-        ghost_reserveY += amountIn;
+        ghost_reserveX += amountIn;
+        ghost_reserveY -= amountOut;
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
