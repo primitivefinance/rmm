@@ -173,9 +173,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         PYIndex index = YT.newIndex();
 
         (uint256 syMinted, uint256 ytOut) =
-            rmm.computeTokenToYT(index, address(weth), amountTokenIn, 10 ether, block.timestamp, 0, 1_000);
+            rmm.computeTokenToYT(index, address(weth), amountTokenIn, rmm.reserveX().mulDivDown(95, 100), block.timestamp, 0, 1_000);
 
-        uint256 amountPtIn = rmm.computeSYToYT(index, syMinted, 10 ether, block.timestamp, ytOut, 0.005 ether);
+        uint256 amountPtIn = rmm.computeSYToYT(index, syMinted, rmm.reserveX().mulDivDown(95, 100), block.timestamp, ytOut, 0.005 ether);
         (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
             rmm.prepareSwapPtIn(amountPtIn, block.timestamp, index);
 
