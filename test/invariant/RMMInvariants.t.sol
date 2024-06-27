@@ -7,6 +7,7 @@ import {abs} from "./../../src/lib/RmmLib.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {SetUp} from "../SetUp.sol";
 import {RMMHandler} from "./RMMHandler.sol";
+import "forge-std/console2.sol";
 
 contract RMMInvariantsTest is SetUp {
     using PYIndexLib for IPYieldToken;
@@ -31,21 +32,30 @@ contract RMMInvariantsTest is SetUp {
         selectors[4] = RMMHandler.swapExactSyForPt.selector;
         selectors[5] = RMMHandler.swapExactYtForSy.selector;
         selectors[6] = RMMHandler.swapExactTokenForYt.selector;
-
+        
+        console.logBytes4(selectors[0]);
+        console.logBytes4(selectors[1]);
+        console.logBytes4(selectors[2]);
+        console.logBytes4(selectors[3]);
+        console.logBytes4(selectors[4]);
+        console.logBytes4(selectors[5]);
+        console.logBytes4(selectors[6]);
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
+        console2.log("got here?");
         targetContract(address(handler));
+        console2.log("here?");
     }
 
     function afterInvariant() public view {
         console.log("Calls: ", handler.totalCalls());
         console.log("Allocate: ", handler.calls(RMMHandler.allocate.selector));
-        // console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
-        // console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
-        // console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
-        // console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
-        // console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
-        // console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
+        console.log("Deallocate: ", handler.calls(RMMHandler.deallocate.selector));
+        console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
+        console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
+        console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
+        console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
+        console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
     }
 
     /// forge-config: default.invariant.runs = 10
@@ -68,6 +78,7 @@ contract RMMInvariantsTest is SetUp {
     /// forge-config: default.invariant.depth = 100
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
+        console2.log("here?");
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
     }
 }
