@@ -453,17 +453,4 @@ contract RMMTest is Test {
         );
         subject().swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
     }
-
-    function test_swapPt_event() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaPt = 1 ether;
-        (,, uint256 minAmountOut, int256 delLiq,) = subject().prepareSwapPtIn(deltaPt, block.timestamp, index);
-        deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaPt);
-        PT.approve(address(subject()), deltaPt);
-
-        vm.expectEmit();
-        emit Swap(address(this), address(this), address(PT), address(SY), deltaPt, minAmountOut, delLiq);
-        subject().swapExactPtForSy(deltaPt, minAmountOut, address(this));
-    }
 }

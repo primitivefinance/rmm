@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
+import {Swap} from "../../src/lib/RmmEvents.sol";
 import {SetUp} from "../SetUp.sol";
 
 contract SwapExactPtForSyTest is SetUp {
@@ -42,5 +43,13 @@ contract SwapExactPtForSyTest is SetUp {
     function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {
         vm.expectRevert();
         rmm.swapExactPtForSy(1 ether, type(uint256).max, address(this));
+    }
+
+    function test_swapExactPtForSy_EmitsEvent() public useDefaultPool {
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut, int256 deltaLiquidity,) = rmm.prepareSwapPtIn(deltaPt, block.timestamp, newIndex());
+        vm.expectEmit(true, true, true, true);
+        emit Swap(address(this), address(this), address(PT), address(SY), deltaPt, minAmountOut, deltaLiquidity);
+        rmm.swapExactPtForSy(deltaPt, minAmountOut, address(this));
     }
 }
