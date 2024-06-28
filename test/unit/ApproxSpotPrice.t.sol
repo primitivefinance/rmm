@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp, RMM} from "../SetUp.sol";
+import {SetUp} from "../SetUp.sol";
 
 contract ApproxSpotPriceTest is SetUp {
     function test_approxSpotPrice_IncreasesOverTime() public useDefaultPool {
