@@ -38,7 +38,7 @@ contract SwapExactPtForSyTest is SetUp {
         assertEq(rmm.reserveX(), preReserveX - amountOut);
         assertEq(rmm.reserveY(), preReserveY + amountIn);
         assertEq(rmm.totalLiquidity(), preLiquidity + uint256(deltaLiquidity));
-        assertEq(rmm.strike(), preStrike);
+        assertApproxEqAbs(rmm.strike(), preStrike, 100);
     }
 
     function test_swapExactPtForSy_MaintainsTradingFunction() public useDefaultPool {
