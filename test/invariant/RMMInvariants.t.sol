@@ -32,19 +32,9 @@ contract RMMInvariantsTest is SetUp {
         selectors[4] = RMMHandler.swapExactSyForPt.selector;
         selectors[5] = RMMHandler.swapExactYtForSy.selector;
         selectors[6] = RMMHandler.swapExactTokenForYt.selector;
-        
-        console.logBytes4(selectors[0]);
-        console.logBytes4(selectors[1]);
-        console.logBytes4(selectors[2]);
-        console.logBytes4(selectors[3]);
-        console.logBytes4(selectors[4]);
-        console.logBytes4(selectors[5]);
-        console.logBytes4(selectors[6]);
-        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 
-        console2.log("got here?");
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
-        console2.log("here?");
     }
 
     function afterInvariant() public view {
@@ -62,9 +52,7 @@ contract RMMInvariantsTest is SetUp {
     /// forge-config: default.invariant.depth = 100
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
-        IPYieldToken YT = handler.YT();
-        PYIndex index = YT.newIndex();
-        assertTrue(abs(rmm.tradingFunction(index)) <= 100, "Invariant out of valid range");
+        assertTrue(abs(rmm.tradingFunction(newIndex())) <= 100, "Invariant out of valid range");
     }
 
     /// forge-config: default.invariant.runs = 10
@@ -78,7 +66,6 @@ contract RMMInvariantsTest is SetUp {
     /// forge-config: default.invariant.depth = 100
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
-        console2.log("here?");
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
     }
 }
