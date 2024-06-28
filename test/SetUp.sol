@@ -58,6 +58,7 @@ contract SetUp is Test {
         rmm = new MockRMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
+        vm.label(address(rmm), "RMM");
         vm.label(address(SY), "SY");
         vm.label(address(YT), "YT");
         vm.label(address(PT), "PT");
