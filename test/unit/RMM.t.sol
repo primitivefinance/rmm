@@ -371,20 +371,4 @@ contract RMMTest is Test {
             "Price did not decrease after selling X."
         );
     }
-
-    function test_swapSy_reverts_InsufficientOutput() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaSy = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
-        deal(address(PT), address(subject()), minAmountOut);
-        deal(address(SY), address(this), deltaSy);
-        SY.approve(address(subject()), deltaSy);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InsufficientOutput.selector, upscale(deltaSy, scalar(address(SY))), minAmountOut + 10, minAmountOut
-            )
-        );
-        subject().swapExactSyForPt(deltaSy, minAmountOut + 10, address(this));
-    }
 }
