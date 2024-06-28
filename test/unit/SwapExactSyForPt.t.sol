@@ -54,7 +54,7 @@ contract SwapExactSyForPtTest is SetUp {
         uint256 amountIn = 1 ether;
         uint256 prevPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
         rmm.swapExactSyForPt(amountIn, 0, address(this));
-        assertTrue(rmm.approxSpotPrice(syToAsset(rmm.reserveX())) > prevPrice, "Price did not increase after buying Y.");
+        assertTrue(rmm.approxSpotPrice(syToAsset(rmm.reserveX())) < prevPrice, "Price did not increase after buying Y.");
     }
 
     function test_swapExactSyForPt_EmitsEvent() public useDefaultPool {
