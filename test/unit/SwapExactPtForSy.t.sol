@@ -5,8 +5,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 import {Swap} from "../../src/lib/RmmEvents.sol";
 import {SetUp} from "../SetUp.sol";
+import {abs} from "./../../src/lib/RmmLib.sol";
+import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 
 contract SwapExactPtForSyTest is SetUp {
+    using PYIndexLib for PYIndex;
+
     function test_swapExactPtForSy_TransfersTokens() public useDefaultPool {
         address to = address(0xbeef);
 
@@ -38,6 +42,22 @@ contract SwapExactPtForSyTest is SetUp {
         assertEq(rmm.reserveY(), preReserveY + amountIn);
         assertEq(rmm.totalLiquidity(), preLiquidity + uint256(deltaLiquidity));
         assertEq(rmm.strike(), preStrike);
+    }
+
+    function test_swapExactPtForSy_MaintainsTradingFunction() public useDefaultPool {
+        uint256 amountIn = 1 ether;
+        rmm.swapExactPtForSy(amountIn, 0, address(this));
+        assertTrue(abs(rmm.tradingFunction(newIndex())) < 100, "Trading function invalid");
+    }
+
+    function test_swapExactPtForSy_MaintainsPrice() public useDefaultPool {
+        uint256 amountIn = 1 ether;
+        uint256 prevPrice = rmm.approxSpotPrice(newIndex().syToAsset(rmm.reserveX()));
+        rmm.swapExactPtForSy(amountIn, 0, address(this));
+        assertTrue(
+            rmm.approxSpotPrice(newIndex().syToAsset(rmm.reserveX())) > prevPrice,
+            "Price did not increase after buying Y."
+        );
     }
 
     function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {

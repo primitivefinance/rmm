@@ -400,41 +400,4 @@ contract RMMTest is Test {
         emit Swap(address(this), address(this), address(SY), address(PT), deltaSy, minAmountOut, delLiq);
         subject().swapExactSyForPt(deltaSy, 0, address(this));
     }
-
-    function test_swapY() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaPt = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapPtIn(deltaPt, block.timestamp, index);
-        deal(address(SY), address(subject()), minAmountOut);
-        deal(address(PT), address(this), deltaPt);
-        PT.approve(address(subject()), deltaPt);
-
-        uint256 prevBalanceX = balanceWad(address(SY), address(this));
-        uint256 prevBalanceY = balanceWad(address(PT), address(this));
-        uint256 prevPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
-        uint256 prevReserveY = subject().reserveY();
-        uint256 prevLiquidity = subject().totalLiquidity();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactPtForSy(deltaPt, minAmountOut, address(this));
-
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(abs(subject().tradingFunction(index)) < 100, "Trading function invalid");
-        assertEq(subject().reserveX(), basicParams.amountX - amountOut, "Reserve X did not decrease by amount in.");
-        assertEq(subject().reserveY(), prevReserveY + deltaPt, "Reserve Y did not increase by delta Y.");
-        assertEq(
-            subject().totalLiquidity(),
-            sum(prevLiquidity, deltaLiquidity),
-            "Total liquidity did not increase by delta liquidity."
-        );
-
-        assertEq(
-            balanceWad(address(SY), address(this)), prevBalanceX + amountOut, "Balance X did not increase by amount in."
-        );
-        assertEq(
-            balanceWad(address(PT), address(this)), prevBalanceY - deltaPt, "Balance Y did not decrease by delta Y."
-        );
-        assertTrue(
-            subject().approxSpotPrice(index.syToAsset(subject().reserveX())) > prevPrice,
-            "Price did not increase after buying Y."
-        );
-    }
 }
