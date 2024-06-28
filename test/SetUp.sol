@@ -15,6 +15,7 @@ import {MockWstETH} from "./mocks/MockWstETH.sol";
 import {MockStETH} from "./mocks/MockStETH.sol";
 
 import {RMM} from "./../src/RMM.sol";
+import {MockRMM} from "./MockRMM.sol";
 
 struct InitParams {
     uint256 priceX;
@@ -35,7 +36,7 @@ contract SetUp is Test {
     using PYIndexLib for PYIndex;
 
     // All the contracts that are needed for the tests.
-    RMM public rmm;
+    MockRMM public rmm;
     WETH public weth;
     PendleWstEthSY public SY;
     IPYieldToken public YT;
@@ -54,7 +55,7 @@ contract SetUp is Test {
         weth = new WETH();
         stETH = new MockStETH();
         wstETH = new MockWstETH(address(stETH));
-        rmm = new RMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
+        rmm = new MockRMM(address(weth), "RMM-LP-TOKEN", "RMM-LPT");
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
         vm.label(address(SY), "SY");
