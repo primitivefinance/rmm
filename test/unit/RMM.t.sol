@@ -437,20 +437,4 @@ contract RMMTest is Test {
             "Price did not increase after buying Y."
         );
     }
-
-    function test_swapPt_reverts_InsufficientOutput() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaPt = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapPtIn(deltaPt, block.timestamp, index);
-
-        mintSY(minAmountOut);
-        mintPtYt(deltaPt);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InsufficientOutput.selector, upscale(deltaPt, scalar(address(PT))), minAmountOut + 10, minAmountOut
-            )
-        );
-        subject().swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
-    }
 }

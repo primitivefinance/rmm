@@ -41,8 +41,11 @@ contract SwapExactPtForSyTest is SetUp {
     }
 
     function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {
-        vm.expectRevert();
-        rmm.swapExactPtForSy(1 ether, type(uint256).max, address(this));
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut,,) = rmm.prepareSwapPtIn(deltaPt, block.timestamp, newIndex());
+
+        vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, deltaPt, minAmountOut + 10, minAmountOut));
+        rmm.swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
     }
 
     function test_swapExactPtForSy_EmitsEvent() public useDefaultPool {
