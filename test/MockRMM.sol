@@ -19,4 +19,8 @@ contract MockRMM is RMM {
     function adjust(int256 deltaX, int256 deltaY, int256 deltaLiquidity, uint256 strike_, PYIndex index) public {
         _adjust(deltaX, deltaY, deltaLiquidity, strike_, index);
     }
+
+    function setLastTimestamp(uint256 lastTimestamp_) public {
+        lastTimestamp = lastTimestamp_;
+    }
 }
