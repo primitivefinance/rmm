@@ -10,4 +10,11 @@ contract ApproxSpotPriceTest is SetUp {
         uint256 postSpotPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
         assertGt(postSpotPrice, preSpotPrice);
     }
+
+    function test_approxSpotPrice_OneAtMaturity() public useDefaultPool {
+        vm.warp(rmm.maturity());
+        rmm.swapExactSyForPt(1 ether, 0, address(this));
+        uint256 maturityPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
+        assertEq(maturityPrice, 1 ether);
+    }
 }

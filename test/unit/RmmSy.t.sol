@@ -204,43 +204,12 @@ contract ForkRMMTest is Test {
         assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
     }
 
-    function test_spot_price_at_maturity() public basic_sy {
-        PYIndex index = YT.newIndex();
-        uint256 deltaSy = 1 ether;
-        vm.warp(subject().maturity());
-        subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
-        subject().swapExactSyForPt(deltaSy, 0, address(this));
-        assertApproxEqAbs(
-            subject().approxSpotPrice(index.syToAsset(subject().reserveX())),
-            1 ether,
-            1e18,
-            "Spot price is not approximately 1 ether."
-        );
-    }
-
     function test_mintSY_with_wstETH() public basic_sy {
         uint256 amountIn = 1 ether;
         uint256 expectedShares = amountIn; // 1:1 exchange rate for wstETH to shares
 
         uint256 sharesOut = subject().mintSY(address(this), wstETH, amountIn, 0);
         // assertEq(sharesOut, expectedShares, "Minting with wstETH did not return the expected amount of shares.");
-    }
-
-    // function test_mintSY_with_stETH() public basic_sy {
-    //     uint256 amountIn = 1 ether;
-    //     uint256 expectedShares = IWstETH(SY.wstETH()).wrap(amountIn); // Wrap stETH to wstETH
-
-    //     uint256 sharesOut = subject().mintSY(SY.stETH(), amountIn);
-    //     assertEq(sharesOut, expectedShares, "Minting with stETH did not return the expected amount of shares.");
-    // }
-
-    function test_mintSY_with_wETH() public basic_sy {
-        IERC20(subject().WETH()).approve(address(subject()), type(uint256).max);
-        deal(subject().WETH(), address(this), 1_000 ether);
-        uint256 amountIn = 1 ether;
-
-        uint256 sharesOut = subject().mintSY(address(this), subject().WETH(), amountIn, 0);
-        // assertEq(sharesOut, expectedShares, "Minting with wETH did not return the expected amount of shares.");
     }
 
     function test_pt_flash_swap_changes_balances() public basic_sy {
