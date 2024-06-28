@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "./../src/RMM.sol";
 
+/// @dev Extends the RMM contract to expose internal functions for testing.
 contract MockRMM is RMM {
     constructor(address weth_, string memory name_, string memory symbol_) RMM(weth_, name_, symbol_) {
         WETH = weth_;
