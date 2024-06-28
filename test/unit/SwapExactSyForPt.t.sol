@@ -1,10 +1,11 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp} from "../SetUp.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {SetUp} from "../SetUp.sol";
 import {Swap} from "../../src/lib/RmmEvents.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
+import {abs} from "./../../src/lib/RmmLib.sol";
 
 contract SwapExactSyForPtTest is SetUp {
     function test_swapExactSyForPt_TransfersTokens() public useDefaultPool {
@@ -41,6 +42,19 @@ contract SwapExactSyForPtTest is SetUp {
         assertEq(rmm.reserveX(), preReserveX + amountIn);
         assertEq(rmm.reserveY(), preReserveY - amountOut);
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + uint256(deltaLiquidity));
+    }
+
+    function test_swapExactSyForPt_MaintainsTradingFunction() public useDefaultPool {
+        uint256 amountIn = 1 ether;
+        rmm.swapExactSyForPt(amountIn, 0, address(this));
+        assertTrue(abs(rmm.tradingFunction(newIndex())) < 100, "Trading function invalid");
+    }
+
+    function test_swapExactSyForPt_MaintainsPrice() public useDefaultPool {
+        uint256 amountIn = 1 ether;
+        uint256 prevPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
+        rmm.swapExactSyForPt(amountIn, 0, address(this));
+        assertTrue(rmm.approxSpotPrice(syToAsset(rmm.reserveX())) > prevPrice, "Price did not increase after buying Y.");
     }
 
     function test_swapExactSyForPt_EmitsEvent() public useDefaultPool {
