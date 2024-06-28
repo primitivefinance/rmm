@@ -191,4 +191,8 @@ contract SetUp is Test {
     function syToAsset(uint256 amount) public returns (uint256) {
         return newIndex().syToAsset(amount);
     }
+
+    function assetToSyUp(uint256 amount) public returns (uint256) {
+        return newIndex().assetToSyUp(amount);
+    }
 }
