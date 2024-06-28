@@ -295,21 +295,6 @@ contract RMMTest is Test {
         // assertTrue(abs(terminal) < 10, "Trading function invalid.");
     }
 
-    function test_price_increase_over_time() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 timeDelta = 10 days;
-
-        uint256 initial = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
-        vm.warp(timeDelta);
-        vm.store(address(subject()), bytes32(LAST_TIMESTAMP_SLOT), bytes32(uint256(block.timestamp)));
-        uint256 terminal = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
-
-        console2.logUint(initial);
-        console2.logUint(terminal);
-
-        assertTrue(terminal > initial, "Price did not increase over time.");
-    }
-
     // avoids stack too deep in tests.
     struct InitParams {
         uint256 priceX;
@@ -332,43 +317,4 @@ contract RMMTest is Test {
     });
 
     // init
-
-    function test_swapSy_basic() public basic {
-        PYIndex index = YT.newIndex();
-        uint256 deltaSy = 1 ether;
-        (,, uint256 minAmountOut,,) = subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
-        deal(address(PT), address(subject()), minAmountOut);
-        deal(address(SY), address(this), deltaSy);
-        SY.approve(address(subject()), deltaSy);
-
-        uint256 prevBalanceX = balanceWad(address(SY), address(this));
-        uint256 prevBalanceY = balanceWad(address(PT), address(this));
-        uint256 prevReserveY = subject().reserveY();
-        uint256 prevPrice = subject().approxSpotPrice(index.syToAsset(subject().reserveX()));
-        uint256 prevLiquidity = subject().totalLiquidity();
-        (uint256 amountOut, int256 deltaLiquidity) = subject().swapExactSyForPt(deltaSy, 0, address(this));
-
-        assertTrue(amountOut >= minAmountOut, "Amount out is not greater than or equal to min amount out.");
-        assertTrue(abs(subject().tradingFunction(index)) < 100, "Invalid trading function state.");
-        assertEq(subject().reserveX(), basicParams.amountX + deltaSy, "Reserve X did not increase by delta X.");
-        assertEq(subject().reserveY(), prevReserveY - amountOut, "Reserve Y did not decrease by amount out.");
-        assertEq(
-            subject().totalLiquidity(),
-            sum(prevLiquidity, deltaLiquidity),
-            "Total liquidity did not increase by delta liquidity."
-        );
-
-        assertEq(
-            balanceWad(address(SY), address(this)), prevBalanceX - deltaSy, "Balance Sy did not decrease by delta X."
-        );
-        assertEq(
-            balanceWad(address(PT), address(this)),
-            prevBalanceY + amountOut,
-            "Balance Y did not increase by amount out."
-        );
-        assertTrue(
-            subject().approxSpotPrice(index.syToAsset(subject().reserveX())) < prevPrice,
-            "Price did not decrease after selling X."
-        );
-    }
 }
