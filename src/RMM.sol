@@ -696,7 +696,7 @@ contract RMM is ERC20 {
         if (!SY.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
 
         if (tokenIn == address(0)) {
-            amountSyOut = SY.deposit{value: msg.value}(address(this), address(0), msg.value, minSyMinted);
+            amountSyOut = SY.deposit{value: msg.value}(receiver, address(0), msg.value, minSyMinted);
         } else {
             ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenIn);
             amountSyOut = SY.deposit(receiver, tokenIn, amountTokenIn, minSyMinted);
