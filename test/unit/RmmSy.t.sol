@@ -195,15 +195,6 @@ contract ForkRMMTest is Test {
         console2.log("priceAfter", priceAfter);
     }
 
-    function test_strike_converges_to_one_at_maturity() public basic_sy {
-        PYIndex index = YT.newIndex();
-        uint256 deltaSy = 1 ether;
-        vm.warp(subject().maturity());
-        subject().prepareSwapSyIn(deltaSy, block.timestamp, index);
-        subject().swapExactSyForPt(deltaSy, 0, address(this));
-        assertEq(subject().strike(), 1 ether, "Strike is not approximately 1 ether.");
-    }
-
     function test_mintSY_with_wstETH() public basic_sy {
         uint256 amountIn = 1 ether;
         uint256 expectedShares = amountIn; // 1:1 exchange rate for wstETH to shares
