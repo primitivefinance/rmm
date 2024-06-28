@@ -6,11 +6,8 @@ import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 import {Swap} from "../../src/lib/RmmEvents.sol";
 import {SetUp} from "../SetUp.sol";
 import {abs} from "./../../src/lib/RmmLib.sol";
-import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 
 contract SwapExactPtForSyTest is SetUp {
-    using PYIndexLib for PYIndex;
-
     function test_swapExactPtForSy_TransfersTokens() public useDefaultPool {
         address to = address(0xbeef);
 
@@ -52,20 +49,9 @@ contract SwapExactPtForSyTest is SetUp {
 
     function test_swapExactPtForSy_MaintainsPrice() public useDefaultPool {
         uint256 amountIn = 1 ether;
-        uint256 prevPrice = rmm.approxSpotPrice(newIndex().syToAsset(rmm.reserveX()));
+        uint256 prevPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
         rmm.swapExactPtForSy(amountIn, 0, address(this));
-        assertTrue(
-            rmm.approxSpotPrice(newIndex().syToAsset(rmm.reserveX())) > prevPrice,
-            "Price did not increase after buying Y."
-        );
-    }
-
-    function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {
-        uint256 deltaPt = 1 ether;
-        (,, uint256 minAmountOut,,) = rmm.prepareSwapPtIn(deltaPt, block.timestamp, newIndex());
-
-        vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, deltaPt, minAmountOut + 10, minAmountOut));
-        rmm.swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
+        assertTrue(rmm.approxSpotPrice(syToAsset(rmm.reserveX())) > prevPrice, "Price did not increase after buying Y.");
     }
 
     function test_swapExactPtForSy_EmitsEvent() public useDefaultPool {
@@ -74,5 +60,13 @@ contract SwapExactPtForSyTest is SetUp {
         vm.expectEmit(true, true, true, true);
         emit Swap(address(this), address(this), address(PT), address(SY), deltaPt, minAmountOut, deltaLiquidity);
         rmm.swapExactPtForSy(deltaPt, minAmountOut, address(this));
+    }
+
+    function test_swapExactPtForSy_RevertsIfInsufficientOutput() public useDefaultPool {
+        uint256 deltaPt = 1 ether;
+        (,, uint256 minAmountOut,,) = rmm.prepareSwapPtIn(deltaPt, block.timestamp, newIndex());
+
+        vm.expectRevert(abi.encodeWithSelector(InsufficientOutput.selector, deltaPt, minAmountOut + 10, minAmountOut));
+        rmm.swapExactPtForSy(deltaPt, minAmountOut + 10, address(this));
     }
 }
