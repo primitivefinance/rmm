@@ -32,6 +32,7 @@ struct InitParams {
 
 contract SetUp is Test {
     using PYIndexLib for IPYieldToken;
+    using PYIndexLib for PYIndex;
 
     // All the contracts that are needed for the tests.
     RMM public rmm;
@@ -184,5 +185,9 @@ contract SetUp is Test {
 
     function newIndex() public returns (PYIndex) {
         return YT.newIndex();
+    }
+
+    function syToAsset(uint256 amount) public returns (uint256) {
+        return newIndex().syToAsset(amount);
     }
 }
