@@ -46,7 +46,8 @@ contract SetUp is Test {
 
     // Some default constants.
 
-    uint32 public DEFAULT_EXPIRY = 1_717_214_400;
+    uint32 public DEFAULT_NOW = 1719578346;
+    uint32 public DEFAULT_EXPIRY = DEFAULT_NOW + 365 days;
     uint256 public DEFAULT_AMOUNT = 1_000 ether;
 
     // Main setup functions.
@@ -89,6 +90,7 @@ contract SetUp is Test {
     }
 
     function setUp() public virtual {
+        vm.warp(DEFAULT_NOW);
         setUpContracts(DEFAULT_EXPIRY);
     }
 
