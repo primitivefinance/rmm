@@ -12,8 +12,6 @@ import "./lib/RmmErrors.sol";
 import "./lib/RmmEvents.sol";
 import "./lib/LiquidityLib.sol";
 
-import "forge-std/console2.sol";
-
 contract RMM is ERC20 {
     using FixedPointMathLib for uint256;
     using FixedPointMathLib for int256;
@@ -31,6 +29,9 @@ contract RMM is ERC20 {
     IPPrincipalToken public PT;
     IStandardizedYield public SY;
     IPYieldToken public YT;
+
+    uint256 public SY_scalar;
+    uint256 public PT_scalar;
 
     uint256 public reserveX;
     uint256 public reserveY;
@@ -86,6 +87,9 @@ contract RMM is ERC20 {
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
+
+        SY_scalar = scalar(address(SY));
+        PT_scalar = scalar(address(PT));
 
         // Sets approvals ahead of time for this contract to handle routing.
         {
@@ -144,6 +148,7 @@ contract RMM is ERC20 {
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
         uint256 delta = index.assetToSyUp(amountInWad) - amountOutWad;
+
         uint256 ytOut = amountOut + delta;
 
         if (delta > maxSyIn) {
@@ -346,8 +351,7 @@ contract RMM is ERC20 {
         returns (uint256 deltaX, uint256 deltaY)
     {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned) = prepareDeallocate(deltaLiquidity);
-        (deltaX, deltaY) =
-            (downscaleDown(deltaXWad, scalar(address(SY))), downscaleDown(deltaYWad, scalar(address(PT))));
+        (deltaX, deltaY) = (downscaleDown(deltaXWad, SY_scalar), downscaleDown(deltaYWad, PT_scalar));
 
         if (minDeltaXOut > deltaX) {
             revert InsufficientOutput(deltaLiquidity, minDeltaXOut, deltaX);
@@ -549,7 +553,7 @@ contract RMM is ERC20 {
         view
         returns (uint256 amountInWad, uint256 ptOutWad, uint256 amountIn, int256 deltaLiquidity, uint256 strike_)
     {
-        ptOutWad = upscale(ptOut, scalar(address(PT)));
+        ptOutWad = upscale(ptOut, PT_scalar);
         // convert amountIn to assetIn, only for swapping X in
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
         uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
@@ -559,7 +563,7 @@ contract RMM is ERC20 {
 
         uint256 nextReserveX = solveX(reserveY - ptOutWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
         amountInWad = index.assetToSy(nextReserveX) - reserveX;
-        amountIn = downscaleDown(amountInWad, scalar(address(SY)));
+        amountIn = downscaleDown(amountInWad, SY_scalar);
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
@@ -569,7 +573,7 @@ contract RMM is ERC20 {
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
-        amountInWad = upscale(amountIn, scalar(address(SY)));
+        amountInWad = upscale(amountIn, SY_scalar);
         // convert amountIn to assetIn, only for swapping X in
         uint256 amountInAsset = index.syToAsset(amountInWad);
 
@@ -585,7 +589,7 @@ contract RMM is ERC20 {
             solveY(comp.reserveInAsset + amountInAsset, nextLiquidity, comp.strike_, sigma, comp.tau_);
 
         amountOutWad = reserveY - nextReserveY;
-        amountOut = downscaleDown(amountOutWad, scalar(address(PT)));
+        amountOut = downscaleDown(amountOutWad, PT_scalar);
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
@@ -595,7 +599,7 @@ contract RMM is ERC20 {
         view
         returns (uint256 amountInWad, uint256 amountOutWad, uint256 amountOut, int256 deltaLiquidity, uint256 strike_)
     {
-        amountInWad = upscale(ptIn, scalar(address(PT)));
+        amountInWad = upscale(ptIn, PT_scalar);
         PoolPreCompute memory comp = preparePoolPreCompute(index, timestamp);
 
         // compute liquidity
@@ -608,7 +612,7 @@ contract RMM is ERC20 {
         uint256 nextReserveX = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
 
         amountOutWad = reserveX - index.assetToSy(nextReserveX);
-        amountOut = downscaleDown(amountOutWad, scalar(address(SY)));
+        amountOut = downscaleDown(amountOutWad, SY_scalar);
         strike_ = comp.strike_;
         deltaLiquidity = toInt(nextLiquidity) - toInt(totalLiquidity);
     }
@@ -620,10 +624,10 @@ contract RMM is ERC20 {
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)
     {
         if (inTermsOfX) {
-            deltaXWad = upscale(amount, scalar(address(SY)));
+            deltaXWad = upscale(amount, SY_scalar);
             (deltaYWad, deltaLiquidity) = computeAllocationGivenDeltaX(deltaXWad, reserveX, reserveY, totalLiquidity);
         } else {
-            deltaYWad = upscale(amount, scalar(address(PT)));
+            deltaYWad = upscale(amount, PT_scalar);
             (deltaXWad, deltaLiquidity) = computeAllocationGivenDeltaY(deltaYWad, reserveX, reserveY, totalLiquidity);
         }
 
