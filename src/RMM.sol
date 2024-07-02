@@ -66,14 +66,10 @@ contract RMM is ERC20 {
         }
     }
 
-    constructor(address weth_, string memory name_, string memory symbol_) ERC20(name_, symbol_, 18) {
-        WETH = weth_;
-    }
-
-    receive() external payable {}
-
-    /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
-    function init(
+    constructor(
+        address weth_,
+        string memory name_,
+        string memory symbol_,
         address PT_,
         uint256 priceX,
         uint256 amountX,
@@ -81,8 +77,24 @@ contract RMM is ERC20 {
         uint256 sigma_,
         uint256 fee_,
         address curator_
-    ) external lock {
-        if (strike != 0) revert AlreadyInitialized();
+    ) ERC20(name_, symbol_, 18) {
+        WETH = weth_;
+
+        _init(PT_, priceX, amountX, strike_, sigma_, fee_, curator_);
+    }
+
+    receive() external payable {}
+
+    /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
+    function _init(
+        address PT_,
+        uint256 priceX,
+        uint256 amountX,
+        uint256 strike_,
+        uint256 sigma_,
+        uint256 fee_,
+        address curator_
+    ) internal {
         if (strike_ <= 1e18) revert InvalidStrike();
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
