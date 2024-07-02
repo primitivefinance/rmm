@@ -27,6 +27,12 @@ struct InitParams {
     address curator;
 }
 
+uint32 constant DEFAULT_NOW = 1719578346;
+uint32 constant DEFAULT_EXPIRY = DEFAULT_NOW + 365 days;
+
+string constant DEFAULT_NAME = "RMM-LP-TOKEN";
+string constant DEFAULT_SYMBOL = "RMM-LPT";
+
 // address constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0; //real wsteth
 // address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
@@ -42,11 +48,6 @@ contract SetUp is Test {
     IPPrincipalToken public PT;
     MockWstETH public wstETH;
     MockStETH public stETH;
-
-    // Some default constants.
-
-    uint32 public constant DEFAULT_NOW = 1719578346;
-    uint32 public constant DEFAULT_EXPIRY = DEFAULT_NOW + 365 days;
 
     // Main setup functions.
 
@@ -83,8 +84,8 @@ contract SetUp is Test {
     function setUpRMM(InitParams memory initParams) public {
         rmm = new MockRMM(
             address(weth),
-            "RMM-LP-TOKEN",
-            "RMM-LPT",
+            DEFAULT_NAME,
+            DEFAULT_SYMBOL,
             initParams.PT,
             initParams.priceX,
             initParams.amountX,
