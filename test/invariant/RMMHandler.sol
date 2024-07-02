@@ -91,7 +91,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         sigma = bound(sigma, 0.02 ether, 0.05 ether);
         fee = bound(fee, 0.0001 ether, 0.001 ether);
 
-
         PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
         (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, PT.expiry(), index);
@@ -111,7 +110,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
     function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
         deltaX = bound(deltaX, 0.1 ether, 10 ether);
-
 
         vm.startPrank(currentActor);
 
@@ -172,10 +170,12 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         PYIndex index = YT.newIndex();
 
-        (uint256 syMinted, uint256 ytOut) =
-            rmm.computeTokenToYT(index, address(weth), amountTokenIn, rmm.reserveX().mulDivDown(95, 100), block.timestamp, 0, 1_000);
+        (uint256 syMinted, uint256 ytOut) = rmm.computeTokenToYT(
+            index, address(weth), amountTokenIn, rmm.reserveX().mulDivDown(95, 100), block.timestamp, 0, 1_000
+        );
 
-        uint256 amountPtIn = rmm.computeSYToYT(index, syMinted, rmm.reserveX().mulDivDown(95, 100), block.timestamp, ytOut, 0.005 ether);
+        uint256 amountPtIn =
+            rmm.computeSYToYT(index, syMinted, rmm.reserveX().mulDivDown(95, 100), block.timestamp, ytOut, 0.005 ether);
         (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
             rmm.prepareSwapPtIn(amountPtIn, block.timestamp, index);
 
@@ -249,5 +249,11 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         console2.log("rmm.reserveY()", rmm.reserveY());
         ghost_reserveY -= ytIn;
         // ghost_totalLiquidity += int256(deltaLiquidity);
+    }
+
+    function increaseTime(uint256 amount) public countCall(this.increaseTime.selector) {
+        amount = bound(amount, 1, 86400);
+
+        vm.warp(block.timestamp + amount);
     }
 }
