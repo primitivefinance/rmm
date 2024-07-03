@@ -4,12 +4,8 @@ pragma solidity ^0.8.13;
 import {SetUp, RMM, InitParams, DEFAULT_EXPIRY} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
 import {AlreadyInitialized, InvalidStrike} from "../../src/lib/RmmErrors.sol";
-import {PYIndex, PYIndexLib, IPYieldToken} from "./../../src/RMM.sol";
 
 contract InitTest is SetUp {
-    using PYIndexLib for IPYieldToken;
-    using PYIndexLib for PYIndex;
-
     function test_init_MintsLiquidity()
         public
         withSY(address(this), 2000000 ether)
@@ -17,10 +13,9 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
         (uint256 totalLiquidity,) =
-            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, index);
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
@@ -32,10 +27,9 @@ contract InitTest is SetUp {
     function test_init_AdjustsPool() public withSY(address(this), 2000000 ether) withPY(address(this), 1000000 ether) {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
         (, uint256 amountY) =
-            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, index);
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
         assertEq(rmm.lastTimestamp(), block.timestamp, "lastTimestamp");
@@ -51,10 +45,9 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
         (, uint256 amountY) =
-            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, index);
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
         uint256 thisPreBalanceSY = SY.balanceOf(address(this));
         uint256 thisPreBalancePT = PT.balanceOf(address(this));
@@ -76,10 +69,9 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
         (uint256 totalLiquidity, uint256 amountY) =
-            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, index);
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
         vm.expectEmit();
 
