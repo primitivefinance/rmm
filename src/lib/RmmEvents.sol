@@ -12,8 +12,7 @@ event Init(
     uint256 strike,
     uint256 sigma,
     uint256 fee,
-    uint256 maturity,
-    address indexed curator
+    uint256 maturity
 );
 
 /// @dev Emitted on swaps.
