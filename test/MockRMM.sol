@@ -5,18 +5,9 @@ import "./../src/RMM.sol";
 
 /// @dev Extends the RMM contract to expose internal functions for testing.
 contract MockRMM is RMM {
-    constructor(
-        address weth_,
-        string memory name_,
-        string memory symbol_,
-        address PT_,
-        uint256 priceX,
-        uint256 amountX,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 fee_,
-        address curator_
-    ) RMM(weth_, name_, symbol_, PT_, priceX, amountX, strike_, sigma_, fee_, curator_) {}
+    constructor(string memory name_, string memory symbol_, address PT_, uint256 sigma_, uint256 fee_)
+        RMM(name_, symbol_, PT_, sigma_, fee_)
+    {}
 
     function debit(address token, uint256 amountWad) public returns (uint256 paymentNative) {
         return _debit(token, amountWad);
