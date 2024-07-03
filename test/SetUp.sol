@@ -10,10 +10,8 @@ import {BaseSplitCodeFactory} from "pendle/core/libraries/BaseSplitCodeFactory.s
 import {PendleYieldTokenV2} from "pendle/core/YieldContractsV2/PendleYieldTokenV2.sol";
 import {PendleYieldContractFactoryV2} from "pendle/core/YieldContractsV2/PendleYieldContractFactoryV2.sol";
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockWstETH} from "./mocks/MockWstETH.sol";
+import {WstETH} from "./WstETH.sol";
 import {MockStETH} from "./mocks/MockStETH.sol";
-
 import {RMM} from "./../src/RMM.sol";
 import {MockRMM} from "./MockRMM.sol";
 
@@ -46,7 +44,7 @@ contract SetUp is Test {
     PendleWstEthSY public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
-    MockWstETH public wstETH;
+    WstETH public wstETH;
     MockStETH public stETH;
 
     // Main setup functions.
@@ -54,7 +52,7 @@ contract SetUp is Test {
     function setUpContracts(uint32 expiry) public {
         weth = new WETH();
         stETH = new MockStETH();
-        wstETH = new MockWstETH(address(stETH));
+        wstETH = new WstETH(address(stETH));
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
         vm.label(address(SY), "SY");
@@ -81,19 +79,17 @@ contract SetUp is Test {
         PT = IPPrincipalToken(factory.getPT(address(SY), expiry));
     }
 
+    function setUp() public virtual {
+        vm.warp(DEFAULT_NOW);
+        setUpContracts(DEFAULT_EXPIRY);
+
+        InitParams memory initParams = getDefaultParams();
+        setUpRMM(initParams);
+        initRMM(initParams);
+    }
+
     function setUpRMM(InitParams memory initParams) public {
-        rmm = new MockRMM(
-            address(weth),
-            DEFAULT_NAME,
-            DEFAULT_SYMBOL,
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        rmm = new MockRMM(DEFAULT_NAME, DEFAULT_SYMBOL, initParams.PT, initParams.sigma, initParams.fee);
 
         vm.label(address(rmm), "RMM");
 
@@ -103,9 +99,15 @@ contract SetUp is Test {
         YT.approve(address(rmm), type(uint256).max);
     }
 
-    function setUp() public virtual {
-        vm.warp(DEFAULT_NOW);
-        setUpContracts(DEFAULT_EXPIRY);
+    function initRMM(InitParams memory initParams) public {
+        (, uint256 amountY) =
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
+
+        uint256 amount = 10000 ether;
+        mintSY(address(this), amount);
+        mintPY(address(this), amount / 2);
+
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 
     // Here are some utility functions, you can use them to set specific states inside of a test.
@@ -149,17 +151,13 @@ contract SetUp is Test {
     // Here are some modifiers, you can use them as hooks to set up the environment before running a test.
 
     modifier useDefaultPool() {
-        uint256 amount = 10000 ether;
-        mintSY(address(this), amount);
-        mintPY(address(this), amount / 2);
         setUpRMM(getDefaultParams());
+        initRMM(getDefaultParams());
+
         _;
     }
 
     modifier useSYPool() {
-        uint256 amount = 1_000_000 ether;
-        mintSY(address(this), amount);
-        mintPY(address(this), amount / 2);
         InitParams memory initParams = InitParams({
             PT: address(PT),
             priceX: 1007488755655417383,
@@ -169,7 +167,10 @@ contract SetUp is Test {
             fee: 0.0003 ether,
             curator: address(0x55)
         });
+
         setUpRMM(initParams);
+        initRMM(initParams);
+
         _;
     }
 
