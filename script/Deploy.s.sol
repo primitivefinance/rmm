@@ -18,7 +18,7 @@ contract Deploy is Script {
 
         address sender = vm.addr(pk);
         console2.log("Deploying RMM from", sender);
-        RMM rmm = FACTORY.createRMM("RMM", "RMM");
+        // RMM rmm = FACTORY.createRMM("RMM", "RMM");
 
         vm.stopBroadcast();
     }
