@@ -21,32 +21,28 @@ contract RMM is ERC20 {
 
     using SafeTransferLib for ERC20;
 
-    int256 public constant INIT_UPPER_BOUND = 30;
     uint256 public constant IMPLIED_RATE_TIME = 365 * 86400;
     uint256 public constant BURNT_LIQUIDITY = 1000;
-    address public immutable WETH;
 
-    IPPrincipalToken public PT;
-    IStandardizedYield public SY;
-    IPYieldToken public YT;
+    IPPrincipalToken public immutable PT;
+    IStandardizedYield public immutable SY;
+    IPYieldToken public immutable YT;
 
-    uint256 public SY_scalar;
-    uint256 public PT_scalar;
+    uint256 public immutable SY_scalar;
+    uint256 public immutable PT_scalar;
+
+    uint256 public immutable sigma;
+    uint256 public immutable fee;
+    uint256 public immutable maturity;
 
     uint256 public reserveX;
     uint256 public reserveY;
     uint256 public totalLiquidity;
-
     uint256 public strike;
-    uint256 public sigma;
-    uint256 public fee;
-    uint256 public maturity;
 
-    uint256 public initTimestamp;
     uint256 public lastTimestamp;
     uint256 public lastImpliedPrice;
 
-    address public curator;
     uint256 private _lock = 1;
 
     modifier lock() {
@@ -66,42 +62,17 @@ contract RMM is ERC20 {
         }
     }
 
-    constructor(
-        address weth_,
-        string memory name_,
-        string memory symbol_,
-        address PT_,
-        uint256 priceX,
-        uint256 amountX,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 fee_,
-        address curator_
-    ) ERC20(name_, symbol_, 18) {
-        WETH = weth_;
-
-        _init(PT_, priceX, amountX, strike_, sigma_, fee_, curator_);
-    }
-
-    receive() external payable {}
-
-    /// @dev Initializes the pool with an initial price, amount of `x` tokens, and parameters.
-    function _init(
-        address PT_,
-        uint256 priceX,
-        uint256 amountX,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 fee_,
-        address curator_
-    ) internal {
-        if (strike_ <= 1e18) revert InvalidStrike();
+    constructor(string memory name_, string memory symbol_, address PT_, uint256 sigma_, uint256 fee_)
+        ERC20(name_, symbol_, 18)
+    {
         PT = IPPrincipalToken(PT_);
         SY = IStandardizedYield(PT.SY());
         YT = IPYieldToken(PT.YT());
-
         SY_scalar = scalar(address(SY));
         PT_scalar = scalar(address(PT));
+        sigma = sigma_;
+        maturity = PT.expiry();
+        fee = fee_;
 
         // Sets approvals ahead of time for this contract to handle routing.
         {
@@ -114,16 +85,18 @@ contract RMM is ERC20 {
                 if (address(token) != address(0)) token.approve(address(SY), type(uint256).max);
             }
         }
+    }
+
+    function init(uint256 priceX, uint256 amountX, uint256 strike_)
+        external
+        lock
+        returns (uint256 totalLiquidity_, uint256 amountY)
+    {
+        if (strike != 0) revert AlreadyInitialized();
+        if (strike_ <= 1e18) revert InvalidStrike();
 
         PYIndex index = YT.newIndex();
-        sigma = sigma_;
-        maturity = PT.expiry();
-        fee = fee_;
-
-        initTimestamp = block.timestamp;
-        curator = curator_;
-
-        (uint256 totalLiquidity_, uint256 amountY) = prepareInit(priceX, amountX, strike_, sigma_, maturity, index);
+        (totalLiquidity_, amountY) = prepareInit(priceX, amountX, strike_, sigma, index);
 
         _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
         _mint(address(0), BURNT_LIQUIDITY);
@@ -132,9 +105,11 @@ contract RMM is ERC20 {
         _debit(address(PT), reserveY);
 
         emit Init(
-            msg.sender, address(SY), PT_, amountX, amountY, totalLiquidity_, strike_, sigma_, fee_, maturity, curator_
+            msg.sender, address(SY), address(PT), amountX, amountY, totalLiquidity_, strike_, sigma, fee, maturity
         );
     }
+
+    receive() external payable {}
 
     /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
     /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
@@ -542,16 +517,13 @@ contract RMM is ERC20 {
     }
 
     //prepare calls
-    function prepareInit(
-        uint256 priceX,
-        uint256 amountX,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 maturity_,
-        PYIndex index
-    ) public view returns (uint256 totalLiquidity_, uint256 amountY) {
+    function prepareInit(uint256 priceX, uint256 amountX, uint256 strike_, uint256 sigma_, PYIndex index)
+        public
+        view
+        returns (uint256 totalLiquidity_, uint256 amountY)
+    {
         uint256 totalAsset = index.syToAsset(amountX);
-        uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
+        uint256 tau_ = computeTauWadYears(maturity - block.timestamp);
         PoolPreCompute memory comp = PoolPreCompute({reserveInAsset: totalAsset, strike_: strike_, tau_: tau_});
         uint256 initialLiquidity =
             computeLGivenX({reserveX_: totalAsset, S: priceX, strike_: strike_, sigma_: sigma_, tau_: tau_});
