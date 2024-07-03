@@ -2,20 +2,18 @@
 pragma solidity ^0.8.13;
 
 import {console} from "forge-std/console.sol";
-import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {abs} from "./../../src/lib/RmmLib.sol";
-import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {SetUp} from "../SetUp.sol";
 import {RMMHandler} from "./RMMHandler.sol";
-import "forge-std/console2.sol";
 
 contract RMMInvariantsTest is SetUp {
-    using PYIndexLib for IPYieldToken;
-
     RMMHandler handler;
 
     function setUp() public virtual override {
         super.setUp();
+
+        // This will redeploy the RMM contract without initializing the pool
+        setUpRMM(getDefaultParams());
         handler = new RMMHandler(rmm, PT, SY, YT, weth);
 
         mintSY(address(handler), 1000 ether);
