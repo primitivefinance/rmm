@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {computeTauWadYears, PoolPreCompute, computeLGivenX, computeY, solveL} from "./lib/RmmLib.sol";
 import {RMM} from "./RMM.sol";
 
@@ -39,14 +38,13 @@ contract Factory {
     }
 
     function prepareInit(
-        address PT,
         uint256 priceX,
         uint256 amountX,
         uint256 strike_,
         uint256 sigma_,
-        uint256 maturity_
-    ) public returns (uint256 totalLiquidity_, uint256 amountY) {
-        PYIndex index = IPYieldToken(IPPrincipalToken(PT).YT()).newIndex();
+        uint256 maturity_,
+        PYIndex index
+    ) public view returns (uint256 totalLiquidity_, uint256 amountY) {
         uint256 totalAsset = index.syToAsset(amountX);
         uint256 tau_ = computeTauWadYears(maturity_ - block.timestamp);
         PoolPreCompute memory comp = PoolPreCompute({reserveInAsset: totalAsset, strike_: strike_, tau_: tau_});
