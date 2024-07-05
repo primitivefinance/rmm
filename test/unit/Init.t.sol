@@ -1,84 +1,23 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {SetUp, RMM, InitParams} from "../SetUp.sol";
+import {SetUp, RMM, InitParams, DEFAULT_EXPIRY} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
 import {AlreadyInitialized, InvalidStrike} from "../../src/lib/RmmErrors.sol";
-import {PYIndex, PYIndexLib, IPYieldToken} from "./../../src/RMM.sol";
 
 contract InitTest is SetUp {
-    using PYIndexLib for IPYieldToken;
-    using PYIndexLib for PYIndex;
-
-    function test_init_StoresInitParams()
-        public
-        withSY(address(this), 2000000 ether)
-        withPY(address(this), 1000000 ether)
-    {
-        InitParams memory initParams = getDefaultParams();
-
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
-
-        assertEq(rmm.strike(), initParams.strike);
-        assertEq(rmm.sigma(), initParams.sigma);
-        assertEq(rmm.fee(), initParams.fee);
-        assertEq(rmm.maturity(), initParams.maturity);
-        assertEq(rmm.curator(), initParams.curator);
-        assertEq(rmm.lastTimestamp(), block.timestamp);
-        assertEq(rmm.initTimestamp(), block.timestamp);
-    }
-
-    function test_init_StoresTokens()
-        public
-        withSY(address(this), 2000000 ether)
-        withPY(address(this), 1000000 ether)
-    {
-        InitParams memory initParams = getDefaultParams();
-
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
-
-        assertEq(address(rmm.PT()), address(PT));
-        assertEq(address(rmm.YT()), address(YT));
-        assertEq(address(rmm.SY()), address(SY));
-    }
-
     function test_init_MintsLiquidity()
         public
         withSY(address(this), 2000000 ether)
         withPY(address(this), 1000000 ether)
     {
         InitParams memory initParams = getDefaultParams();
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
+        setUpRMM(initParams);
 
-        (uint256 totalLiquidity,) = rmm.prepareInit(
-            initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, initParams.maturity, index
-        );
+        (uint256 totalLiquidity,) =
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
         assertEq(rmm.totalLiquidity(), totalLiquidity);
         assertEq(rmm.balanceOf(address(this)), totalLiquidity - rmm.BURNT_LIQUIDITY());
@@ -87,25 +26,16 @@ contract InitTest is SetUp {
 
     function test_init_AdjustsPool() public withSY(address(this), 2000000 ether) withPY(address(this), 1000000 ether) {
         InitParams memory initParams = getDefaultParams();
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
+        setUpRMM(initParams);
 
-        (, uint256 amountY) = rmm.prepareInit(
-            initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, initParams.maturity, index
-        );
-
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        (, uint256 amountY) =
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
         assertEq(rmm.lastTimestamp(), block.timestamp, "lastTimestamp");
         assertEq(rmm.reserveX(), initParams.amountX, "reserveX");
         assertEq(rmm.reserveY(), amountY, "reserveY");
+        assertEq(rmm.strike(), initParams.strike);
     }
 
     function test_init_TransfersTokens()
@@ -114,26 +44,17 @@ contract InitTest is SetUp {
         withPY(address(this), 1000000 ether)
     {
         InitParams memory initParams = getDefaultParams();
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
+        setUpRMM(initParams);
 
-        (, uint256 amountY) = rmm.prepareInit(
-            initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, initParams.maturity, index
-        );
+        (, uint256 amountY) =
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
         uint256 thisPreBalanceSY = SY.balanceOf(address(this));
         uint256 thisPreBalancePT = PT.balanceOf(address(this));
         uint256 rmmPreBalanceSY = SY.balanceOf(address(rmm));
         uint256 rmmPreBalancePT = PT.balanceOf(address(rmm));
 
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
         assertEq(SY.balanceOf(address(this)), thisPreBalanceSY - initParams.amountX);
         assertEq(PT.balanceOf(address(this)), thisPreBalancePT - amountY);
@@ -147,11 +68,10 @@ contract InitTest is SetUp {
         withPY(address(this), 1000000 ether)
     {
         InitParams memory initParams = getDefaultParams();
-        PYIndex index = IPYieldToken(PT.YT()).newIndex();
+        setUpRMM(initParams);
 
-        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(
-            initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, initParams.maturity, index
-        );
+        (uint256 totalLiquidity, uint256 amountY) =
+            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
 
         vm.expectEmit();
 
@@ -165,19 +85,10 @@ contract InitTest is SetUp {
             initParams.strike,
             initParams.sigma,
             initParams.fee,
-            initParams.maturity,
-            initParams.curator
+            DEFAULT_EXPIRY
         );
 
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 
     function test_init_RevertsIfAlreadyInitialized()
@@ -189,16 +100,7 @@ contract InitTest is SetUp {
         InitParams memory initParams = getDefaultParams();
 
         vm.expectRevert(AlreadyInitialized.selector);
-
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            initParams.strike,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 
     function test_init_RevertsIfInvalidStrike()
@@ -207,18 +109,10 @@ contract InitTest is SetUp {
         withPY(address(this), 1000000 ether)
     {
         InitParams memory initParams = getDefaultParams();
+        setUpRMM(initParams);
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidStrike.selector));
-
-        rmm.init(
-            initParams.PT,
-            initParams.priceX,
-            initParams.amountX,
-            1 ether,
-            initParams.sigma,
-            initParams.fee,
-            initParams.curator
-        );
+        vm.expectRevert(InvalidStrike.selector);
+        rmm.init(initParams.priceX, initParams.amountX, 1 ether);
     }
 
     function test_init_RevertsWhenLocked()

@@ -1,19 +1,12 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import {SetUp} from "../SetUp.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FeeOnTransferToken} from "../../src/test/FeeOnTransferToken.sol";
-import {MockRMM} from "../MockRMM.sol";
 import {InsufficientPayment} from "./../../src/lib/RmmErrors.sol";
 
-contract DebitTest is Test {
-    MockRMM rmm;
-
-    function setUp() public {
-        rmm = new MockRMM(address(0), "", "");
-    }
-
+contract DebitTest is SetUp {
     function test_debit_TransfersTokens() public {
         MockERC20 token = new MockERC20("", "", 18);
 

@@ -93,13 +93,13 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
-        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, PT.expiry(), index);
+        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, index);
 
         PT.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
         YT.approve(address(rmm), type(uint256).max);
 
-        rmm.init(address(PT), priceX, amountX, strike, sigma, fee, address(0));
+        rmm.init(priceX, amountX, strike);
 
         ghost_reserveX += amountX;
         ghost_reserveY += amountY;

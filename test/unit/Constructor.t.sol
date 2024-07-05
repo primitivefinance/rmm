@@ -1,18 +1,19 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, RMM} from "../SetUp.sol";
+import {SetUp, RMM, InitParams, DEFAULT_NAME, DEFAULT_SYMBOL, DEFAULT_EXPIRY} from "../SetUp.sol";
 
-contract ConstructorTest is Test {
-    function test_constructor_InitializesParameters() public {
-        address weth = address(0xbeef);
-        string memory name = "RMM-LP-TOKEN";
-        string memory symbol = "RMM-LPT";
+contract ConstructorTest is SetUp {
+    function test_constructor_InitializesParameters() public view {
+        InitParams memory initParams = getDefaultParams();
 
-        RMM rmm = new RMM(weth, name, symbol);
-
-        assertEq(rmm.WETH(), weth);
-        assertEq(rmm.name(), name);
-        assertEq(rmm.symbol(), symbol);
+        assertEq(rmm.name(), DEFAULT_NAME);
+        assertEq(rmm.symbol(), DEFAULT_SYMBOL);
+        assertEq(address(rmm.PT()), address(PT));
+        assertEq(address(rmm.SY()), address(SY));
+        assertEq(address(rmm.YT()), address(YT));
+        assertEq(rmm.sigma(), initParams.sigma);
+        assertEq(rmm.fee(), initParams.fee);
+        assertEq(rmm.maturity(), DEFAULT_EXPIRY);
     }
 }
