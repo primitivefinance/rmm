@@ -492,30 +492,6 @@ contract RMM is ERC20 {
         }
     }
 
-    function computeYTToPT(PYIndex index, uint256 exactYTIn, uint256 blockTime, uint256 initialGuess)
-        public
-        view
-        returns (uint256)
-    {
-        uint256 min = exactYTIn;
-        uint256 max = initialGuess;
-        for (uint256 iter = 0; iter < 100; ++iter) {
-            uint256 guess = (min + max) / 2;
-            (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
-            uint256 netPtToAccount = index.assetToSyUp(guess);
-
-            uint256 netPtToPull = netPtToAccount - amountOut;
-            if (netPtToPull <= exactYTIn) {
-                if (isASmallerApproxB(netPtToPull, exactYTIn, 10_000)) {
-                    return guess;
-                }
-                min = guess;
-            } else {
-                max = guess - 1;
-            }
-        }
-    }
-
     //prepare calls
     function prepareInit(uint256 priceX, uint256 amountX, uint256 strike_, uint256 sigma_, PYIndex index)
         public
