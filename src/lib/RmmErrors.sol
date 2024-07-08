@@ -29,3 +29,5 @@ error PaymentFailed(address token, address from, address to, uint256 amount);
 error InvalidTokenIn(address tokenIn);
 /// @dev Thrown when an external call is made within the same frame as another.
 error Reentrancy();
+
+error MaturityReached();
