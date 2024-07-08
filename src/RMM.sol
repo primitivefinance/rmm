@@ -6,6 +6,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -483,7 +484,9 @@ contract RMM is ERC20 {
         uint256 epsilon
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
+        console2.log("here");
         max = max > 0 ? max : calcMaxPtIn(reserveX, reserveY, totalLiquidity, strike);
+        console2.log("here2");
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
@@ -510,10 +513,12 @@ function calcMaxPtIn(
     uint256 strike_
 ) internal pure returns (uint256) {
     uint256 low = 0;
-    uint256 high = type(uint256).max - reserveY_ - 1;
+    uint256 high = reserveY_ - 1;
+    console2.log("1");
 
     while (low != high) {
         uint256 mid = (low + high + 1) / 2;
+        console2.log("2");
         if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
             high = mid - 1;
         } else {
@@ -532,8 +537,14 @@ function calcSlope(
     uint256 strike_,
     int256 ptToMarket
 ) internal pure returns (int256) {
+    console2.log("reserveX_", reserveX_);
+    console2.log("reserveY_", reserveY_);
+    console2.log("totalLiquidity_", totalLiquidity_);
+    console2.log("strike_", strike_);
+    console2.log("ptToMarket", ptToMarket);
     uint256 newReserveY = reserveY_ + uint256(ptToMarket);
     uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
+    console2.log("3");
     
     int256 b = Gaussian.ppf(toInt(b_i));
     int256 pdf_b = Gaussian.pdf(b);
@@ -557,6 +568,7 @@ function computedXdY(
     // uint256 tau
 ) internal pure returns (int256) {
         // This is a placeholder. You'll need to implement this based on your RMM model
+        console2.log("3");
         return -int256(reserveX_) * 1e18 / int256(reserveY_);
     }
 
