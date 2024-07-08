@@ -113,8 +113,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         vm.startPrank(currentActor);
 
-        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(true, deltaX, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) = rmm.prepareAllocate(true, deltaX);
 
         deal(address(SY), currentActor, deltaXWad);
         deal(address(PT), currentActor, deltaYWad);

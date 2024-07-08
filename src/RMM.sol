@@ -113,6 +113,12 @@ contract RMM is ERC20 {
 
     /// @dev Swaps SY for YT, sending at least `minAmountOut` YT to `to`.
     /// @notice `amountIn` is an amount of PT that needs to be minted from the SY in and the SY flash swapped from the pool
+    /// @notice Order of operations is as follows:
+    /// 1. Compute amount PT to pull from the pool, this PT is destined to be swapped for SY
+    /// 2. Compute the amount of SY out given that we are swapping in the borrowed PT
+    /// 3. Adjust the pool state, execute the PT -> SY swap
+    /// 4. Compute the SY in needed to cover the flash swapped PT
+    /// 5. Send the YT to the recipient
     function swapExactSyForYt(
         uint256 maxSyIn,
         uint256 amountPtToFlash,
@@ -125,7 +131,8 @@ contract RMM is ERC20 {
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
-
+        
+        // compute amount PT to pull from the pool
         amountPtToFlash = computeSYToYT(index, maxSyIn, upperBound, block.timestamp, amountPtToFlash, epsilon);
 
         (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
@@ -278,6 +285,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
+    /// 
     function swapExactYtForSy(uint256 ytIn, uint256 maxSyIn, address to)
         external
         lock
@@ -315,7 +323,7 @@ contract RMM is ERC20 {
 
         PYIndex index = YT.newIndex();
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted) =
-            prepareAllocate(inTermsOfX, amount, index);
+            prepareAllocate(inTermsOfX, amount);
         if (deltaLiquidity < minLiquidityOut) {
             revert InsufficientLiquidityOut(inTermsOfX, amount, minLiquidityOut, deltaLiquidity);
         }
@@ -475,6 +483,7 @@ contract RMM is ERC20 {
         uint256 epsilon
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
+        max = max > 0 ? max : calcMaxPtIn(reserveX, reserveY, totalLiquidity, strike);
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
@@ -490,6 +499,65 @@ contract RMM is ERC20 {
                 max = guess - 1;
             }
         }
+    }
+
+    // In RMMLib.sol
+
+function calcMaxPtIn(
+    uint256 reserveX_,
+    uint256 reserveY_,
+    uint256 totalLiquidity_,
+    uint256 strike_
+) internal pure returns (uint256) {
+    uint256 low = 0;
+    uint256 high = type(uint256).max - reserveY_ - 1;
+
+    while (low != high) {
+        uint256 mid = (low + high + 1) / 2;
+        if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
+            high = mid - 1;
+        } else {
+            low = mid;
+        }
+    }
+
+    // Return 99.9% of the calculated max to account for potential precision issues
+    return (low * 999) / 1000;
+}
+
+function calcSlope(
+    uint256 reserveX_,
+    uint256 reserveY_,
+    uint256 totalLiquidity_,
+    uint256 strike_,
+    int256 ptToMarket
+) internal pure returns (int256) {
+    uint256 newReserveY = reserveY_ + uint256(ptToMarket);
+    uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
+    
+    int256 b = Gaussian.ppf(toInt(b_i));
+    int256 pdf_b = Gaussian.pdf(b);
+    
+    // Calculate the slope
+    int256 slope = int256(1e36) / (int256(strike_ * totalLiquidity_) * pdf_b / 1e18);
+    
+    // Adjust for the relationship between X and Y
+    int256 dXdY = computedXdY(reserveX_, newReserveY);
+    
+    // Combine the direct Y effect and the indirect X effect
+    return slope + dXdY;
+}
+
+function computedXdY(
+    uint256 reserveX_,
+    uint256 reserveY_
+    // uint256 totalLiquidity_,
+    // uint256 strike,
+    // uint256 sigma,
+    // uint256 tau
+) internal pure returns (int256) {
+        // This is a placeholder. You'll need to implement this based on your RMM model
+        return -int256(reserveX_) * 1e18 / int256(reserveY_);
     }
 
     //prepare calls
@@ -578,7 +646,7 @@ contract RMM is ERC20 {
     }
 
     /// @notice uint256 deltaX is expected in SY units, uint256 deltaY is expected in PT units
-    function prepareAllocate(bool inTermsOfX, uint256 amount, PYIndex index)
+    function prepareAllocate(bool inTermsOfX, uint256 amount)
         public
         view
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted)

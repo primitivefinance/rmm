@@ -50,7 +50,7 @@ contract SwapExactSyForYtTest is SetUp {
         uint256 preTotalLiquidity = rmm.totalLiquidity();
 
         uint256 exactSYIn = 1 ether;
-        uint256 ytOut = rmm.computeSYToYT(newIndex(), exactSYIn, 500 ether, block.timestamp, 0, 10_000);
+        uint256 ytOut = rmm.computeSYToYT(newIndex(), exactSYIn, 0, block.timestamp, 0, 10_000);
         (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
             rmm.prepareSwapPtIn(ytOut, block.timestamp, newIndex());
         rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(this));

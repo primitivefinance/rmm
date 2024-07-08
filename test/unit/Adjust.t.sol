@@ -12,7 +12,7 @@ contract AdjustTest is SetUp {
         uint256 preReserveY = rmm.reserveY();
         uint256 preTotalLiquidity = rmm.totalLiquidity();
 
-        (uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity,) = rmm.prepareAllocate(true, 1 ether, newIndex());
+        (uint256 deltaX, uint256 deltaY, uint256 deltaLiquidity,) = rmm.prepareAllocate(true, 1 ether);
         rmm.adjust(int256(deltaX), int256(deltaY), int256(deltaLiquidity), rmm.strike(), newIndex());
 
         assertEq(rmm.reserveX(), preReserveX + deltaX);

@@ -9,7 +9,7 @@ import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
 contract SwapSyTest is SetUp {
     function test_swapSy_AdjustsPool() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 1 ether);
         rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
@@ -27,7 +27,7 @@ contract SwapSyTest is SetUp {
 
     function test_swapSy_TransfersTokens() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 1 ether);
         rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
@@ -49,7 +49,7 @@ contract SwapSyTest is SetUp {
 
     function test_swapSy_EmitsSwap() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 1 ether);
         rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
@@ -63,7 +63,7 @@ contract SwapSyTest is SetUp {
 
     function test_swapSy_RevertsWhenInsufficientOutput() public useDefaultPool withSY(address(this), 1_000 ether) {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(true, 1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 1 ether);
         rmm.allocate(true, 1 ether, deltaLiquidity, address(this));
 
         PYIndex index = PYIndex.wrap(YT.pyIndexCurrent());
