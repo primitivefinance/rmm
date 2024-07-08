@@ -311,6 +311,8 @@ contract RMM is ERC20 {
         lock
         returns (uint256)
     {
+        if (block.timestamp >= maturity) revert MaturityReached();
+
         PYIndex index = YT.newIndex();
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted) =
             prepareAllocate(inTermsOfX, amount, index);
@@ -348,7 +350,7 @@ contract RMM is ERC20 {
         }
 
         _burn(msg.sender, lptBurned); // uses state totalLiquidity
-        _adjust(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity), strike, YT.newIndex());
+        _updateReserves(-toInt(deltaXWad), -toInt(deltaYWad), -toInt(deltaLiquidity), YT.newIndex());
 
         (uint256 creditNativeX) = _credit(address(SY), to, deltaXWad);
         (uint256 creditNativeY) = _credit(address(PT), to, deltaYWad);
@@ -378,12 +380,10 @@ contract RMM is ERC20 {
         reserveY = sum(reserveY, deltaY);
         totalLiquidity = sum(totalLiquidity, deltaLiquidity);
         strike = strike_;
-        uint256 timeToExpiry = maturity - block.timestamp;
+        int256 timeToExpiry = int256(maturity) - int256(block.timestamp);
+
         lastImpliedPrice = timeToExpiry > 0
-            ? uint256(
-                int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(IMPLIED_RATE_TIME)
-                    / int256(timeToExpiry)
-            )
+            ? uint256(int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(IMPLIED_RATE_TIME) / timeToExpiry)
             : 1 ether;
     }
 
