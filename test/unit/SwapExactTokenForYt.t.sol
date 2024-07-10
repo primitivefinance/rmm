@@ -14,9 +14,9 @@ contract SwapExactTokenForYtTest is SetUp {
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) =
-            rmm.computeTokenToYT(index, address(weth), amountIn, 500 ether, block.timestamp, 0, 1_000);
+            rmm.computeTokenToYT(index, address(weth), amountIn, 0, block.timestamp, 0, 1_000);
         rmm.swapExactTokenForYt(
-            address(weth), amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 500 ether, 0.005 ether, address(this)
+            address(weth), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this)
         );
     }
 
@@ -27,9 +27,9 @@ contract SwapExactTokenForYtTest is SetUp {
         uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) =
-            rmm.computeTokenToYT(index, address(0), amountIn, 500 ether, block.timestamp, 0, 1_000);
-        (uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
-            address(0), amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 500 ether, 0.005 ether, address(this)
+            rmm.computeTokenToYT(index, address(0), amountIn, 0, block.timestamp, 0, 1_000);
+        (,uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
+            address(0), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this)
         );
 
         assertEq(address(this).balance, preETHBalance - amountIn);

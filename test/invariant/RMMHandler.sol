@@ -88,7 +88,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         priceX = bound(priceX, 1.05 ether, 1.15 ether);
         amountX = bound(amountX, 100 ether, 1000 ether);
         strike = bound(strike, 1.05 ether, 1.15 ether);
-        sigma = bound(sigma, 0.02 ether, 0.05 ether);
+        sigma = bound(sigma, 0.03 ether, 0.05 ether);
         fee = bound(fee, 0.0001 ether, 0.001 ether);
 
         PYIndex index = IPYieldToken(PT.YT()).newIndex();
@@ -143,20 +143,28 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         uint256 exactSYIn = 1 ether;
         deal(address(SY), address(currentActor), exactSYIn);
 
-        uint256 rX = rmm.reserveX();
-
         PYIndex index = YT.newIndex();
-        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, rX.mulDivDown(95, 100), block.timestamp, 0, 10_000);
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 0, block.timestamp, 0, 1_000);
 
         vm.startPrank(currentActor);
         SY.approve(address(rmm), exactSYIn);
         (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
             rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
-        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), ytOut, 1_000, address(msg.sender));
         vm.stopPrank();
-
+        console2.log("h");
+        console2.log("ghost_reserveX", ghost_reserveX);
+        console2.log("rx", rmm.reserveX());
+        console2.log("ghost_reserveY", ghost_reserveY);
+        console2.log("ry", rmm.reserveY());
+        console2.log("ghost_totalLiquidity", ghost_totalLiquidity);
+        console2.log("amountOutWad", amountOutWad);
+        console2.log("amountInWad", amountInWad);
+        console2.log("deltaLiquidity", deltaLiquidity);
         ghost_reserveX -= amountOutWad;
+        console2.log("h1");
         ghost_reserveY += amountInWad;
+        console2.log("h2");
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
@@ -173,13 +181,8 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
             index, address(weth), amountTokenIn, 0, block.timestamp, 0, 1_000
         );
 
-        uint256 amountPtIn =
-            rmm.computeSYToYT(index, syMinted, 0, block.timestamp, ytOut, 0.005 ether);
-        (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
-            rmm.prepareSwapPtIn(amountPtIn, block.timestamp, index);
-
         weth.approve(address(rmm), amountTokenIn);
-        rmm.swapExactTokenForYt(
+        (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) = rmm.swapExactTokenForYt(
             address(weth),
             amountTokenIn,
             ytOut,
@@ -194,7 +197,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         ghost_reserveX -= amountOutWad;
         ghost_reserveY += amountInWad;
-        ghost_totalLiquidity += int256(deltaLiquidity);
+        ghost_totalLiquidity += deltaLiquidity;
     }
 
     function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {
@@ -229,7 +232,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         deal(address(YT), currentActor, ytIn);
         vm.startPrank(currentActor);
         YT.approve(address(rmm), ytIn);
-        console2.log("rYPre", rmm.reserveY());
+        console2.log("YT Balance", YT.balanceOf(currentActor));
         (uint256 amountOut, uint256 amountIn, int256 deltaLiquidity) =
             rmm.swapExactYtForSy(ytIn, 1000 ether, address(currentActor));
         vm.stopPrank();

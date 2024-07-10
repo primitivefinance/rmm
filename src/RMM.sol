@@ -184,7 +184,7 @@ contract RMM is ERC20 {
         uint256 upperBound,
         uint256 epsilon,
         address to
-    ) external payable lock returns (uint256 amountOut, int256 deltaLiquidity) {
+    ) external payable lock returns (uint256 syIn, uint256 amountOut, int256 deltaLiquidity) {
         SwapToYt memory swap;
         swap.tokenIn = token;
         swap.amountTokenIn = token == address(0) ? 0 : amountTokenIn;
@@ -194,6 +194,7 @@ contract RMM is ERC20 {
         swap.minYtOut = minYtOut;
         swap.to = to;
         swap.realSyMinted = _mintSYFromNativeAndToken(address(this), swap.tokenIn, swap.amountTokenIn, swap.minSyMinted);
+        syIn = swap.realSyMinted;
 
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
@@ -484,7 +485,13 @@ contract RMM is ERC20 {
         uint256 epsilon
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
+        console2.log("here1");
+        console2.log("reserveX", reserveX);
+        console2.log("reserveY", reserveY);
+        console2.log("totalLiquidity", totalLiquidity);
+        console2.log("strike", strike);
         max = max > 0 ? max : calcMaxPtIn(index.syToAsset(reserveX), reserveY, totalLiquidity, strike);
+        console2.log("here2");
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
@@ -530,6 +537,7 @@ contract RMM is ERC20 {
 
         while (low != high) {
             uint256 mid = (low + high + 1) / 2;
+            console2.log("mid", mid);
             if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
                 high = mid - 1;
             } else {
@@ -551,6 +559,10 @@ contract RMM is ERC20 {
     ) internal pure returns (int256) {
         uint256 newReserveY = reserveY_ + uint256(ptToMarket);
         uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
+
+        if (b_i > 1e18) {
+            return -1;
+        }
         
         int256 b = Gaussian.ppf(toInt(b_i));
         int256 pdf_b = Gaussian.pdf(b);
