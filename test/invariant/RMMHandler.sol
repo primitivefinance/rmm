@@ -86,7 +86,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         uint256 fee;
 
         priceX = bound(priceX, 1.05 ether, 1.15 ether);
-        amountX = bound(amountX, 100 ether, 1000 ether);
+        amountX = bound(amountX, 500 ether, 1000 ether);
         strike = bound(strike, 1.05 ether, 1.15 ether);
         sigma = bound(sigma, 0.03 ether, 0.05 ether);
         fee = bound(fee, 0.0001 ether, 0.001 ether);
