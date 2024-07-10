@@ -131,7 +131,7 @@ contract RMM is ERC20 {
         uint256 amountInWad;
         uint256 amountOutWad;
         uint256 strike_;
-        
+
         // compute amount PT to pull from the pool
         amountPtToFlash = computeSYToYT(index, maxSyIn, upperBound, block.timestamp, amountPtToFlash, epsilon);
 
@@ -285,7 +285,7 @@ contract RMM is ERC20 {
         emit Swap(msg.sender, to, address(SY), address(PT), debitNative, creditNative, deltaLiquidity);
     }
 
-    /// 
+    ///
     function swapExactYtForSy(uint256 ytIn, uint256 maxSyIn, address to)
         external
         lock
@@ -474,7 +474,53 @@ contract RMM is ERC20 {
         amountYtOut = computeSYToYT(index, amountSyMinted, max, blockTime, initialGuess, epsilon);
     }
 
+    function computeSwapItIn(PoolPreCompute memory comp, uint256 computedL, uint256 ptIn, PYIndex index)
+        internal
+        view
+        returns (uint256 amountOut)
+    {
+        uint256 amountInWad = upscale(ptIn, PT_scalar);
+        uint256 nextLiquidity = computeDeltaLYIn(
+            amountInWad, comp.reserveInAsset, reserveY, totalLiquidity, fee, comp.strike_, sigma, comp.tau_
+        ) + computedL;
+        uint256 nextReserveX = solveX(reserveY + amountInWad, nextLiquidity, comp.strike_, sigma, comp.tau_);
+        uint256 amountOutWad = reserveX - index.assetToSy(nextReserveX);
+        amountOut = downscaleDown(amountOutWad, SY_scalar);
+    }
+
     function computeSYToYT(
+        PYIndex index,
+        uint256 exactSYIn,
+        uint256 max,
+        uint256 blockTime,
+        uint256 initialGuess,
+        uint256 epsilon
+    ) public view returns (uint256 guess) {
+        uint256 min = exactSYIn;
+        max = max > 0 ? max : calcMaxPtIn(reserveX, reserveY, totalLiquidity, strike);
+
+        PoolPreCompute memory comp = preparePoolPreCompute(index, blockTime);
+        uint256 computedL = solveL(comp, totalLiquidity, reserveY, sigma);
+
+        for (uint256 iter = 0; iter < 256; ++iter) {
+            guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
+            uint256 amountOut = computeSwapItIn(comp, computedL, guess, index);
+
+            uint256 netSyToPt = index.assetToSyUp(guess);
+
+            uint256 netSyToPull = netSyToPt - amountOut;
+            if (netSyToPull <= exactSYIn) {
+                if (isASmallerApproxB(netSyToPull, exactSYIn, epsilon)) {
+                    return guess;
+                }
+                min = guess;
+            } else {
+                max = guess - 1;
+            }
+        }
+    }
+
+    function _computeSYToYT(
         PYIndex index,
         uint256 exactSYIn,
         uint256 max,
@@ -503,59 +549,59 @@ contract RMM is ERC20 {
 
     // In RMMLib.sol
 
-function calcMaxPtIn(
-    uint256 reserveX_,
-    uint256 reserveY_,
-    uint256 totalLiquidity_,
-    uint256 strike_
-) internal pure returns (uint256) {
-    uint256 low = 0;
-    uint256 high = type(uint256).max - reserveY_ - 1;
+    function calcMaxPtIn(uint256 reserveX_, uint256 reserveY_, uint256 totalLiquidity_, uint256 strike_)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 low = 0;
+        uint256 high = type(uint256).max - reserveY_ - 1;
 
-    while (low != high) {
-        uint256 mid = (low + high + 1) / 2;
-        if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
-            high = mid - 1;
-        } else {
-            low = mid;
+        while (low != high) {
+            uint256 mid = (low + high + 1) / 2;
+            if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
+                high = mid - 1;
+            } else {
+                low = mid;
+            }
         }
+
+        // Return 99.9% of the calculated max to account for potential precision issues
+        return (low * 999) / 1000;
     }
 
-    // Return 99.9% of the calculated max to account for potential precision issues
-    return (low * 999) / 1000;
-}
+    function calcSlope(
+        uint256 reserveX_,
+        uint256 reserveY_,
+        uint256 totalLiquidity_,
+        uint256 strike_,
+        int256 ptToMarket
+    ) internal pure returns (int256) {
+        uint256 newReserveY = reserveY_ + uint256(ptToMarket);
+        uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
 
-function calcSlope(
-    uint256 reserveX_,
-    uint256 reserveY_,
-    uint256 totalLiquidity_,
-    uint256 strike_,
-    int256 ptToMarket
-) internal pure returns (int256) {
-    uint256 newReserveY = reserveY_ + uint256(ptToMarket);
-    uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
-    
-    int256 b = Gaussian.ppf(toInt(b_i));
-    int256 pdf_b = Gaussian.pdf(b);
-    
-    // Calculate the slope
-    int256 slope = int256(1e36) / (int256(strike_ * totalLiquidity_) * pdf_b / 1e18);
-    
-    // Adjust for the relationship between X and Y
-    int256 dXdY = computedXdY(reserveX_, newReserveY);
-    
-    // Combine the direct Y effect and the indirect X effect
-    return slope + dXdY;
-}
+        int256 b = Gaussian.ppf(toInt(b_i));
+        int256 pdf_b = Gaussian.pdf(b);
 
-function computedXdY(
-    uint256 reserveX_,
-    uint256 reserveY_
-    // uint256 totalLiquidity_,
-    // uint256 strike,
-    // uint256 sigma,
-    // uint256 tau
-) internal pure returns (int256) {
+        // Calculate the slope
+        int256 slope = int256(1e36) / (int256(strike_ * totalLiquidity_) * pdf_b / 1e18);
+
+        // Adjust for the relationship between X and Y
+        int256 dXdY = computedXdY(reserveX_, newReserveY);
+
+        // Combine the direct Y effect and the indirect X effect
+        return slope + dXdY;
+    }
+
+    function computedXdY(uint256 reserveX_, uint256 reserveY_)
+        // uint256 totalLiquidity_,
+        // uint256 strike,
+        // uint256 sigma,
+        // uint256 tau
+        internal
+        pure
+        returns (int256)
+    {
         // This is a placeholder. You'll need to implement this based on your RMM model
         return -int256(reserveX_) * 1e18 / int256(reserveY_);
     }
