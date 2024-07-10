@@ -484,9 +484,7 @@ contract RMM is ERC20 {
         uint256 epsilon
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
-        console2.log("here");
-        max = max > 0 ? max : calcMaxPtIn(reserveX, reserveY, totalLiquidity, strike);
-        console2.log("here2");
+        max = max > 0 ? max : calcMaxPtIn(index.syToAsset(reserveX), reserveY, totalLiquidity, strike);
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);
@@ -504,71 +502,70 @@ contract RMM is ERC20 {
         }
     }
 
-    // In RMMLib.sol
-
-function calcMaxPtIn(
-    uint256 reserveX_,
-    uint256 reserveY_,
-    uint256 totalLiquidity_,
-    uint256 strike_
-) internal pure returns (uint256) {
-    uint256 low = 0;
-    uint256 high = reserveY_ - 1;
-    console2.log("1");
-
-    while (low != high) {
-        uint256 mid = (low + high + 1) / 2;
-        console2.log("2");
-        if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
-            high = mid - 1;
-        } else {
-            low = mid;
-        }
+    function calcMaxPtOut(
+        uint256 reserveX_,
+        uint256 reserveY_,
+        uint256 totalLiquidity_,
+        uint256 strike_,
+        uint256 sigma_,
+        uint256 tau_
+    ) internal pure returns (uint256) {
+        int256 currentTF = computeTradingFunction(reserveX_, reserveY_, totalLiquidity_, strike_, sigma_, tau_);
+        
+        uint256 maxProportion = uint256(int256(1e18) - currentTF) * 1e18 / (2 * 1e18);
+        
+        uint256 maxPtOut = reserveY_ * maxProportion / 1e18;
+        
+        return (maxPtOut * 999) / 1000;
     }
 
-    // Return 99.9% of the calculated max to account for potential precision issues
-    return (low * 999) / 1000;
-}
+    function calcMaxPtIn(
+        uint256 reserveX_,
+        uint256 reserveY_,
+        uint256 totalLiquidity_,
+        uint256 strike_
+    ) internal pure returns (uint256) {
+        uint256 low = 0;
+        uint256 high = reserveY_ - 1;
 
-function calcSlope(
-    uint256 reserveX_,
-    uint256 reserveY_,
-    uint256 totalLiquidity_,
-    uint256 strike_,
-    int256 ptToMarket
-) internal pure returns (int256) {
-    console2.log("reserveX_", reserveX_);
-    console2.log("reserveY_", reserveY_);
-    console2.log("totalLiquidity_", totalLiquidity_);
-    console2.log("strike_", strike_);
-    console2.log("ptToMarket", ptToMarket);
-    uint256 newReserveY = reserveY_ + uint256(ptToMarket);
-    uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
-    console2.log("3");
-    
-    int256 b = Gaussian.ppf(toInt(b_i));
-    int256 pdf_b = Gaussian.pdf(b);
-    
-    // Calculate the slope
-    int256 slope = int256(1e36) / (int256(strike_ * totalLiquidity_) * pdf_b / 1e18);
-    
-    // Adjust for the relationship between X and Y
-    int256 dXdY = computedXdY(reserveX_, newReserveY);
-    
-    // Combine the direct Y effect and the indirect X effect
-    return slope + dXdY;
-}
+        while (low != high) {
+            uint256 mid = (low + high + 1) / 2;
+            if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
+                high = mid - 1;
+            } else {
+                low = mid;
+            }
+        }
 
-function computedXdY(
-    uint256 reserveX_,
-    uint256 reserveY_
-    // uint256 totalLiquidity_,
-    // uint256 strike,
-    // uint256 sigma,
-    // uint256 tau
-) internal pure returns (int256) {
-        // This is a placeholder. You'll need to implement this based on your RMM model
-        console2.log("3");
+        return low;
+    }
+
+
+
+    function calcSlope(
+        uint256 reserveX_,
+        uint256 reserveY_,
+        uint256 totalLiquidity_,
+        uint256 strike_,
+        int256 ptToMarket
+    ) internal pure returns (int256) {
+        uint256 newReserveY = reserveY_ + uint256(ptToMarket);
+        uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
+        
+        int256 b = Gaussian.ppf(toInt(b_i));
+        int256 pdf_b = Gaussian.pdf(b);
+        
+        int256 slope = (int256(strike_ * totalLiquidity_) * pdf_b / 1e36);
+        
+        int256 dxdy = computedXdY(reserveX_, newReserveY);
+        
+        return slope + dxdy;
+    }
+
+    function computedXdY(
+        uint256 reserveX_,
+        uint256 reserveY_
+    ) internal pure returns (int256) {
         return -int256(reserveX_) * 1e18 / int256(reserveY_);
     }
 
