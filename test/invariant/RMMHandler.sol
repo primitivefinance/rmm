@@ -93,7 +93,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         PYIndex index = IPYieldToken(PT.YT()).newIndex();
 
-        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, index);
+        (uint256 totalLiquidity,) = rmm.prepareInit(priceX, amountX, strike, sigma, index);
 
         PT.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
@@ -101,8 +101,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
         rmm.init(priceX, amountX, strike);
 
-        ghost_reserveX += amountX;
-        ghost_reserveY += amountY;
+
+        ghost_reserveX += rmm.reserveX();
+        ghost_reserveY += rmm.reserveY();
         ghost_totalLiquidity += int256(totalLiquidity);
     }
 
@@ -131,11 +132,10 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
     function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
         uint256 deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
-        (uint256 deltaXWad, uint256 deltaYWad,) = rmm.prepareDeallocate(deltaLiquidity);
-        rmm.deallocate(deltaLiquidity, 0, 0, address(this));
+        (uint256 deltaX, uint256 deltaY) = rmm.deallocate(deltaLiquidity, 0, 0, address(this));
 
-        ghost_reserveX -= deltaXWad;
-        ghost_reserveY -= deltaYWad;
+        ghost_reserveX -= deltaX;
+        ghost_reserveY -= deltaY;
         ghost_totalLiquidity -= int256(deltaLiquidity);
     }
 
@@ -152,19 +152,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
             rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
         rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), ytOut, 1_000, address(msg.sender));
         vm.stopPrank();
-        console2.log("h");
-        console2.log("ghost_reserveX", ghost_reserveX);
-        console2.log("rx", rmm.reserveX());
-        console2.log("ghost_reserveY", ghost_reserveY);
-        console2.log("ry", rmm.reserveY());
-        console2.log("ghost_totalLiquidity", ghost_totalLiquidity);
-        console2.log("amountOutWad", amountOutWad);
-        console2.log("amountInWad", amountInWad);
-        console2.log("deltaLiquidity", deltaLiquidity);
+
         ghost_reserveX -= amountOutWad;
-        console2.log("h1");
         ghost_reserveY += amountInWad;
-        console2.log("h2");
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
@@ -220,6 +210,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         SY.approve(address(rmm), amountIn);
         (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactSyForPt(amountIn, 0, address(currentActor));
         vm.stopPrank();
+        
+        console2.log("ry", rmm.reserveY());
+        console2.log("ry - amountOut", rmm.reserveY() - amountOut);
 
         ghost_reserveX += amountIn;
         ghost_reserveY -= amountOut;
