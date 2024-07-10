@@ -22,12 +22,12 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](3);
+        bytes4[] memory selectors = new bytes4[](5);
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
-        // selectors[3] = RMMHandler.swapExactPtForSy.selector;
-        // selectors[4] = RMMHandler.swapExactSyForPt.selector;
+        selectors[3] = RMMHandler.swapExactPtForSy.selector;
+        selectors[4] = RMMHandler.swapExactSyForPt.selector;
         // selectors[5] = RMMHandler.swapExactYtForSy.selector;
         // selectors[6] = RMMHandler.swapExactTokenForYt.selector;
 
