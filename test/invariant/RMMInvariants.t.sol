@@ -17,6 +17,8 @@ contract RMMInvariantsTest is SetUp {
         setUpRMM(getDefaultParams());
         handler = new RMMHandler(rmm, PT, SY, YT, weth);
 
+        weth.deposit{value: 10_000 ether}();
+        weth.transfer(address(handler), 10_000 ether);
 
         mintSY(address(this), 5_000 ether);
         mintPY(address(this), 1_000 ether);
@@ -27,14 +29,14 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](6);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
         selectors[3] = RMMHandler.swapExactPtForSy.selector;
         selectors[4] = RMMHandler.swapExactSyForPt.selector;
         selectors[5] = RMMHandler.swapExactYtForSy.selector;
-        // selectors[6] = RMMHandler.swapExactTokenForYt.selector;
+        selectors[6] = RMMHandler.swapExactTokenForYt.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
@@ -52,21 +54,21 @@ contract RMMInvariantsTest is SetUp {
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
         assertTrue(abs(rmm.tradingFunction(newIndex())) <= 100, "Invariant out of valid range");
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());

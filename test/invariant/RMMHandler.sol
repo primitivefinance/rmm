@@ -45,7 +45,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     modifier useActor() {
         actors.add(baseActor);
         currentActor = actors.rand(0);
-        console2.log("currentActor", currentActor);
         _;
     }
 
@@ -161,8 +160,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         fund(address(weth), currentActor, amountTokenIn);
 
         vm.startPrank(currentActor);
-        weth.deposit{value: amountTokenIn}();
-
         PYIndex index = YT.newIndex();
 
         (uint256 syMinted, uint256 ytOut) = rmm.computeTokenToYT(

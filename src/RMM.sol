@@ -184,7 +184,7 @@ contract RMM is ERC20 {
         uint256 upperBound,
         uint256 epsilon,
         address to
-    ) external payable lock returns (uint256 syIn, uint256 amountOut, int256 deltaLiquidity) {
+    ) external payable lock returns (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) {
         SwapToYt memory swap;
         swap.tokenIn = token;
         swap.amountTokenIn = token == address(0) ? 0 : amountTokenIn;
@@ -194,12 +194,10 @@ contract RMM is ERC20 {
         swap.minYtOut = minYtOut;
         swap.to = to;
         swap.realSyMinted = _mintSYFromNativeAndToken(address(this), swap.tokenIn, swap.amountTokenIn, swap.minSyMinted);
-        syIn = swap.realSyMinted;
 
         PYIndex index = YT.newIndex();
-        uint256 amountInWad;
-        uint256 amountOutWad;
         uint256 strike_;
+        uint256 amountOut;
 
         swap.amountPtIn = computeSYToYT(index, swap.realSyMinted, upperBound, block.timestamp, swap.amountPtIn, epsilon);
 
