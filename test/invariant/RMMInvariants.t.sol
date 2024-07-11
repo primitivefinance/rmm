@@ -54,21 +54,21 @@ contract RMMInvariantsTest is SetUp {
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 10
+    /// forge-config: default.invariant.depth = 30
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
         assertTrue(abs(rmm.tradingFunction(newIndex())) <= 100, "Invariant out of valid range");
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 10
+    /// forge-config: default.invariant.depth = 30
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 10
+    /// forge-config: default.invariant.depth = 30
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
