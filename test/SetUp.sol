@@ -14,6 +14,7 @@ import {WstETH} from "./WstETH.sol";
 import {MockStETH} from "./mocks/MockStETH.sol";
 import {RMM} from "./../src/RMM.sol";
 import {MockRMM} from "./MockRMM.sol";
+import "forge-std/console2.sol";
 
 struct InitParams {
     address PT;
@@ -55,6 +56,7 @@ contract SetUp is Test {
         wstETH = new WstETH(address(stETH));
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
+
         vm.label(address(SY), "SY");
         vm.label(address(YT), "YT");
         vm.label(address(PT), "PT");
@@ -94,16 +96,14 @@ contract SetUp is Test {
         vm.label(address(rmm), "RMM");
 
         weth.approve(address(rmm), type(uint256).max);
+        wstETH.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
         PT.approve(address(rmm), type(uint256).max);
         YT.approve(address(rmm), type(uint256).max);
     }
 
     function initRMM(InitParams memory initParams) public {
-        (, uint256 amountY) =
-            rmm.prepareInit(initParams.priceX, initParams.amountX, initParams.strike, initParams.sigma, newIndex());
-
-        uint256 amount = 10000 ether;
+        uint256 amount = 100_000 ether;
         mintSY(address(this), amount);
         mintPY(address(this), amount / 2);
 
@@ -113,8 +113,9 @@ contract SetUp is Test {
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
     function mintSY(address to, uint256 amount) public {
-        // SY.deposit(address(to), address(wstETH), amount, 0);
-        deal(address(SY), address(to), amount);
+        deal(address(wstETH), address(this), 100_000 ether);
+        wstETH.approve(address(SY), 100_000 ether);
+        SY.deposit(address(to), address(wstETH), amount, 0);
     }
 
     function batchMintSY(address[] memory to, uint256[] memory amounts) public {
@@ -175,8 +176,7 @@ contract SetUp is Test {
     }
 
     modifier withSY(address to, uint256 amount) {
-        // SY.deposit(address(to), address(wstETH), amount, 0);
-        deal(address(SY), address(to), amount);
+        deal(address(SY), address(to), amount, true);
         _;
     }
 

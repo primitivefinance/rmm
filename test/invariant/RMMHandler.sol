@@ -40,17 +40,13 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     AddressSet internal actors;
     address internal currentActor;
 
-    modifier createActor() {
-        currentActor = msg.sender;
-        actors.add(currentActor);
-        _;
-    }
+    address baseActor = address(0x1234567890123456789012345678901234567890);
 
-    modifier useActor(uint256 actorIndexSeed) {
-        currentActor = actors.rand(actorIndexSeed);
-        vm.startPrank(currentActor);
+    modifier useActor() {
+        actors.add(baseActor);
+        currentActor = actors.rand(0);
+        console2.log("currentActor", currentActor);
         _;
-        vm.stopPrank();
     }
 
     modifier countCall(bytes4 key) {
@@ -66,10 +62,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         YT = YT_;
         weth = weth_;
     }
-
     // Utility functions
 
-    function give(address token, address to, uint256 amount) public {
+    function fund(address token, address to, uint256 amount) public {
         ERC20(token).transfer(to, amount);
     }
 
@@ -109,29 +104,32 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
 
     // Target functions
 
-    function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
-        deltaX = bound(deltaX, 0.1 ether, 10 ether);
+    function allocate(uint256 deltaX, uint256 deltaY) public useActor countCall(this.allocate.selector) {
+        deltaX = bound(deltaX, 0.1 ether, 1 ether);
+        console2.log("currentActor", currentActor);
 
         vm.startPrank(currentActor);
-
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) = rmm.prepareAllocate(true, deltaX);
+        vm.stopPrank();
 
-        deal(address(SY), currentActor, deltaXWad);
-        deal(address(PT), currentActor, deltaYWad);
+        fund(address(SY), currentActor, deltaXWad);
+        fund(address(PT), currentActor, deltaYWad);
+
+        vm.startPrank(currentActor);
 
         SY.approve(address(rmm), deltaXWad);
         PT.approve(address(rmm), deltaYWad);
         uint256 realDeltaLiquidity = rmm.allocate(true, deltaX, deltaLiquidity, address(currentActor));
-
         vm.stopPrank();
+
 
         ghost_totalLiquidity += int256(realDeltaLiquidity);
         ghost_reserveX += deltaXWad;
         ghost_reserveY += deltaYWad;
     }
 
-    function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
-        uint256 deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
+    function deallocate(uint256 deltaLiquidity) public useActor countCall(this.deallocate.selector) {
+        deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
         (uint256 deltaX, uint256 deltaY) = rmm.deallocate(deltaLiquidity, 0, 0, address(this));
 
         ghost_reserveX -= deltaX;
@@ -139,9 +137,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity -= int256(deltaLiquidity);
     }
 
-    function swapExactSyForYt() public createActor countCall(this.swapExactSyForYt.selector) {
+    function swapExactSyForYt() public useActor countCall(this.swapExactSyForYt.selector) {
         uint256 exactSYIn = 1 ether;
-        deal(address(SY), address(currentActor), exactSYIn);
+        fund(address(SY), address(currentActor), exactSYIn);
 
         PYIndex index = YT.newIndex();
         uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 0, block.timestamp, 0, 1_000);
@@ -158,9 +156,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {
+    function swapExactTokenForYt() public useActor countCall(this.swapExactTokenForYt.selector) {
         uint256 amountTokenIn = 1 ether;
-        deal(currentActor, amountTokenIn);
+        fund(address(weth), currentActor, amountTokenIn);
 
         vm.startPrank(currentActor);
         weth.deposit{value: amountTokenIn}();
@@ -190,9 +188,10 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += deltaLiquidity;
     }
 
-    function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {
+    function swapExactPtForSy() public useActor countCall(this.swapExactPtForSy.selector) {
         uint256 amountIn = 1 ether;
-        deal(address(PT), currentActor, amountIn);
+        fund(address(PT), currentActor, amountIn);
+
         vm.startPrank(currentActor);
         PT.approve(address(rmm), amountIn);
         (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactPtForSy(amountIn, 0, address(currentActor));
@@ -203,24 +202,23 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {
+    function swapExactSyForPt() public useActor countCall(this.swapExactSyForPt.selector) {
         uint256 amountIn = 1 ether;
-        deal(address(SY), currentActor, amountIn);
+        fund(address(SY), currentActor, amountIn);
+
         vm.startPrank(currentActor);
         SY.approve(address(rmm), amountIn);
         (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactSyForPt(amountIn, 0, address(currentActor));
         vm.stopPrank();
-        
-        console2.log("ry", rmm.reserveY());
-        console2.log("ry - amountOut", rmm.reserveY() - amountOut);
 
         ghost_reserveX += amountIn;
         ghost_reserveY -= amountOut;
         ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {
+    function swapExactYtForSy() public useActor countCall(this.swapExactYtForSy.selector) {
         uint256 ytIn = 1 ether;
+        console2.log("YT balance of SY 1", SY.balanceOf(address(YT)));
 
         deal(address(YT), currentActor, ytIn);
         vm.startPrank(currentActor);
@@ -229,13 +227,6 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
             rmm.swapExactYtForSy(ytIn, 1000 ether, address(currentActor));
         vm.stopPrank();
 
-        // the workflow here is:
-        // 1. YT -> RMM
-        // 2. Flash amountYt of PT from RMM, so the reserveY should be reduced by ytIn
-        // 3. recombine the YT and PT into SY
-        // 4. send the SY to rmm to cover the cost of the PT
-        // 5. remainder SY sent to currentActor
-        // in the end the reserves are mutated such that rY = rYStart - ytIn, rX = rXStart + syCreated - sySwapped
         ghost_reserveX += amountIn;
         ghost_reserveY -= ytIn;
         ghost_totalLiquidity += int256(deltaLiquidity);

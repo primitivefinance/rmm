@@ -532,7 +532,6 @@ contract RMM is ERC20 {
 
         while (low != high) {
             uint256 mid = (low + high + 1) / 2;
-            console2.log("mid", mid);
             if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
                 high = mid - 1;
             } else {
@@ -752,6 +751,10 @@ contract RMM is ERC20 {
     }
 
     function redeemPy(uint256 amount, address to) internal returns (uint256 amountOut) {
+        console2.log("PT balance", PT.balanceOf(address(this)));
+        console2.log("YT balance", YT.balanceOf(address(this)));
+        console2.log("SY balance", SY.balanceOf(address(YT)));
+        console2.log("SY address", address(SY));
         PT.transfer(address(YT), amount);
         YT.transfer(address(YT), amount);
         amountOut = YT.redeemPY(to);
