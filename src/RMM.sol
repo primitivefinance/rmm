@@ -310,6 +310,7 @@ contract RMM is ERC20 {
         (uint256 creditNative) = _debit(address(YT), ytIn);
         uint256 amountSy = redeemPy(ytIn, address(this));
         amountOut = amountSy - amountInWad;
+        amountIn = amountInWad;
         (uint256 debitNative) = _credit(address(SY), to, amountOut);
 
         emit Swap(msg.sender, to, address(PT), address(SY), debitNative, creditNative, deltaLiquidity);
@@ -485,13 +486,7 @@ contract RMM is ERC20 {
         uint256 epsilon
     ) public view returns (uint256 guess) {
         uint256 min = exactSYIn;
-        console2.log("here1");
-        console2.log("reserveX", reserveX);
-        console2.log("reserveY", reserveY);
-        console2.log("totalLiquidity", totalLiquidity);
-        console2.log("strike", strike);
         max = max > 0 ? max : calcMaxPtIn(index.syToAsset(reserveX), reserveY, totalLiquidity, strike);
-        console2.log("here2");
         for (uint256 iter = 0; iter < 256; ++iter) {
             guess = initialGuess > 0 && iter == 0 ? initialGuess : (min + max) / 2;
             (,, uint256 amountOut,,) = prepareSwapPtIn(guess, blockTime, index);

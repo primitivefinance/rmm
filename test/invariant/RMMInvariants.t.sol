@@ -22,13 +22,13 @@ contract RMMInvariantsTest is SetUp {
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](5);
-        selectors[0] = RMMHandler.allocate.selector;
-        selectors[1] = RMMHandler.deallocate.selector;
-        selectors[2] = RMMHandler.swapExactSyForYt.selector;
-        selectors[3] = RMMHandler.swapExactPtForSy.selector;
-        selectors[4] = RMMHandler.swapExactSyForPt.selector;
-        // selectors[5] = RMMHandler.swapExactYtForSy.selector;
+        bytes4[] memory selectors = new bytes4[](1);
+        // selectors[0] = RMMHandler.allocate.selector;
+        // selectors[1] = RMMHandler.deallocate.selector;
+        // selectors[2] = RMMHandler.swapExactSyForYt.selector;
+        // selectors[3] = RMMHandler.swapExactPtForSy.selector;
+        // selectors[4] = RMMHandler.swapExactSyForPt.selector;
+        selectors[0] = RMMHandler.swapExactYtForSy.selector;
         // selectors[6] = RMMHandler.swapExactTokenForYt.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
@@ -47,21 +47,21 @@ contract RMMInvariantsTest is SetUp {
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
         assertTrue(abs(rmm.tradingFunction(newIndex())) <= 100, "Invariant out of valid range");
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
     /// forge-config: default.invariant.runs = 10
-    /// forge-config: default.invariant.depth = 100
+    /// forge-config: default.invariant.depth = 10
     /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());

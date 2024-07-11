@@ -225,8 +225,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         deal(address(YT), currentActor, ytIn);
         vm.startPrank(currentActor);
         YT.approve(address(rmm), ytIn);
-        console2.log("YT Balance", YT.balanceOf(currentActor));
-        (uint256 amountOut, uint256 amountIn, int256 deltaLiquidity) =
+        (, uint256 amountIn, int256 deltaLiquidity) =
             rmm.swapExactYtForSy(ytIn, 1000 ether, address(currentActor));
         vm.stopPrank();
 
@@ -237,13 +236,9 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         // 4. send the SY to rmm to cover the cost of the PT
         // 5. remainder SY sent to currentActor
         // in the end the reserves are mutated such that rY = rYStart - ytIn, rX = rXStart + syCreated - sySwapped
-        // ghost_reserveX += amountIn;
-        console2.log("ghost_reserveY", ghost_reserveY);
-        console2.log("amountIn", amountIn);
-        console2.log("ghost_reserveY - amountIn", ghost_reserveY - amountIn);
-        console2.log("rmm.reserveY()", rmm.reserveY());
+        ghost_reserveX += amountIn;
         ghost_reserveY -= ytIn;
-        // ghost_totalLiquidity += int256(deltaLiquidity);
+        ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
     function increaseTime(uint256 amount) public countCall(this.increaseTime.selector) {
