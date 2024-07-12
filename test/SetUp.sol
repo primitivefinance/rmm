@@ -174,8 +174,9 @@ contract SetUp is Test {
     }
 
     modifier withWETH(address to, uint256 amount) {
+        deal(address(this), amount);
         weth.deposit{value: amount}();
-        weth.transfer(to, amount);
+        if (to != address(this)) weth.transfer(to, amount);
         _;
     }
 
