@@ -5,6 +5,7 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
+import {console} from "forge-std/console.sol";
 
 import {RMM, IPYieldToken} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
@@ -78,10 +79,11 @@ contract LiquidityManager {
         // swap syToSwap for pt
         rmm.swapExactSyForPt(syToSwap, args.minOut, address(this));
         uint256 syBal = sy.balanceOf(address(this));
+        sy.approve(address(args.rmm), syBal);
         uint256 ptBal = pt.balanceOf(address(this));
 
         pt.approve(address(args.rmm), ptBal);
-        liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
+        liquidity = rmm.allocate(true, syBal, args.minLiquidityDelta, msg.sender);
     }
 
     function allocateFromPt(AllocateArgs calldata args) external returns (uint256 liquidity) {
@@ -112,12 +114,11 @@ contract LiquidityManager {
         pt.approve(address(rmm), args.amountIn);
 
         // swap ptToSwap for sy
-        rmm.swapExactPtForSy(ptToSwap, args.minOut, address(this));
-        uint256 syBal = sy.balanceOf(address(this));
-        uint256 ptBal = pt.balanceOf(address(this));
+        (uint256 syOut,) = rmm.swapExactPtForSy(ptToSwap, args.minOut, address(this));
+        console.log("syOut", syOut);
 
-        sy.approve(address(rmm), syBal);
-        liquidity = rmm.allocate(syBal, ptBal, args.minLiquidityDelta, msg.sender);
+        sy.approve(address(rmm), type(uint256).max);
+        liquidity = rmm.allocate(false, pt.balanceOf(address(this)), args.minLiquidityDelta, msg.sender);
     }
 
     struct ComputeArgs {
