@@ -15,20 +15,19 @@ contract SwapExactTokenForYtTest is SetUp {
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) =
             rmm.computeTokenToYT(index, address(weth), amountIn, 0, block.timestamp, 0, 1_000);
-        rmm.swapExactTokenForYt(
-            address(weth), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this)
-        );
+        rmm.swapExactTokenForYt(address(weth), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this));
     }
 
     function test_swapExactTokenForYt_SwapsETH() public useSYPool {
+        uint256 amountIn = 1 ether;
+        deal(address(this), amountIn);
         uint256 preETHBalance = address(this).balance;
         uint256 preYTBalance = YT.balanceOf(address(this));
 
-        uint256 amountIn = 1 ether;
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) =
             rmm.computeTokenToYT(index, address(0), amountIn, 0, block.timestamp, 0, 1_000);
-        (,uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
+        (, uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
             address(0), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this)
         );
 
