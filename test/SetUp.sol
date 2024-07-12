@@ -56,7 +56,6 @@ contract SetUp is Test {
         wstETH = new WstETH(address(stETH));
         SY = new PendleWstEthSY("wstEthSY", "wstEthSY", address(weth), address(wstETH));
 
-
         vm.label(address(SY), "SY");
         vm.label(address(YT), "YT");
         vm.label(address(PT), "PT");
@@ -112,29 +111,18 @@ contract SetUp is Test {
 
     // Here are some utility functions, you can use them to set specific states inside of a test.
 
-    function mintSY(address to, uint256 amount) public {
-        deal(address(wstETH), address(this), 100_000 ether);
-        wstETH.approve(address(SY), 100_000 ether);
-        SY.deposit(address(to), address(wstETH), amount, 0);
-    }
-
-    function batchMintSY(address[] memory to, uint256[] memory amounts) public {
-        require(to.length == amounts.length, "INVALID_LENGTH");
-        for (uint256 i; i < to.length; i++) {
-            mintSY(to[i], amounts[i]);
-        }
+    function mintSY(address to, uint256 amount) public returns (uint256 amountSharesOut) {
+        deal(address(this), amount);
+        (uint256 stETHAmount) = stETH.submit{value: amount}(address(0));
+        stETH.approve(address(SY), stETHAmount);
+        amountSharesOut = SY.deposit(address(this), address(stETH), amount, 0);
+        if (to != address(this)) SY.transfer(address(to), amountSharesOut);
     }
 
     function mintPY(address to, uint256 amount) public {
-        SY.transfer(address(YT), amount);
+        uint256 amountSharesOut = mintSY(address(this), amount);
+        SY.transfer(address(YT), amountSharesOut);
         YT.mintPY(to, to);
-    }
-
-    function batchMintPY(address[] memory to, uint256[] memory amounts) public {
-        require(to.length == amounts.length, "INVALID_LENGTH");
-        for (uint256 i; i < to.length; i++) {
-            mintPY(to[i], amounts[i]);
-        }
     }
 
     function getDefaultParams() internal view returns (InitParams memory) {
@@ -176,13 +164,12 @@ contract SetUp is Test {
     }
 
     modifier withSY(address to, uint256 amount) {
-        deal(address(SY), address(to), amount, true);
+        mintSY(address(to), amount);
         _;
     }
 
     modifier withPY(address to, uint256 amount) {
-        SY.transfer(address(YT), amount);
-        YT.mintPY(to, to);
+        mintPY(address(to), amount);
         _;
     }
 
