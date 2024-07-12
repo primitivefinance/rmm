@@ -9,8 +9,7 @@ contract MintSYTest is SetUp {
         assertEq(SY.balanceOf(address(0xbeef)), 1 ether);
     }
 
-    function test_mintSY_MintsSYUsingWETH() public useDefaultPool {
-        weth.deposit{value: 1 ether}();
+    function test_mintSY_MintsSYUsingWETH() public useDefaultPool withWETH(address(this), 1 ether) {
         rmm.mintSY(address(0xbeef), address(weth), 1 ether, 0);
         assertEq(SY.balanceOf(address(0xbeef)), 1 ether);
     }
