@@ -26,9 +26,6 @@ contract RMM is ERC20 {
     IStandardizedYield public SY;
     IPYieldToken public YT;
 
-    uint256 public SY_scalar;
-    uint256 public PT_scalar;
-
     uint256 public sigma;
     uint256 public fee;
     uint256 public maturity;
@@ -40,6 +37,9 @@ contract RMM is ERC20 {
 
     uint256 public lastTimestamp;
     uint256 public lastImpliedPrice;
+
+    uint256 private SY_scalar;
+    uint256 private PT_scalar;
 
     uint256 private _lock = 1;
 
@@ -124,7 +124,7 @@ contract RMM is ERC20 {
         uint256 upperBound,
         uint256 epsilon,
         address to
-    ) public lock returns (uint256 amountOut, int256 deltaLiquidity) {
+    ) external lock returns (uint256 amountOut, int256 deltaLiquidity) {
         PYIndex index = YT.newIndex();
         uint256 amountInWad;
         uint256 amountOutWad;
