@@ -624,15 +624,6 @@ contract RMM is ERC20 {
         return computeTauWadYears(maturity - lastTimestamp);
     }
 
-    /// @dev Computes the time to maturity based on the current `block.timestamp` and converts it to units of WAD years.
-    function currentTau() public view returns (uint256) {
-        if (maturity < block.timestamp) {
-            return 0;
-        }
-
-        return computeTauWadYears(maturity - block.timestamp);
-    }
-
     function futureTau(uint256 timestamp) public view returns (uint256) {
         if (maturity < timestamp) {
             return 0;
