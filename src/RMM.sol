@@ -180,7 +180,7 @@ contract RMM is ERC20 {
         uint256 upperBound,
         uint256 epsilon,
         address to
-    ) external payable lock returns (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) {
+    ) external payable lock returns (uint256 ytOut, uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) {
         SwapToYt memory swap;
         swap.tokenIn = token;
         swap.amountTokenIn = token == address(0) ? 0 : amountTokenIn;
@@ -193,27 +193,25 @@ contract RMM is ERC20 {
 
         PYIndex index = YT.newIndex();
         uint256 strike_;
-        uint256 amountOut;
 
         swap.amountPtIn = computeSYToYT(index, swap.realSyMinted, upperBound, block.timestamp, swap.amountPtIn, epsilon);
 
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
+        (amountInWad, amountOutWad, ytOut, deltaLiquidity, strike_) =
             prepareSwapPtIn(swap.amountPtIn, block.timestamp, index);
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        swap.realYtOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        ytOut += (index.assetToSyUp(amountInWad) - amountOutWad);
 
         // Converts the SY received from minting it into its components PT and YT.
-        amountOut = mintPtYt(swap.realYtOut, address(this));
-        swap.realYtOut = amountOut;
+        ytOut = mintPtYt(ytOut, address(this));
 
-        if (swap.realYtOut < swap.minYtOut) {
-            revert InsufficientOutput(amountInWad, swap.minYtOut, swap.realYtOut);
+        if (ytOut < swap.minYtOut) {
+            revert InsufficientOutput(amountInWad, swap.minYtOut, ytOut);
         }
 
-        _credit(address(YT), to, swap.realYtOut);
+        _credit(address(YT), to, ytOut);
 
         uint256 debitSurplus = address(this).balance;
         if (debitSurplus > 0) {
@@ -226,7 +224,7 @@ contract RMM is ERC20 {
             address(SY),
             address(YT),
             swap.amountTokenIn + swap.amountNativeIn - debitSurplus,
-            swap.realYtOut,
+            ytOut,
             deltaLiquidity
         );
     }
