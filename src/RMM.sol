@@ -6,7 +6,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -22,19 +21,16 @@ contract RMM is ERC20 {
 
     using SafeTransferLib for ERC20;
 
-    uint256 public constant IMPLIED_RATE_TIME = 365 * 86400;
-    uint256 public constant BURNT_LIQUIDITY = 1000;
+    IPPrincipalToken public PT;
+    IStandardizedYield public SY;
+    IPYieldToken public YT;
 
-    IPPrincipalToken public immutable PT;
-    IStandardizedYield public immutable SY;
-    IPYieldToken public immutable YT;
+    uint256 public SY_scalar;
+    uint256 public PT_scalar;
 
-    uint256 public immutable SY_scalar;
-    uint256 public immutable PT_scalar;
-
-    uint256 public immutable sigma;
-    uint256 public immutable fee;
-    uint256 public immutable maturity;
+    uint256 public sigma;
+    uint256 public fee;
+    uint256 public maturity;
 
     uint256 public reserveX;
     uint256 public reserveY;
@@ -93,14 +89,13 @@ contract RMM is ERC20 {
         lock
         returns (uint256 totalLiquidity_, uint256 amountY)
     {
-        if (strike != 0) revert AlreadyInitialized();
-        if (strike_ <= 1e18) revert InvalidStrike();
+        if (strike_ <= 1e18 || strike_ != 0) revert InvalidStrikeChange();
 
         PYIndex index = YT.newIndex();
         (totalLiquidity_, amountY) = prepareInit(priceX, amountX, strike_, sigma, index);
 
-        _mint(msg.sender, totalLiquidity_ - BURNT_LIQUIDITY);
-        _mint(address(0), BURNT_LIQUIDITY);
+        _mint(msg.sender, totalLiquidity_ - 1000);
+        _mint(address(0), 1000);
         _adjust(toInt(amountX), toInt(amountY), toInt(totalLiquidity_), strike_, index);
         _debit(address(SY), reserveX);
         _debit(address(PT), reserveY);
@@ -392,7 +387,7 @@ contract RMM is ERC20 {
         int256 timeToExpiry = int256(maturity) - int256(block.timestamp);
 
         lastImpliedPrice = timeToExpiry > 0
-            ? uint256(int256(approxSpotPrice(index.syToAsset(reserveX))).lnWad() * int256(IMPLIED_RATE_TIME) / timeToExpiry)
+            ? uint256(int256(computeSpotPrice(index.syToAsset(reserveX), totalLiquidity, strike, sigma, lastTau())).lnWad() * int256(365 * 86400) / timeToExpiry)
             : 1 ether;
     }
 
@@ -437,19 +432,13 @@ contract RMM is ERC20 {
         return computeTradingFunction(totalAsset, reserveY, totalLiquidity, strike, sigma, lastTau());
     }
 
-    /// @notice Uses state to approximate the spot price of the X token in terms of the Y token.
-    /// @dev Do not rely on this for onchain calculations.
-    function approxSpotPrice(uint256 totalAsset) public view returns (uint256) {
-        return computeSpotPrice(totalAsset, totalLiquidity, strike, sigma, lastTau());
-    }
-
     function computeKGivenLastPrice(uint256 reserveX_, uint256 liquidity, uint256 sigma_, uint256 tau_)
         public
         view
         returns (uint256)
     {
         int256 timeToExpiry = int256(maturity - block.timestamp);
-        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(IMPLIED_RATE_TIME);
+        int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(365 * 86400);
         int256 lastPrice = rt.expWad();
 
         uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
@@ -500,77 +489,6 @@ contract RMM is ERC20 {
                 max = guess - 1;
             }
         }
-    }
-
-    function calcMaxPtOut(
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 totalLiquidity_,
-        uint256 strike_,
-        uint256 sigma_,
-        uint256 tau_
-    ) internal pure returns (uint256) {
-        int256 currentTF = computeTradingFunction(reserveX_, reserveY_, totalLiquidity_, strike_, sigma_, tau_);
-        
-        uint256 maxProportion = uint256(int256(1e18) - currentTF) * 1e18 / (2 * 1e18);
-        
-        uint256 maxPtOut = reserveY_ * maxProportion / 1e18;
-        
-        return (maxPtOut * 999) / 1000;
-    }
-
-    function calcMaxPtIn(
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 totalLiquidity_,
-        uint256 strike_
-    ) internal pure returns (uint256) {
-        uint256 low = 0;
-        uint256 high = reserveY_ - 1;
-
-        while (low != high) {
-            uint256 mid = (low + high + 1) / 2;
-            if (calcSlope(reserveX_, reserveY_, totalLiquidity_, strike_, int256(mid)) < 0) {
-                high = mid - 1;
-            } else {
-                low = mid;
-            }
-        }
-
-        return low;
-    }
-
-
-
-    function calcSlope(
-        uint256 reserveX_,
-        uint256 reserveY_,
-        uint256 totalLiquidity_,
-        uint256 strike_,
-        int256 ptToMarket
-    ) internal pure returns (int256) {
-        uint256 newReserveY = reserveY_ + uint256(ptToMarket);
-        uint256 b_i = newReserveY * 1e36 / (strike_ * totalLiquidity_);
-
-        if (b_i > 1e18) {
-            return -1;
-        }
-        
-        int256 b = Gaussian.ppf(toInt(b_i));
-        int256 pdf_b = Gaussian.pdf(b);
-        
-        int256 slope = (int256(strike_ * totalLiquidity_) * pdf_b / 1e36);
-        
-        int256 dxdy = computedXdY(reserveX_, newReserveY);
-        
-        return slope + dxdy;
-    }
-
-    function computedXdY(
-        uint256 reserveX_,
-        uint256 reserveY_
-    ) internal pure returns (int256) {
-        return -int256(reserveX_) * 1e18 / int256(reserveY_);
     }
 
     //prepare calls
@@ -749,10 +667,6 @@ contract RMM is ERC20 {
     }
 
     function redeemPy(uint256 amount, address to) internal returns (uint256 amountOut) {
-        console2.log("PT balance", PT.balanceOf(address(this)));
-        console2.log("YT balance", YT.balanceOf(address(this)));
-        console2.log("SY balance", SY.balanceOf(address(YT)));
-        console2.log("SY address", address(SY));
         PT.transfer(address(YT), amount);
         YT.transfer(address(YT), amount);
         amountOut = YT.redeemPY(to);

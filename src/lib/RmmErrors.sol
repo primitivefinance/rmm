@@ -2,7 +2,8 @@
 pragma solidity ^0.8.13;
 
 /// @dev Thrown if trying to initialize a pool with an invalid strike price (strike < 1e18).
-error InvalidStrike();
+/// @dev Thrown if trying to change the strike price of an already initialized pool.
+error InvalidStrikeChange();
 /// @dev Thrown if trying to initialize an already initialized pool.
 error AlreadyInitialized();
 /// @dev Thrown when a `balanceOf` call fails or returns unexpected data.
@@ -31,3 +32,6 @@ error InvalidTokenIn(address tokenIn);
 error Reentrancy();
 
 error MaturityReached();
+
+error ToIntOverflow();
+error ToUintOverflow();

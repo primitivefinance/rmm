@@ -5,7 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SetUp} from "../SetUp.sol";
 import {Swap} from "../../src/lib/RmmEvents.sol";
 import {InsufficientOutput} from "../../src/lib/RmmErrors.sol";
-import {abs} from "./../../src/lib/RmmLib.sol";
+import {abs, computeSpotPrice} from "./../../src/lib/RmmLib.sol";
 
 contract SwapExactSyForPtTest is SetUp {
     function test_swapExactSyForPt_TransfersTokens() public useDefaultPool {
@@ -52,9 +52,9 @@ contract SwapExactSyForPtTest is SetUp {
 
     function test_swapExactSyForPt_MaintainsPrice() public useDefaultPool {
         uint256 amountIn = 1 ether;
-        uint256 prevPrice = rmm.approxSpotPrice(syToAsset(rmm.reserveX()));
+        uint256 prevPrice = computeSpotPrice(syToAsset(rmm.reserveX()), rmm.totalLiquidity(), rmm.strike(), rmm.sigma(), rmm.lastTau());
         rmm.swapExactSyForPt(amountIn, 0, address(this));
-        assertTrue(rmm.approxSpotPrice(syToAsset(rmm.reserveX())) < prevPrice, "Price did not increase after buying Y.");
+        assertTrue(computeSpotPrice(syToAsset(rmm.reserveX()), rmm.totalLiquidity(), rmm.strike(), rmm.sigma(), rmm.lastTau()) < prevPrice, "Price did not increase after buying Y.");
     }
 
     function test_swapExactSyForPt_EmitsEvent() public useDefaultPool {

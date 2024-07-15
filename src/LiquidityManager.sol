@@ -5,9 +5,8 @@ import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
-import {console} from "forge-std/console.sol";
 
-import {RMM, IPYieldToken} from "./RMM.sol";
+import {RMM, IPYieldToken, Gaussian, computeTradingFunction} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
 
 contract LiquidityManager {
@@ -115,7 +114,6 @@ contract LiquidityManager {
 
         // swap ptToSwap for sy
         (uint256 syOut,) = rmm.swapExactPtForSy(ptToSwap, args.minOut, address(this));
-        console.log("syOut", syOut);
 
         sy.approve(address(rmm), type(uint256).max);
         liquidity = rmm.allocate(false, pt.balanceOf(address(this)), args.minLiquidityDelta, msg.sender);
@@ -180,4 +178,22 @@ contract LiquidityManager {
     function isAApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
         return b.mulWadDown(1 ether - eps) <= a && a <= b.mulWadDown(1 ether + eps);
     }
+
+    function calcMaxPtOut(
+        uint256 reserveX_,
+        uint256 reserveY_,
+        uint256 totalLiquidity_,
+        uint256 strike_,
+        uint256 sigma_,
+        uint256 tau_
+    ) internal pure returns (uint256) {
+        int256 currentTF = computeTradingFunction(reserveX_, reserveY_, totalLiquidity_, strike_, sigma_, tau_);
+        
+        uint256 maxProportion = uint256(int256(1e18) - currentTF) * 1e18 / (2 * 1e18);
+        
+        uint256 maxPtOut = reserveY_ * maxProportion / 1e18;
+        
+        return (maxPtOut * 999) / 1000;
+    }
+
 }

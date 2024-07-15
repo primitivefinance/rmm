@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {SetUp, RMM, InitParams, DEFAULT_EXPIRY} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
-import {AlreadyInitialized, InvalidStrike} from "../../src/lib/RmmErrors.sol";
+import {InvalidStrikeChange} from "../../src/lib/RmmErrors.sol";
 
 contract InitTest is SetUp {
     function test_init_MintsLiquidity()
@@ -20,8 +20,8 @@ contract InitTest is SetUp {
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
 
         assertEq(rmm.totalLiquidity(), totalLiquidity);
-        assertEq(rmm.balanceOf(address(this)), totalLiquidity - rmm.BURNT_LIQUIDITY());
-        assertEq(rmm.balanceOf(address(0)), rmm.BURNT_LIQUIDITY());
+        assertEq(rmm.balanceOf(address(this)), totalLiquidity - 1000);
+        assertEq(rmm.balanceOf(address(0)), 1000);
     }
 
     function test_init_AdjustsPool() public withSY(address(this), 2000000 ether) withPY(address(this), 1000000 ether) {
@@ -99,7 +99,7 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
 
-        vm.expectRevert(AlreadyInitialized.selector);
+        vm.expectRevert(InvalidStrikeChange.selector);
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 
@@ -111,7 +111,7 @@ contract InitTest is SetUp {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
 
-        vm.expectRevert(InvalidStrike.selector);
+        vm.expectRevert(InvalidStrikeChange.selector);
         rmm.init(initParams.priceX, initParams.amountX, 1 ether);
     }
 

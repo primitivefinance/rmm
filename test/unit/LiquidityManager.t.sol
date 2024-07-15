@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
+import {RMM, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
 import {LiquidityManager, RMM} from "../../src/LiquidityManager.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {IPMarket} from "pendle/interfaces/IPMarket.sol";
