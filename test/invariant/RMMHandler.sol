@@ -3,16 +3,20 @@ pragma solidity ^0.8.13;
 
 import {CommonBase} from "forge-std/Base.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
+import {console} from "forge-std/console.sol";
 import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {PendleWstEthSY} from "pendle/core/StandardizedYield/implementations/PendleWstEthSY.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {RMM} from "../../src/RMM.sol";
 import {PYIndex} from "./../../src/RMM.sol";
 import {AddressSet, LibAddressSet} from "../helpers/AddressSet.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+
+import "forge-std/console2.sol";
 
 contract RMMHandler is CommonBase, StdUtils, StdCheats {
     using LibAddressSet for AddressSet;
@@ -23,10 +27,11 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     PendleWstEthSY public SY;
     IPYieldToken public YT;
     IPPrincipalToken public PT;
+    WETH public weth;
 
     uint256 public ghost_reserveX;
     uint256 public ghost_reserveY;
-    uint256 public ghost_totalLiquidity;
+    int256 public ghost_totalLiquidity;
     uint256 public ghost_totalSupply;
 
     mapping(bytes4 => uint256) public calls;
@@ -35,17 +40,12 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     AddressSet internal actors;
     address internal currentActor;
 
-    modifier createActor() {
-        currentActor = msg.sender;
-        actors.add(currentActor);
-        _;
-    }
+    address baseActor = address(0x1234567890123456789012345678901234567890);
 
-    modifier useActor(uint256 actorIndexSeed) {
-        currentActor = actors.rand(actorIndexSeed);
-        vm.startPrank(currentActor);
+    modifier useActor() {
+        actors.add(baseActor);
+        currentActor = actors.rand(0);
         _;
-        vm.stopPrank();
     }
 
     modifier countCall(bytes4 key) {
@@ -54,16 +54,16 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         _;
     }
 
-    constructor(RMM rmm_, IPPrincipalToken PT_, PendleWstEthSY SY_, IPYieldToken YT_) {
+    constructor(RMM rmm_, IPPrincipalToken PT_, PendleWstEthSY SY_, IPYieldToken YT_, WETH weth_) {
         rmm = rmm_;
         PT = PT_;
         SY = SY_;
         YT = YT_;
+        weth = weth_;
     }
-
     // Utility functions
 
-    function give(address token, address to, uint256 amount) public {
+    function fund(address token, address to, uint256 amount) public {
         ERC20(token).transfer(to, amount);
     }
 
@@ -73,117 +73,165 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
     }
 
     function init() public {
-        /*
-        priceX = bound(priceX, 1 ether, 10 ether);
-        amountX = bound(amountX, 1 ether, 10 ether);
-        strike = bound(strike, 1 ether, 10 ether);
-        sigma = bound(sigma, 0 ether, 1 ether);
-        fee = bound(fee, 0 ether, 1 ether);
-        */
+        uint256 priceX;
+        uint256 amountX;
+        uint256 strike;
+        uint256 sigma;
+        uint256 fee;
 
-        uint256 priceX = 1 ether;
-        uint256 amountX = 50 ether;
-        uint256 strike = 1 ether;
-        uint256 sigma = 0.015 ether;
-        uint256 fee = 0.00016 ether;
+        priceX = bound(priceX, 1.05 ether, 1.15 ether);
+        amountX = bound(amountX, 500 ether, 1000 ether);
+        strike = bound(strike, 1.05 ether, 1.15 ether);
+        sigma = bound(sigma, 0.03 ether, 0.05 ether);
+        fee = bound(fee, 0.0001 ether, 0.001 ether);
 
-        (uint256 totalLiquidity, uint256 amountY) = rmm.prepareInit(priceX, amountX, strike, sigma, PT.expiry());
+        PYIndex index = IPYieldToken(PT.YT()).newIndex();
+
+        (uint256 totalLiquidity,) = rmm.prepareInit(priceX, amountX, strike, sigma, index);
 
         PT.approve(address(rmm), type(uint256).max);
         SY.approve(address(rmm), type(uint256).max);
+        YT.approve(address(rmm), type(uint256).max);
 
-        rmm.init(address(PT), priceX, amountX, strike, sigma, fee, address(0));
+        rmm.init(priceX, amountX, strike);
 
-        ghost_reserveX += amountX;
-        ghost_reserveY += amountY;
-        ghost_totalLiquidity += totalLiquidity;
+
+        ghost_reserveX += rmm.reserveX();
+        ghost_reserveY += rmm.reserveY();
+        ghost_totalLiquidity += int256(totalLiquidity);
     }
 
     // Target functions
 
-    function allocate(uint256 deltaX, uint256 deltaY) public createActor countCall(this.allocate.selector) {
-        deltaX = bound(deltaX, 0.1 ether, 100 ether);
-        deltaY = bound(deltaY, 0.1 ether, 100 ether);
+    function allocate(uint256 deltaX, uint256 deltaY) public useActor countCall(this.allocate.selector) {
+        deltaX = bound(deltaX, 0.1 ether, 1 ether);
+        console2.log("currentActor", currentActor);
 
-        deal(address(SY), currentActor, deltaX);
-        deal(address(PT), currentActor, deltaY);
+        vm.startPrank(currentActor);
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) = rmm.prepareAllocate(true, deltaX);
+        vm.stopPrank();
+
+        fund(address(SY), currentActor, deltaXWad);
+        fund(address(PT), currentActor, deltaYWad);
 
         vm.startPrank(currentActor);
 
-        SY.approve(address(rmm), deltaX);
-        PT.approve(address(rmm), deltaY);
-
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(deltaX, deltaY, PYIndex.wrap(rmm.YT().pyIndexCurrent()));
-        uint256 deltaLiquidity = rmm.allocate(deltaXWad, deltaYWad, 0, address(currentActor));
-
+        SY.approve(address(rmm), deltaXWad);
+        PT.approve(address(rmm), deltaYWad);
+        uint256 realDeltaLiquidity = rmm.allocate(true, deltaX, deltaLiquidity, address(currentActor));
         vm.stopPrank();
 
-        ghost_totalLiquidity += deltaLiquidity;
+
+        ghost_totalLiquidity += int256(realDeltaLiquidity);
         ghost_reserveX += deltaXWad;
         ghost_reserveY += deltaYWad;
     }
 
-    function deallocate(uint256 actorSeed) public useActor(actorSeed) countCall(this.deallocate.selector) {
-        uint256 deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
-        (uint256 deltaXWad, uint256 deltaYWad,) = rmm.prepareDeallocate(deltaLiquidity);
-        rmm.deallocate(deltaLiquidity, 0, 0, address(this));
+    function deallocate(uint256 deltaLiquidity) public useActor countCall(this.deallocate.selector) {
+        deltaLiquidity = rmm.totalLiquidity() * rmm.balanceOf(currentActor) / rmm.totalSupply();
+        (uint256 deltaX, uint256 deltaY) = rmm.deallocate(deltaLiquidity, 0, 0, address(this));
 
-        ghost_reserveX -= deltaXWad;
-        ghost_reserveY -= deltaYWad;
-        ghost_totalLiquidity -= deltaLiquidity;
+        ghost_reserveX -= deltaX;
+        ghost_reserveY -= deltaY;
+        ghost_totalLiquidity -= int256(deltaLiquidity);
     }
 
-    function swapExactSyForYt() public createActor countCall(this.swapExactSyForYt.selector) {
+    function swapExactSyForYt() public useActor countCall(this.swapExactSyForYt.selector) {
         uint256 exactSYIn = 1 ether;
-        deal(address(SY), address(currentActor), exactSYIn);
+        fund(address(SY), address(currentActor), exactSYIn);
 
         PYIndex index = YT.newIndex();
-        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 10 ether, block.timestamp, 0, 10_000);
+        uint256 ytOut = rmm.computeSYToYT(index, exactSYIn, 0, block.timestamp, 0, 1_000);
 
         vm.startPrank(currentActor);
         SY.approve(address(rmm), exactSYIn);
-        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), 500 ether, 10_000, address(msg.sender));
+        (uint256 amountInWad, uint256 amountOutWad,, int256 deltaLiquidity,) =
+            rmm.prepareSwapPtIn(ytOut, block.timestamp, index);
+        rmm.swapExactSyForYt(exactSYIn, ytOut, ytOut.mulDivDown(95, 100), ytOut, 1_000, address(msg.sender));
         vm.stopPrank();
+
+        ghost_reserveX -= amountOutWad;
+        ghost_reserveY += amountInWad;
+        ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactTokenForYt() public createActor countCall(this.swapExactTokenForYt.selector) {
-        uint256 amountIn = 1 ether;
-        address weth = rmm.WETH();
-        deal(weth, currentActor, amountIn);
+    function swapExactTokenForYt() public useActor countCall(this.swapExactTokenForYt.selector) {
+        uint256 amountTokenIn = 1 ether;
+        fund(address(weth), currentActor, amountTokenIn);
 
+        vm.startPrank(currentActor);
         PYIndex index = YT.newIndex();
-        (uint256 syMinted, uint256 ytOut) =
-            rmm.computeTokenToYT(index, weth, amountIn, 10 ether, block.timestamp, 0, 1_000);
 
-        vm.startPrank(currentActor);
-        rmm.swapExactTokenForYt(
-            weth, amountIn, ytOut, syMinted, ytOut.mulDivDown(99, 100), 10 ether, 0.005 ether, address(currentActor)
+        (uint256 syMinted, uint256 ytOut) = rmm.computeTokenToYT(
+            index, address(weth), amountTokenIn, 0, block.timestamp, 0, 1_000
         );
+
+        weth.approve(address(rmm), amountTokenIn);
+        (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) = rmm.swapExactTokenForYt(
+            address(weth),
+            amountTokenIn,
+            ytOut,
+            syMinted,
+            ytOut,
+            10 ether,
+            0.005 ether,
+            address(currentActor)
+        );
+
         vm.stopPrank();
+
+        ghost_reserveX -= amountOutWad;
+        ghost_reserveY += amountInWad;
+        ghost_totalLiquidity += deltaLiquidity;
     }
 
-    function swapExactPtForSy() public createActor countCall(this.swapExactPtForSy.selector) {
-        deal(address(PT), currentActor, 1 ether);
+    function swapExactPtForSy() public useActor countCall(this.swapExactPtForSy.selector) {
+        uint256 amountIn = 1 ether;
+        fund(address(PT), currentActor, amountIn);
+
         vm.startPrank(currentActor);
-        PT.approve(address(rmm), 1 ether);
-        rmm.swapExactPtForSy(1 ether, 0, address(currentActor));
+        PT.approve(address(rmm), amountIn);
+        (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactPtForSy(amountIn, 0, address(currentActor));
         vm.stopPrank();
+
+        ghost_reserveX -= amountOut;
+        ghost_reserveY += amountIn;
+        ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactSyForPt() public createActor countCall(this.swapExactSyForPt.selector) {
-        deal(address(SY), currentActor, 1 ether);
+    function swapExactSyForPt() public useActor countCall(this.swapExactSyForPt.selector) {
+        uint256 amountIn = 1 ether;
+        fund(address(SY), currentActor, amountIn);
+
         vm.startPrank(currentActor);
-        SY.approve(address(rmm), 1 ether);
-        rmm.swapExactSyForPt(1 ether, 0, address(currentActor));
+        SY.approve(address(rmm), amountIn);
+        (uint256 amountOut, int256 deltaLiquidity) = rmm.swapExactSyForPt(amountIn, 0, address(currentActor));
         vm.stopPrank();
+
+        ghost_reserveX += amountIn;
+        ghost_reserveY -= amountOut;
+        ghost_totalLiquidity += int256(deltaLiquidity);
     }
 
-    function swapExactYtForSy() public createActor countCall(this.swapExactYtForSy.selector) {
-        deal(address(YT), currentActor, 1 ether);
+    function swapExactYtForSy() public useActor countCall(this.swapExactYtForSy.selector) {
+        uint256 ytIn = 1 ether;
+        console2.log("YT balance of SY 1", SY.balanceOf(address(YT)));
+
+        deal(address(YT), currentActor, ytIn);
         vm.startPrank(currentActor);
-        YT.approve(address(rmm), 1 ether);
-        rmm.swapExactYtForSy(1 ether, 0, address(currentActor));
+        YT.approve(address(rmm), ytIn);
+        (, uint256 amountIn, int256 deltaLiquidity) =
+            rmm.swapExactYtForSy(ytIn, 1000 ether, address(currentActor));
         vm.stopPrank();
+
+        ghost_reserveX += amountIn;
+        ghost_reserveY -= ytIn;
+        ghost_totalLiquidity += int256(deltaLiquidity);
+    }
+
+    function increaseTime(uint256 amount) public countCall(this.increaseTime.selector) {
+        amount = bound(amount, 1, 86400);
+
+        vm.warp(block.timestamp + amount);
     }
 }

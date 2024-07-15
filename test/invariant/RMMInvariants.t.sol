@@ -2,36 +2,43 @@
 pragma solidity ^0.8.13;
 
 import {console} from "forge-std/console.sol";
-import {PYIndex, PYIndexLib} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {abs} from "./../../src/lib/RmmLib.sol";
-import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {SetUp} from "../SetUp.sol";
 import {RMMHandler} from "./RMMHandler.sol";
+import "forge-std/console2.sol";
 
 contract RMMInvariantsTest is SetUp {
-    using PYIndexLib for IPYieldToken;
-
     RMMHandler handler;
 
     function setUp() public virtual override {
         super.setUp();
-        handler = new RMMHandler(rmm, PT, SY, YT);
 
-        mintSY(address(handler), 100 ether);
-        mintSY(address(this), 100 ether);
-        mintPY(address(handler), 100 ether);
+        // This will redeploy the RMM contract without initializing the pool
+        setUpRMM(getDefaultParams());
+        handler = new RMMHandler(rmm, PT, SY, YT, weth);
+
+        weth.deposit{value: 10_000 ether}();
+        weth.transfer(address(handler), 10_000 ether);
+
+        mintSY(address(this), 5_000 ether);
+        mintPY(address(this), 1_000 ether);
+
+        mintSY(address(handler), 100_000 ether);
+        mintPY(address(handler), 50_000 ether);
+
 
         handler.init();
 
-        bytes4[] memory selectors = new bytes4[](5);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = RMMHandler.allocate.selector;
         selectors[1] = RMMHandler.deallocate.selector;
         selectors[2] = RMMHandler.swapExactSyForYt.selector;
-        selectors[3] = RMMHandler.swapExactTokenForYt.selector;
-        selectors[4] = RMMHandler.swapExactPtForSy.selector;
+        selectors[3] = RMMHandler.swapExactPtForSy.selector;
+        selectors[4] = RMMHandler.swapExactSyForPt.selector;
+        selectors[5] = RMMHandler.swapExactYtForSy.selector;
+        selectors[6] = RMMHandler.swapExactTokenForYt.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
-
         targetContract(address(handler));
     }
 
@@ -42,21 +49,27 @@ contract RMMInvariantsTest is SetUp {
         console.log("SwapExactSyForYt: ", handler.calls(RMMHandler.swapExactSyForYt.selector));
         console.log("SwapExactTokenForYt: ", handler.calls(RMMHandler.swapExactTokenForYt.selector));
         console.log("SwapExactPtForSy: ", handler.calls(RMMHandler.swapExactPtForSy.selector));
+        console.log("SwapExactSyForPt: ", handler.calls(RMMHandler.swapExactSyForPt.selector));
+        console.log("SwapExactYtForSy: ", handler.calls(RMMHandler.swapExactYtForSy.selector));
     }
 
-    /// forge-config: default.invariant.runs = 100
-    /// forge-config: default.invariant.depth = 2
-    /// forge-config: default.invariant.fail-on-revert = false
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 30
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_TradingFunction() public {
-        IPYieldToken YT = handler.YT();
-        PYIndex index = YT.newIndex();
-        assertTrue(abs(rmm.tradingFunction(index)) <= 100, "Invariant out of valid range");
+        assertTrue(abs(rmm.tradingFunction(newIndex())) <= 100, "Invariant out of valid range");
     }
 
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 30
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveX() public view {
         assertEq(rmm.reserveX(), handler.ghost_reserveX());
     }
 
+    /// forge-config: default.invariant.runs = 10
+    /// forge-config: default.invariant.depth = 30
+    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_ReserveY() public view {
         assertEq(rmm.reserveY(), handler.ghost_reserveY());
     }

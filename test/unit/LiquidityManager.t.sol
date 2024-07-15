@@ -2,13 +2,9 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {RMM, toInt, toUint, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
+import {RMM, upscale, downscaleDown, scalar, sum, abs, PoolPreCompute} from "../../src/RMM.sol";
 import {LiquidityManager, RMM} from "../../src/LiquidityManager.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {ReturnsTooLittleToken} from "solmate/test/utils/weird-tokens/ReturnsTooLittleToken.sol";
-import {ReturnsTooMuchToken} from "solmate/test/utils/weird-tokens/ReturnsTooMuchToken.sol";
-import {MissingReturnToken} from "solmate/test/utils/weird-tokens/MissingReturnToken.sol";
-import {ReturnsFalseToken} from "solmate/test/utils/weird-tokens/ReturnsFalseToken.sol";
 import {IPMarket} from "pendle/interfaces/IPMarket.sol";
 import "pendle/core/Market/MarketMathCore.sol";
 import "pendle/interfaces/IPAllActionV3.sol";
@@ -16,7 +12,6 @@ import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 IPAllActionV3 constant router = IPAllActionV3(0x00000000005BBB0EF59571E58418F9a4357b68A0);
 IPMarket constant market = IPMarket(0x9eC4c502D989F04FfA9312C9D6E3F872EC91A0F9);
@@ -51,11 +46,11 @@ contract ForkRMMTest is Test {
     function setUp() public {
         vm.createSelectFork({urlOrAlias: "mainnet", blockNumber: 17_162_783});
 
-        __subject__ = new RMM(WETH_ADDRESS, "LPToken", "LPT");
         __liquidityManager__ = new LiquidityManager();
 
         vm.label(address(__subject__), "RMM");
         (SY, PT, YT) = IPMarket(market).readTokens();
+        __subject__ = new RMM("LPToken", "LPT", address(PT), 0.025 ether, 0.0003 ether);
         (MarketState memory ms,) = getPendleMarketData();
         timeToExpiry = ms.expiry - block.timestamp;
 
@@ -79,6 +74,10 @@ contract ForkRMMTest is Test {
         IERC20(SY).approve(address(liquidityManager()), type(uint256).max);
         IERC20(PT).approve(address(liquidityManager()), type(uint256).max);
         IERC20(YT).approve(address(liquidityManager()), type(uint256).max);
+
+        vm.label(address(SY), "SY");
+        vm.label(address(YT), "YT");
+        vm.label(address(PT), "PT");
     }
 
     function getPendleMarketData() public returns (MarketState memory ms, MarketPreCompute memory mp) {
@@ -125,15 +124,7 @@ contract ForkRMMTest is Test {
     modifier basic_sy() {
         (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData();
         uint256 price = uint256(getPtExchangeRate());
-        subject().init({
-            PT_: address(PT),
-            priceX: price,
-            amountX: uint256(ms.totalSy - 100 ether),
-            strike_: uint256(mp.rateAnchor),
-            sigma_: 0.025 ether,
-            fee_: 0.0003 ether,
-            curator_: address(0x55)
-        });
+        subject().init({priceX: price, amountX: uint256(ms.totalSy - 100 ether), strike_: uint256(mp.rateAnchor)});
 
         _;
     }
@@ -207,7 +198,7 @@ contract ForkRMMTest is Test {
         uint256 dx = maxSyToSwap - syToSwap;
         uint256 dy = ptOut;
 
-        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
+        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(true, dx);
         liquidityManager().allocateFromSy(
             LiquidityManager.AllocateArgs(address(subject()), maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps)
         );
@@ -230,9 +221,11 @@ contract ForkRMMTest is Test {
         uint256 dy = maxPtToSwap - ptToSwap;
         uint256 dx = syOut;
 
-        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(dx, dy, index);
+        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(false, dy);
         liquidityManager().allocateFromPt(
-            LiquidityManager.AllocateArgs(address(subject()), maxPtToSwap, syOut, minLiquidityDelta.mulDivDown(95, 100), ptToSwap, eps)
+            LiquidityManager.AllocateArgs(
+                address(subject()), maxPtToSwap, syOut, minLiquidityDelta.mulDivDown(95, 100), ptToSwap, eps
+            )
         );
         assertEq(subject().reserveY(), rY + maxPtToSwap, "unexpected rY balance after zap");
         assertEq(subject().reserveX(), rX, "unexpected rX balance after zap");

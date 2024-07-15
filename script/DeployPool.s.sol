@@ -87,7 +87,7 @@ contract DeployPool is Script {
         uint256 pk = vm.envUint(ENV_PRIVATE_KEY);
         vm.startBroadcast(pk);
         sender = vm.addr(pk);
-        rmm = FACTORY.createRMM("Lido Staked ETH 24 Dec 2025", "stETH-24DEC25");
+        rmm = FACTORY.createRMM("Lido Staked ETH 24 Dec 2025", "stETH-24DEC25", address(PT), 0.02 ether, fee);
         console2.log("rmm address: ", address(rmm));
 
         mintSY(10_000 ether);
@@ -107,15 +107,7 @@ contract DeployPool is Script {
         PYIndex index = YT.newIndex();
         (MarketState memory ms, MarketPreCompute memory mp) = getPendleMarketData(index);
         uint256 price = uint256(getPtExchangeRate(index));
-        rmm.init({
-            PT_: address(PT),
-            priceX: price,
-            amountX: uint256(ms.totalSy),
-            strike_: uint256(mp.rateAnchor),
-            sigma_: 0.02 ether,
-            fee_: fee,
-            curator_: address(0x55)
-        });
+        rmm.init({priceX: price, amountX: uint256(ms.totalSy), strike_: uint256(mp.rateAnchor)});
 
         vm.stopBroadcast();
     }

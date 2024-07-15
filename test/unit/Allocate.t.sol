@@ -8,11 +8,11 @@ import {InsufficientLiquidityOut} from "../../src/lib/RmmErrors.sol";
 
 contract AllocateTest is SetUp {
     function test_allocate_MintsLiquidity() public useDefaultPool {
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 0.1 ether);
 
         uint256 preTotalLiquidity = rmm.totalLiquidity();
-        uint256 deltaLiquidity = rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        deltaLiquidity = rmm.allocate(true, 0.1 ether, 0, address(this));
         assertEq(rmm.totalLiquidity(), preTotalLiquidity + deltaLiquidity);
     }
 
@@ -22,8 +22,8 @@ contract AllocateTest is SetUp {
         uint256 preBalance = rmm.balanceOf(address(this));
         uint256 preTotalSupply = rmm.totalSupply();
         (uint256 deltaXWad, uint256 deltaYWad,, uint256 lpMinted) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+            rmm.prepareAllocate(true, 0.1 ether);
+        rmm.allocate(true, 0.1 ether, 0, address(this));
         assertEq(rmm.balanceOf(address(this)), preBalance + lpMinted);
         assertEq(rmm.totalSupply(), preTotalSupply + lpMinted);
     }
@@ -34,9 +34,9 @@ contract AllocateTest is SetUp {
         uint256 preReserveX = rmm.reserveX();
         uint256 preReserveY = rmm.reserveY();
 
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 0.1 ether);
+        rmm.allocate(true, 0.1 ether, deltaLiquidity, address(this));
 
         assertEq(rmm.reserveX(), preReserveX + deltaXWad);
         assertEq(rmm.reserveY(), preReserveY + deltaYWad);
@@ -51,9 +51,9 @@ contract AllocateTest is SetUp {
         uint256 rmmPreBalanceSY = SY.balanceOf(address(rmm));
         uint256 rmmPreBalancePT = PT.balanceOf(address(rmm));
 
-        (uint256 deltaXWad, uint256 deltaYWad,,) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
+            rmm.prepareAllocate(true, 0.1 ether);
+        rmm.allocate(true, 0.1 ether, deltaLiquidity, address(this));
 
         assertEq(SY.balanceOf(address(this)), thisPreBalanceSY - deltaXWad);
         assertEq(PT.balanceOf(address(this)), thisPreBalancePT - deltaYWad);
@@ -65,25 +65,25 @@ contract AllocateTest is SetUp {
         deal(address(SY), address(this), 1_000 ether);
 
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 0.1 ether);
 
         vm.expectEmit(true, true, true, true);
 
         emit Allocate(address(this), address(this), deltaXWad, deltaYWad, deltaLiquidity);
-        rmm.allocate(deltaXWad, deltaYWad, 0, address(this));
+        rmm.allocate(true, 0.1 ether, deltaLiquidity, address(this));
     }
 
     function test_allocate_RevertsIfInsufficientLiquidityOut() public useDefaultPool {
         deal(address(SY), address(this), 1_000 ether);
 
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity,) =
-            rmm.prepareAllocate(0.1 ether, 0.1 ether, PYIndex.wrap(YT.pyIndexCurrent()));
+            rmm.prepareAllocate(true, 0.1 ether);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                InsufficientLiquidityOut.selector, deltaXWad, deltaYWad, deltaLiquidity + 1, deltaLiquidity
+                InsufficientLiquidityOut.selector, true, 0.1 ether, deltaLiquidity + 1, deltaLiquidity
             )
         );
-        rmm.allocate(deltaXWad, deltaYWad, deltaLiquidity + 1, address(this));
+        rmm.allocate(true, 0.1 ether, deltaLiquidity + 1, address(this));
     }
 }
