@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {SetUp, RMM, InitParams, DEFAULT_EXPIRY} from "../SetUp.sol";
 import {Init} from "../../src/lib/RmmEvents.sol";
-import {InvalidStrikeChange} from "../../src/lib/RmmErrors.sol";
+import {InvalidStrike, AlreadyInitialized} from "../../src/lib/RmmErrors.sol";
 
 contract InitTest is SetUp {
     function test_init_MintsLiquidity()
@@ -99,7 +99,7 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
 
-        vm.expectRevert(InvalidStrikeChange.selector);
+        vm.expectRevert(AlreadyInitialized.selector);
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 
@@ -111,7 +111,7 @@ contract InitTest is SetUp {
         InitParams memory initParams = getDefaultParams();
         setUpRMM(initParams);
 
-        vm.expectRevert(InvalidStrikeChange.selector);
+        vm.expectRevert(InvalidStrike.selector);
         rmm.init(initParams.priceX, initParams.amountX, 1 ether);
     }
 

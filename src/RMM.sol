@@ -6,6 +6,7 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
+import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -89,7 +90,8 @@ contract RMM is ERC20 {
         lock
         returns (uint256 totalLiquidity_, uint256 amountY)
     {
-        if (strike_ <= 1e18 || strike_ != 0) revert InvalidStrikeChange();
+        if (strike_ <= 1e18) revert InvalidStrike();
+        if (strike != 0) revert AlreadyInitialized();
 
         PYIndex index = YT.newIndex();
         (totalLiquidity_, amountY) = prepareInit(priceX, amountX, strike_, sigma, index);
@@ -424,6 +426,7 @@ contract RMM is ERC20 {
         if (!success || data.length != 32) revert BalanceError();
         return abi.decode(data, (uint256));
     }
+
 
     /// @dev Computes the trading function result using the current state.
     function tradingFunction(PYIndex index) public view returns (int256) {
