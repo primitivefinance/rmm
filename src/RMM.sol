@@ -90,8 +90,7 @@ contract RMM is ERC20 {
         lock
         returns (uint256 totalLiquidity_, uint256 amountY)
     {
-        if (strike_ <= 1e18) revert InvalidStrike();
-        if (strike != 0) revert AlreadyInitialized();
+        if (strike_ <= 1e18 || strike != 0) revert InvalidStrike();
 
         PYIndex index = YT.newIndex();
         (totalLiquidity_, amountY) = prepareInit(priceX, amountX, strike_, sigma, index);
@@ -323,7 +322,7 @@ contract RMM is ERC20 {
         (uint256 deltaXWad, uint256 deltaYWad, uint256 deltaLiquidity, uint256 lptMinted) =
             prepareAllocate(inTermsOfX, amount);
         if (deltaLiquidity < minLiquidityOut) {
-            revert InsufficientLiquidityOut(inTermsOfX, amount, minLiquidityOut, deltaLiquidity);
+            revert InsufficientOutput(amount, minLiquidityOut, deltaLiquidity);
         }
 
         _mint(to, lptMinted);
