@@ -17,11 +17,9 @@ contract RMMInvariantsTest is SetUp {
         setUpRMM(getDefaultParams());
         handler = new RMMHandler(rmm, PT, SY, YT, weth);
 
-        // weth.deposit{value: 10_000 ether}();
-        // weth.transfer(address(handler), 10_000 ether);
-
-        // mintSY(address(this), 5_000 ether);
-        // mintPY(address(this), 1_000 ether);
+        vm.deal(address(this), 10_000 ether);
+        weth.deposit{value: 10_000 ether}();
+        weth.transfer(address(handler), 10_000 ether);
 
         mintSY(address(handler), 100_000 ether);
         mintPY(address(handler), 100_000 ether);
