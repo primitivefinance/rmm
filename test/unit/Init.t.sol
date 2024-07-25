@@ -99,7 +99,7 @@ contract InitTest is SetUp {
     {
         InitParams memory initParams = getDefaultParams();
 
-        vm.expectRevert(AlreadyInitialized.selector);
+        vm.expectRevert(InvalidStrike.selector);
         rmm.init(initParams.priceX, initParams.amountX, initParams.strike);
     }
 

@@ -198,7 +198,7 @@ contract ForkRMMTest is Test {
         uint256 dx = maxSyToSwap - syToSwap;
         uint256 dy = ptOut;
 
-        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(true, dx);
+        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(false, dy);
         liquidityManager().allocateFromSy(
             LiquidityManager.AllocateArgs(address(subject()), maxSyToSwap, ptOut, minLiquidityDelta, syToSwap, eps)
         );
@@ -221,7 +221,7 @@ contract ForkRMMTest is Test {
         uint256 dy = maxPtToSwap - ptToSwap;
         uint256 dx = syOut;
 
-        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(false, dy);
+        (,, uint256 minLiquidityDelta,) = subject().prepareAllocate(true, dx);
         liquidityManager().allocateFromPt(
             LiquidityManager.AllocateArgs(
                 address(subject()), maxPtToSwap, syOut, minLiquidityDelta.mulDivDown(95, 100), ptToSwap, eps

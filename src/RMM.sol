@@ -6,7 +6,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -180,7 +179,7 @@ contract RMM is ERC20 {
         uint256 upperBound,
         uint256 epsilon,
         address to
-    ) external payable lock returns (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) {
+    ) external payable lock returns (uint256 ytOut, uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) {
         SwapToYt memory swap;
         swap.tokenIn = token;
         swap.amountTokenIn = token == address(0) ? 0 : amountTokenIn;
@@ -193,27 +192,25 @@ contract RMM is ERC20 {
 
         PYIndex index = YT.newIndex();
         uint256 strike_;
-        uint256 amountOut;
 
         swap.amountPtIn = computeSYToYT(index, swap.realSyMinted, upperBound, block.timestamp, swap.amountPtIn, epsilon);
 
-        (amountInWad, amountOutWad, amountOut, deltaLiquidity, strike_) =
+        (amountInWad, amountOutWad, ytOut, deltaLiquidity, strike_) =
             prepareSwapPtIn(swap.amountPtIn, block.timestamp, index);
 
         _adjust(-toInt(amountOutWad), toInt(amountInWad), deltaLiquidity, strike_, index);
 
         // SY is needed to cover the minted PT, so we need to debit the delta from the msg.sender
-        swap.realYtOut = amountOut + (index.assetToSyUp(amountInWad) - amountOutWad);
+        ytOut += (index.assetToSyUp(amountInWad) - amountOutWad);
 
         // Converts the SY received from minting it into its components PT and YT.
-        amountOut = mintPtYt(swap.realYtOut, address(this));
-        swap.realYtOut = amountOut;
+        ytOut = mintPtYt(ytOut, address(this));
 
-        if (swap.realYtOut < swap.minYtOut) {
-            revert InsufficientOutput(amountInWad, swap.minYtOut, swap.realYtOut);
+        if (ytOut < swap.minYtOut) {
+            revert InsufficientOutput(amountInWad, swap.minYtOut, ytOut);
         }
 
-        _credit(address(YT), to, swap.realYtOut);
+        _credit(address(YT), to, ytOut);
 
         uint256 debitSurplus = address(this).balance;
         if (debitSurplus > 0) {
@@ -226,7 +223,7 @@ contract RMM is ERC20 {
             address(SY),
             address(YT),
             swap.amountTokenIn + swap.amountNativeIn - debitSurplus,
-            swap.realYtOut,
+            ytOut,
             deltaLiquidity
         );
     }
@@ -443,11 +440,11 @@ contract RMM is ERC20 {
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(365 * 86400);
         int256 lastPrice = rt.expWad();
 
-        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        uint256 a = sigma_.mulWad(sigma_).mulWad(tau_).mulWad(0.5 ether);
         // // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWad(liquidity)));
         int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
-        return uint256(lastPrice).divWadDown(uint256(exp));
+        return uint256(lastPrice).divWad(uint256(exp));
     }
 
     function computeTokenToYT(
@@ -592,7 +589,7 @@ contract RMM is ERC20 {
             (deltaXWad, deltaLiquidity) = computeAllocationGivenDeltaY(deltaYWad, reserveX, reserveY, totalLiquidity);
         }
 
-        lptMinted = deltaLiquidity.mulDivDown(totalSupply, totalLiquidity + deltaLiquidity);
+        lptMinted = deltaLiquidity.mulDiv(totalSupply, totalLiquidity + deltaLiquidity);
     }
 
     function prepareDeallocate(uint256 deltaLiquidity)
@@ -601,8 +598,8 @@ contract RMM is ERC20 {
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned)
     {
         uint256 liquidity = totalLiquidity;
-        deltaXWad = deltaLiquidity.mulDivDown(reserveX, liquidity);
-        deltaYWad = deltaLiquidity.mulDivDown(reserveY, liquidity);
+        deltaXWad = deltaLiquidity.mulDiv(reserveX, liquidity);
+        deltaYWad = deltaLiquidity.mulDiv(reserveY, liquidity);
         lptBurned = deltaLiquidity.mulDivUp(totalSupply, liquidity);
     }
 

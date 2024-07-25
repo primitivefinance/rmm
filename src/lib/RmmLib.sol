@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Gaussian} from "solstat/Gaussian.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ToUintOverflow, ToIntOverflow} from "./RmmErrors.sol";
 
@@ -17,7 +17,7 @@ struct PoolPreCompute {
 
 
 function computeLnSDivK(uint256 S, uint256 strike_) pure returns (int256) {
-    return int256(S.divWadDown(strike_)).lnWad();
+    return int256(S.divWad(strike_)).lnWad();
 }
 
 /// @dev Computes σ√τ given `sigma_` σ and `tau` τ.
@@ -28,7 +28,7 @@ function computeSigmaSqrtTau(uint256 sigma_, uint256 tau_) pure returns (uint256
 
 /// @dev Converts seconds (units of block.timestamp) into years in WAD units.
 function computeTauWadYears(uint256 tauSeconds) pure returns (uint256) {
-    return tauSeconds.mulDivDown(1e18, 365 days);
+    return tauSeconds.mulDiv(1e18, 365 days);
 }
 
 /// @dev k = Φ⁻¹(x/L) + Φ⁻¹(y/μL)  + σ√τ
@@ -60,7 +60,7 @@ function computeSpotPrice(uint256 reserveX_, uint256 totalLiquidity_, uint256 st
     returns (uint256)
 {
     // Φ^-1(1 - x/L)
-    int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(totalLiquidity_)));
+    int256 a = Gaussian.ppf(int256(1 ether - reserveX_.divWad(totalLiquidity_)));
     // σ√τ
     int256 b = toInt(computeSigmaSqrtTau(sigma_, tau_));
     // 1/2σ^2τ
@@ -76,7 +76,7 @@ function computeY(uint256 reserveX_, uint256 liquidity, uint256 strike_, uint256
     pure
     returns (uint256)
 {
-    int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWadDown(liquidity)));
+    int256 a = Gaussian.ppf(toInt(1 ether - reserveX_.divWad(liquidity)));
     int256 b = tau_ != 0 ? toInt(computeSigmaSqrtTau(sigma_, tau_)) : int256(0);
     int256 c = Gaussian.cdf(a - b);
 
@@ -133,7 +133,7 @@ function computeLGivenX(uint256 reserveX_, uint256 S, uint256 strike_, uint256 s
 {
     int256 lnSDivK = computeLnSDivK(S, strike_);
     uint256 sigmaSqrtTau = computeSigmaSqrtTau(sigma_, tau_);
-    uint256 halfSigmaSquaredTau = sigma_.mulWadDown(sigma_).mulWadDown(0.5 ether).mulWadDown(tau_);
+    uint256 halfSigmaSquaredTau = sigma_.mulWad(sigma_).mulWad(0.5 ether).mulWad(tau_);
     int256 d1 = 1 ether * (lnSDivK + int256(halfSigmaSquaredTau)) / int256(sigmaSqrtTau);
     uint256 cdf = uint256(Gaussian.cdf(d1));
 
@@ -207,7 +207,7 @@ function computeDeltaLXIn(
 ) pure returns (uint256 deltaL) {
     uint256 fees = swapFee.mulWadUp(amountIn);
     uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
-    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWad(px.mulWad(reserveX) + reserveY);
 }
 
 function computeDeltaLYOut(
@@ -222,7 +222,7 @@ function computeDeltaLYOut(
 ) pure returns (uint256 deltaL) {
     uint256 fees = swapFee.mulWadUp(amountOut);
     uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
-    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+    deltaL = px.mulWadUp(totalLiquidity).mulWadUp(fees).divWad(px.mulWad(reserveX) + reserveY);
 }
 
 function computeDeltaLYIn(
@@ -237,7 +237,7 @@ function computeDeltaLYIn(
 ) pure returns (uint256 deltaL) {
     uint256 fees = swapFee.mulWadUp(amountIn);
     uint256 px = computeSpotPrice(reserveX, totalLiquidity, strike, sigma, tau);
-    deltaL = totalLiquidity.mulWadUp(fees).divWadDown(px.mulWadDown(reserveX) + reserveY);
+    deltaL = totalLiquidity.mulWadUp(fees).divWad(px.mulWad(reserveX) + reserveY);
 }
 
 function findRootNewLiquidity(bytes memory args, uint256 initialGuess, uint256 maxIterations, uint256 tolerance)
@@ -284,7 +284,7 @@ function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterat
 
         reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
 
-        if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+        if (FixedPointMathLib.abs(int256(reserveX_) - reserveX_next) <= tolerance || FixedPointMathLib.abs(fx) <= tolerance) {
             reserveX_ = uint256(reserveX_next);
             break;
         }
@@ -310,7 +310,7 @@ function findRootNewY(bytes memory args, uint256 initialGuess, uint256 maxIterat
 
         reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
 
-        if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+        if (FixedPointMathLib.abs(int256(reserveY_) - reserveY_next) <= tolerance || FixedPointMathLib.abs(fx) <= tolerance) {
             reserveY_ = uint256(reserveY_next);
             break;
         }
@@ -324,10 +324,10 @@ function computeTfDL(bytes memory args, uint256 L) pure returns (int256) {
     int256 x = int256(rX);
     int256 y = int256(rY);
     int256 mu = int256(K);
-    int256 L_squared = int256(L.mulWadDown(L));
+    int256 L_squared = int256(L.mulWad(L));
 
-    int256 a = Gaussian.ppf(int256(rX.divWadUp(L)));
-    int256 b = Gaussian.ppf(int256(rY.divWadUp(L.mulWadUp(K))));
+    int256 a = Gaussian.ppf(int256(rX.divWad(L)));
+    int256 b = Gaussian.ppf(int256(rY.divWad(L.mulWad(K))));
 
     int256 pdf_a = Gaussian.pdf(a);
     int256 pdf_b = Gaussian.pdf(b);
@@ -458,12 +458,12 @@ function sum(uint256 a, int256 b) pure returns (uint256) {
 
 /// @dev Converts native decimal amount to WAD amount, rounding down.
 function upscale(uint256 amount, uint256 scalingFactor) pure returns (uint256) {
-    return FixedPointMathLib.mulWadDown(amount, scalingFactor);
+    return FixedPointMathLib.mulWad(amount, scalingFactor);
 }
 
 /// @dev Converts a WAD amount to a native DECIMAL amount, rounding down.
 function downscaleDown(uint256 amount, uint256 scalar_) pure returns (uint256) {
-    return FixedPointMathLib.divWadDown(amount, scalar_);
+    return FixedPointMathLib.divWad(amount, scalar_);
 }
 
 /// @dev Converts a WAD amount to a native DECIMAL amount, rounding up.
@@ -479,14 +479,6 @@ function toUint(int256 x) pure returns (uint256) {
     return uint256(x);
 }
 
-function abs(int256 x) pure returns (int256) {
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
-}
-
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
 function scalar(address token) view returns (uint256) {
     uint256 decimals = ERC20(token).decimals();
@@ -495,5 +487,5 @@ function scalar(address token) view returns (uint256) {
 }
 
 function isASmallerApproxB(uint256 a, uint256 b, uint256 eps) pure returns (bool) {
-    return a <= b && a >= b.mulWadDown(1e18 - eps);
+    return a <= b && a >= b.mulWad(1e18 - eps);
 }

@@ -27,7 +27,7 @@ contract SwapExactTokenForYtTest is SetUp {
         PYIndex index = YT.newIndex();
         (uint256 syMinted, uint256 ytOut) =
             rmm.computeTokenToYT(index, address(0), amountIn, 0, block.timestamp, 0, 1_000);
-        (, uint256 amountOut,) = rmm.swapExactTokenForYt{value: amountIn}(
+        (uint256 amountOut,,,) = rmm.swapExactTokenForYt{value: amountIn}(
             address(0), amountIn, ytOut, syMinted, ytOut, 0, 0.005 ether, address(this)
         );
 

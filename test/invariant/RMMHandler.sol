@@ -167,7 +167,7 @@ contract RMMHandler is CommonBase, StdUtils, StdCheats {
         );
 
         weth.approve(address(rmm), amountTokenIn);
-        (uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) = rmm.swapExactTokenForYt(
+        (, uint256 amountInWad, uint256 amountOutWad, int256 deltaLiquidity) = rmm.swapExactTokenForYt(
             address(weth),
             amountTokenIn,
             ytOut,
