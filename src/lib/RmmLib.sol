@@ -284,7 +284,7 @@ function findRootNewX(bytes memory args, uint256 initialGuess, uint256 maxIterat
 
         reserveX_next = int256(reserveX_) - fx * 1e18 / dfx;
 
-        if (abs(int256(reserveX_) - reserveX_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+        if (FixedPointMathLib.abs(int256(reserveX_) - reserveX_next) <= tolerance || FixedPointMathLib.abs(fx) <= tolerance) {
             reserveX_ = uint256(reserveX_next);
             break;
         }
@@ -310,7 +310,7 @@ function findRootNewY(bytes memory args, uint256 initialGuess, uint256 maxIterat
 
         reserveY_next = int256(reserveY_) - fx * 1e18 / dfx;
 
-        if (abs(int256(reserveY_) - reserveY_next) <= int256(tolerance) || abs(fx) <= int256(tolerance)) {
+        if (FixedPointMathLib.abs(int256(reserveY_) - reserveY_next) <= tolerance || FixedPointMathLib.abs(fx) <= tolerance) {
             reserveY_ = uint256(reserveY_next);
             break;
         }
@@ -477,14 +477,6 @@ function toUint(int256 x) pure returns (uint256) {
         revert ToUintOverflow();
     }
     return uint256(x);
-}
-
-function abs(int256 x) pure returns (int256) {
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
 }
 
 /// @dev Computes the scalar to multiply to convert between WAD and native units.
