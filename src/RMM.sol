@@ -6,7 +6,6 @@ import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
 import {IPPrincipalToken} from "pendle/interfaces/IPPrincipalToken.sol";
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {IPYieldToken} from "pendle/interfaces/IPYieldToken.sol";
-import "forge-std/console2.sol";
 
 import "./lib/RmmLib.sol";
 import "./lib/RmmErrors.sol";
@@ -441,11 +440,11 @@ contract RMM is ERC20 {
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(365 * 86400);
         int256 lastPrice = rt.expWad();
 
-        uint256 a = sigma_.mulWadDown(sigma_).mulWadDown(tau_).mulWadDown(0.5 ether);
+        uint256 a = sigma_.mulWad(sigma_).mulWad(tau_).mulWad(0.5 ether);
         // // $$\Phi^{-1} (1 - \frac{x}{L})$$
-        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWadDown(liquidity)));
+        int256 b = Gaussian.ppf(int256(1 ether - reserveX_.divWad(liquidity)));
         int256 exp = (b * (int256(computeSigmaSqrtTau(sigma_, tau_))) / 1e18 - int256(a)).expWad();
-        return uint256(lastPrice).divWadDown(uint256(exp));
+        return uint256(lastPrice).divWad(uint256(exp));
     }
 
     function computeTokenToYT(
@@ -590,7 +589,7 @@ contract RMM is ERC20 {
             (deltaXWad, deltaLiquidity) = computeAllocationGivenDeltaY(deltaYWad, reserveX, reserveY, totalLiquidity);
         }
 
-        lptMinted = deltaLiquidity.mulDivDown(totalSupply, totalLiquidity + deltaLiquidity);
+        lptMinted = deltaLiquidity.mulDiv(totalSupply, totalLiquidity + deltaLiquidity);
     }
 
     function prepareDeallocate(uint256 deltaLiquidity)
@@ -599,8 +598,8 @@ contract RMM is ERC20 {
         returns (uint256 deltaXWad, uint256 deltaYWad, uint256 lptBurned)
     {
         uint256 liquidity = totalLiquidity;
-        deltaXWad = deltaLiquidity.mulDivDown(reserveX, liquidity);
-        deltaYWad = deltaLiquidity.mulDivDown(reserveY, liquidity);
+        deltaXWad = deltaLiquidity.mulDiv(reserveX, liquidity);
+        deltaYWad = deltaLiquidity.mulDiv(reserveY, liquidity);
         lptBurned = deltaLiquidity.mulDivUp(totalSupply, liquidity);
     }
 

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.13;
 
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 
 using FixedPointMathLib for uint256;
 using FixedPointMathLib for int256;
 
 function computeDeltaLGivenDeltaX(uint256 deltaX, uint256 liquidity, uint256 reserveX) pure returns (uint256 deltaL) {
-    return liquidity.mulDivDown(deltaX, reserveX);
+    return liquidity.mulDiv(deltaX, reserveX);
 }
 
 function computeDeltaLGivenDeltaY(uint256 deltaY, uint256 liquidity, uint256 reserveY) pure returns (uint256 deltaL) {
-    return liquidity.mulDivDown(deltaY, reserveY);
+    return liquidity.mulDiv(deltaY, reserveY);
 }
 
 function computeDeltaYGivenDeltaX(uint256 deltaX, uint256 reserveX, uint256 reserveY) pure returns (uint256 deltaY) {
