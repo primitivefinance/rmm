@@ -3,9 +3,8 @@ pragma solidity ^0.8.13;
 
 import {IStandardizedYield} from "pendle/interfaces/IStandardizedYield.sol";
 import {PYIndexLib, PYIndex} from "pendle/core/StandardizedYield/PYIndex.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {SafeTransferLib, ERC20} from "solmate/utils/SafeTransferLib.sol";
-import "forge-std/console2.sol";
 
 import {RMM, IPYieldToken, Gaussian, computeTradingFunction} from "./RMM.sol";
 import {InvalidTokenIn, InsufficientSYMinted} from "./lib/RmmErrors.sol";
@@ -16,21 +15,28 @@ contract LiquidityManager {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
-    function mintSY(address SY, address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut)
-        public
-        payable
-        returns (uint256 amountOut)
-    {
+    function mintSY(
+        address SY,
+        address receiver,
+        address tokenIn,
+        uint256 amountTokenToDeposit,
+        uint256 minSharesOut
+    ) public payable returns (uint256 amountOut) {
         IStandardizedYield sy = IStandardizedYield(SY);
-        if (!sy.isValidTokenIn(tokenIn)) revert InvalidTokenIn(tokenIn);
+        
+        if (!sy.isValidTokenIn(tokenIn)) {
+            revert InvalidTokenIn(tokenIn);
+        }
 
         if (msg.value > 0 && sy.isValidTokenIn(address(0))) {
-            // SY minted check is done in this function instead of relying on the SY contract's deposit().
+            // Mint SY using ETH
             amountOut += sy.deposit{value: msg.value}(address(this), address(0), msg.value, 0);
         }
 
         if (tokenIn != address(0)) {
+            // Transfer tokens from sender to this contract
             ERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountTokenToDeposit);
+            // Mint SY using the transferred tokens
             amountOut += sy.deposit(receiver, tokenIn, amountTokenToDeposit, 0);
         }
 
@@ -174,7 +180,7 @@ contract LiquidityManager {
     }
 
     function isAApproxB(uint256 a, uint256 b, uint256 eps) internal pure returns (bool) {
-        return b.mulWadDown(1 ether - eps) <= a && a <= b.mulWadDown(1 ether + eps);
+        return b.mulWad(1 ether - eps) <= a && a <= b.mulWad(1 ether + eps);
     }
 
     function calcMaxPtOut(
