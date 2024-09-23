@@ -438,6 +438,7 @@ contract RMM is ERC20 {
         public
         view
         returns (uint256)
+        
     {
         int256 timeToExpiry = int256(maturity - block.timestamp);
         int256 rt = int256(lastImpliedPrice) * int256(timeToExpiry) / int256(365 * 86400);
